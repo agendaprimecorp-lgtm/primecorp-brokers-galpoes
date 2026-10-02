@@ -1,0 +1,15 @@
+import { build } from 'esbuild';
+import { NetlifyDB } from "@netlify/database-dev";
+import assert from "node:assert/strict";
+await build({ entryPoints: ['netlify/functions/coleta-background.mts'], bundle: true, platform: 'node', format: 'esm', outfile: 'test/out/coleta.mjs', alias: { '@netlify/identity': './test/mocks/identity.mjs', '@netlify/blobs': './test/mocks/blobs.mjs', '@anthropic-ai/sdk': './test/mocks/anthropic.mjs', imapflow: './test/mocks/imapflow.mjs', mailparser: './test/mocks/mailparser.mjs' }, packages: 'external', logLevel: 'warning' });
+const db = new NetlifyDB(); process.env.NETLIFY_DB_URL = await db.start(); await db.applyMigrations("./netlify/database/migrations");
+process.env.ALERTAS_IMAP_USER='alertas@x.com'; process.env.ALERTAS_IMAP_SENHA='abc'; process.env.COLETA_SEGREDO='s3gredo-123';
+const fn = (await import('./out/coleta.mjs')).default;
+await fn(new Request('https://pc.test/.netlify/functions/coleta-background',{method:'POST',headers:{'x-coleta-segredo':'errado-1234'}}));
+assert.equal(globalThis.__seen, undefined, 'segredo errado não pode rodar');
+await fn(new Request('https://pc.test/.netlify/functions/coleta-background',{method:'POST',headers:{'x-coleta-segredo':'s3gredo-123'}}));
+const { getDatabase } = await import('@netlify/database'); const d = getDatabase();
+const of = await d.sql`SELECT dados FROM registros WHERE colecao='ofertas'`; const em = await d.sql`SELECT conteudo FROM emissoes`;
+console.log(of.map(r=>r.dados), em, globalThis.__seen);
+assert.equal(of.length,1); assert.deepEqual(globalThis.__seen,['11','12']); assert.equal(of[0].dados.fabril,'11.000');
+console.log('coleta OK'); await db.stop(); process.exit(0);
