@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "esbuild src/app.js src/sala.js src/anunciante.js --bundle --minify --format=esm --target=es2020,safari15 --outdir=public --external:html2canvas --external:dompurify --external:canvg --log-level=warning",
-    "test": "node test/build.mjs && node test/run.mjs && node test/coleta.mjs"
+    "test": "node test/build.mjs && node test/run.mjs && node test/coleta.mjs && node test/zoe.mjs"
   },
   "author": "",
   "license": "ISC",

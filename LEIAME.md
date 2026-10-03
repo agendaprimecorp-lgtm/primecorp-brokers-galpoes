@@ -133,3 +133,41 @@ Captar → **Iniciar registro fotográfico** → escolha o tipo (casa, galpão, 
 - **Visita guiada em uma tela**: no celular, nome do ambiente, câmera, Descrever e Salvar e seguir ficam visíveis sem rolar; as abas somem durante a visita. Botão de galeria na câmera para fotos recebidas.
 - **Computador**: "Novo anúncio com fotos recebidas" — mesmo roteiro guiado, mas arrastando as fotos de cada ambiente (do celular, do parceiro, do proprietário). A IA trata luz, cor e nitidez, descreve o ambiente, e a ficha passa pela mesma validação antes de publicar. O que foi feito no celular chega sozinho ao computador; dali sai Ficha PDF e Pacote (XML, planilha, fotos).
 - **Próximos passos**: linha do tempo 1-2-3 com ações em ícones (Pedir autorização, Publicar, WhatsApp, Copiar link, Ficha PDF, Pacote, Abrir oferta).
+
+## Verificação do imóvel (out/2026)
+Cada oferta tem o cartão **Verificação do imóvel** (privado: nada dele sai no teaser, na sala, no anúncio ou na ficha).
+- **Campos**: nº da matrícula, cartório (CRI), inscrição imobiliária (IPTU), CIB, CEP, logradouro, número, complemento, bairro, proprietário e CPF/CNPJ; rural: NIRF e código SIGEF (CAR, CCIR e georreferenciamento continuam no bloco Rural). A leitura por link já tenta extrair matrícula, cartório, inscrição e CEP quando o anúncio cita.
+- **Varredura automática** (sem intervenção): ao salvar com CEP, endereço ou CPF/CNPJ alterados, ou no botão **Varrer agora**: CEP nos Correios (BrasilAPI, reserva ViaCEP), posição no mapa (OpenStreetMap) e CNPJ na Receita (BrasilAPI: razão social e situação cadastral). CPF só tem o dígito conferido (não há consulta pública).
+- **Matrícula por IA**: envie a certidão ou visualização da matrícula (PDF até 4 MB ou fotos). Em segundo plano a IA lê número, cartório, data da certidão, proprietários, áreas, construção averbada, ônus (hipoteca, alienação fiduciária, penhora, indisponibilidade, usufruto…) e quais foram cancelados; completa os campos vazios e cruza tudo com a oferta.
+- **Índice de verificação (0–100%) e semáforo**: VERIFICADO (tudo conferido + 7 certidões do vendedor), EM VERIFICAÇÃO, BLOQUEADO (divergência ou ônus impeditivo) ou SEM DADOS.
+- **Relatório PDF** de verificação (fica em Relatórios emitidos) e **fontes oficiais em 1 toque** (RI Digital/ONR, CENPROT, CNDT, Receita/PGFN, TJSP, SICAR, SIGEF, CCIR).
+- **Limite legal**: a matrícula não tem consulta aberta por API. Ela é emitida no RI Digital (ONR) com login e emolumentos; o sistema lê o PDF que você baixar. Para automatizar também o pedido, dá para plugar depois um robô pago (ex.: Infosimples) com a sua credencial do ONR.
+
+## Zoe · assistente no WhatsApp (out/2026)
+A Zoe atende clientes, proprietários, corretores e prefeituras no WhatsApp da PrimeCorp e conversa com a equipe (Rodrigo e Joselia) como secretária.
+- **Linhas de conversa**: busca de imóvel (qualifica, registra o briefing, procura na base e mostra só faixas e código), proprietário (registra a oferta "a revisar" e marca a captação no local), corretor/imobiliária (parceria), interesse em anúncio, prefeituras (B2G → reunião com Rodrigo), agenda (marcar, remarcar, cancelar) e reclamação/jurídico/negociação (sempre passa para humano).
+- **Regras fixas**: apresenta-se como assistente virtual com aviso LGPD; nunca passa endereço, proprietário, anunciante ou matrícula; não inventa preço nem disponibilidade; não negocia; "HUMANO" transfere na hora; "SAIR" para as mensagens automáticas.
+- **Equipe pelo WhatsApp**: números em `ZOE_EQUIPE` falam com a Zoe no modo equipe ("resumo do dia", "agenda de amanhã", "conversas pendentes", "verificação do PC-0009") e recebem os avisos (nova demanda, imóvel oferecido, agendamento, pedido de humano).
+- **No app**: Mais → **Zoe** (Conversas · Testar a Zoe · Conhecimento) e Mais → **Agenda**. Ao responder uma conversa, a Zoe pausa nela até você tocar em "Devolver para a Zoe". O simulador não grava nada de verdade.
+
+### Ligar o WhatsApp (uma vez)
+1. Use um **número exclusivo** para a Zoe (chip novo ou número fixo). Ele não pode estar ativo no app WhatsApp comum.
+2. Em developers.facebook.com: crie um app do tipo **Business**, adicione o produto **WhatsApp**, vincule ao Meta Business da PrimeCorp e registre o número. Gere um **token permanente** (usuário do sistema com permissão `whatsapp_business_messaging`).
+3. Em WhatsApp → Configuração → **Webhook**: URL `https://SEU-SITE/whatsapp/webhook`, token de verificação = o valor de `WHATSAPP_VERIFY_TOKEN`; assine o campo **messages**.
+4. No Netlify (escopo Functions), cadastre e faça novo deploy:
+
+| Variável | Valor |
+|---|---|
+| `WHATSAPP_TOKEN` | Token permanente da Meta |
+| `WHATSAPP_PHONE_ID` | Phone number ID (não é o número) |
+| `WHATSAPP_APP_SECRET` | App Secret do app (confere a assinatura de cada mensagem) |
+| `WHATSAPP_VERIFY_TOKEN` | Uma frase sua, igual à do passo 3 |
+| `WHATSAPP_NUMERO` | O número para exibir, ex.: (19) 9xxxx-xxxx |
+| `ZOE_EQUIPE` | WhatsApp da equipe separados por vírgula (ex.: `19998051985,199xxxxxxxx`) |
+| `ZOE_MODELO_AVISO` | Opcional: nome de um modelo aprovado com 1 variável, para avisar a equipe fora da janela de 24 h |
+| `COLETA_SEGREDO` | Já existe: protege as funções de segundo plano da Zoe e da matrícula |
+
+5. Mais → Zoe → **Conhecimento**: revise quem somos, serviços, FAQ, horário e duração das reuniões. Teste em **Testar a Zoe** antes de divulgar o número.
+
+Custos: mensagens dentro da janela de 24 h após o cliente escrever não são cobradas pela Meta; modelos (fora da janela) são cobrados por mensagem. A IA da Zoe usa os mesmos créditos do AI Gateway da Netlify.
+Testes: `npm test` (57 testes, incluindo 17 de verificação e Zoe) e `node test/e2e9.mjs` com o servidor de teste.
