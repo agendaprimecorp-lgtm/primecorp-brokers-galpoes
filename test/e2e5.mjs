@@ -3,8 +3,8 @@
 import { chromium } from 'playwright'; import fs from 'node:fs'; import { unzipSync, strFromU8 } from 'fflate';
 const OUT = process.env.OUT || '/tmp/claude-0/telas5'; fs.mkdirSync(OUT, { recursive: true });
 const HOST = 'https://primecorp-brokers-galpoes.netlify.app'; const FOT = '/tmp/claude-0/fotos_teste/';
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true });
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true, permissions: ['camera', 'microphone'] });
 await ctx.route('**/fonts.googleapis.com/**', (r) => r.fulfill({ contentType: 'text/css', body: '' }));
 await ctx.route(HOST + '/**', async (r) => { const resp = await r.fetch({ url: r.request().url().replace(HOST, 'http://localhost:8899') }); await r.fulfill({ response: resp }); });
 await ctx.addInitScript(() => { const SR = class { start() { setTimeout(() => { this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'fachada com portão' }], { isFinal: true })] }); }, 200); } stop() { this.onend && this.onend(); } }; for (const k of ['webkitSpeechRecognition', 'SpeechRecognition']) Object.defineProperty(window, k, { value: SR, configurable: true, writable: true }); });
@@ -61,9 +61,9 @@ await p.click('#guardar'); ok(await esperar(async () => /4 foto\(s\) guardada/.t
 // 5) captação com roteiro guiado + pacote
 await p.click('[data-tab="captar"]'); await W(500); await p.click('#nc'); await W(500); await p.click('[data-ti="Casa"]'); await W(200); await p.selectOption('#iop', 'Venda'); await p.click('#iniManual'); await W(900);
 await p.selectOption('[data-c="tipo"]', 'Casa'); await W(600);
-ok(/Roteiro da visita/.test(await txt()) && /0\/\d+ obrigatórias/.test(await txt('#rtc')), 'roteiro de fotos da casa'); await sh('07_roteiro_casa');
-await p.click('[data-rf="fachada"]').catch(() => {}); await p.setInputFiles('#camR', [FOT + 'f1.jpg']);
-ok(await esperar(async () => /^1\//.test(await txt('#rtc'))), 'foto da fachada marca o item do roteiro');
+ok(/Registro fotográfico/.test(await txt()) && /^0\/\d+/.test(await txt('#ranel')) && (await p.$$('.rt.obr')).length >= 5, 'mosaico do roteiro da casa'); await sh('07_roteiro_casa');
+await p.click('[data-rf="fachada"]'); await W(700); ok((await p.textContent('#vnome')) === 'Fachada', 'toque no mosaico abre a câmera no ambiente'); await esperar(async () => p.$eval('#vid', (v) => v.videoWidth > 0)); await p.click('#obt'); await esperar(async () => (await p.$$('#vthumbs img')).length === 1); await p.click('#bk'); await W(900);
+ok(await esperar(async () => /^1/.test(await txt('#ranel')) && !!(await p.$('.rt.ok img'))), 'foto da fachada marca o item do roteiro (miniatura no mosaico)');
 ok(await esperar(async () => (await p.$eval('.ambn', (x) => x.value)) === 'Fachada'), 'ambiente criado com o nome do roteiro (IA não renomeia)');
 await p.setInputFiles('#camN', [FOT + 'f2.jpg']); await esperar(async () => (await p.$$('.amb')).length === 2);
 await W(1500); await sh('08_roteiro_progresso');

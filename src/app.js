@@ -1227,6 +1227,45 @@ async function exportarPacote(o) {
   const nome = `${codigo}_pacote.zip`; await compartilharOuBaixar(new Blob([zipSync(z)], { type: "application/zip" }), nome);
   await emitir({ tipo: "pacote_exportado", oferta_id: at.id, destinatario: "Sistema de imobiliária", conteudo: `${nome} · ${ref.length} foto(s) · XML VRSync, CSV e texto` }).catch(() => {});
 }
+/* Ícones dos ambientes do roteiro (traço 1.8, 24×24) */
+const IC_AMB = {
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  fachada: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  condominio: '<path d="M3 17c2 0 2-1.5 4.5-1.5S10 17 12 17s2.5-1.5 4.5-1.5S19 17 21 17"/><path d="M3 21c2 0 2-1.5 4.5-1.5S10 21 12 21s2.5-1.5 4.5-1.5S19 21 21 21"/><path d="M8 13V5a2 2 0 0 1 4 0M14 13V5"/>',
+  sala: '<path d="M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M3 11h18v6H3zM5 17v2M19 17v2"/>',
+  cozinha: '<path d="M4 10h16v3a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"/><path d="M2 10h20M9 6c0-1 1-1 1-2M14 6c0-1 1-1 1-2"/>',
+  dorm: '<path d="M3 18V7M3 13h18v5M21 18v-3a3 3 0 0 0-3-3h-8v1"/><circle cx="7" cy="10.5" r="1.8"/>',
+  banho: '<path d="M4 12h16v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM6 12V6a2 2 0 0 1 4 0M7 19l-1 2M17 19l1 2"/>',
+  servico: '<rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M8 6h2"/>',
+  externa: '<path d="M12 21v-6M7 15h10l-5-11z"/><path d="M4 21h16"/>',
+  vaga: '<path d="M5 16V11l2-5h10l2 5v5zM5 16v3M19 16v3M5 11h14"/><circle cx="8" cy="13.5" r=".8"/><circle cx="16" cy="13.5" r=".8"/>',
+  vista: '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M12 4v16M4 12h16"/>',
+  interna: '<path d="M2 21V9l10-5 10 5v12"/><path d="M6 21v-8h12v8M6 17h12"/>',
+  pe_direito: '<path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/>',
+  docas: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  piso: '<path d="M3 9h18M3 15h18M9 3v18M15 3v18"/><rect x="3" y="3" width="18" height="18" rx="1"/>',
+  energia: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  escritorios: '<rect x="3" y="7" width="18" height="13" rx="1"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  apoio: '<path d="M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 2-2 6 0 8v10"/>',
+  patio: '<path d="M4 21 9 3M20 21 15 3M12 6v2M12 11v2M12 16v2"/>',
+  acesso: '<path d="M4 21 9 3M20 21 15 3M12 6v2M12 11v2M12 16v2"/>',
+  salao: '<path d="M3 9l2-5h14l2 5M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v8h14v-8"/>',
+  copa: '<path d="M5 8h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10h2a2 2 0 0 1 0 4h-2M8 3v2M12 3v2"/>',
+  entorno: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  geral: '<path d="M3 20l6-10 4 6 3-4 5 8z"/><circle cx="17" cy="6" r="2"/>',
+  frente: '<path d="M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4"/>',
+  topografia: '<path d="M3 20l5-8 4 4 4-7 5 11z"/>',
+  vizinhanca: '<path d="M2 21V11l5-4 5 4v10M12 21V8l5-4 5 4v13M2 21h20"/>',
+  infra: '<path d="M12 2v20M6 6h12M8 10h8M12 6l-5 15M12 6l5 15"/>',
+  porteira: '<path d="M3 5v16M21 5v16M3 9h18M3 15h18M3 9l18 6"/>',
+  sede: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 14h2v2H9zM13 14h2v2h-2z"/>',
+  sede_int: '<path d="M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M3 11h18v6H3z"/>',
+  producao: '<path d="M12 21V11M12 11c0-4 3-6 7-6 0 4-3 6-7 6zM12 14c0-3-2-5-6-5 0 3 2 5 6 5z"/>',
+  agua: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+  benfeitorias: '<path d="M3 21V10l9-6 9 6v11z"/><path d="M8 21v-7h8v7M8 14l8 7M16 14l-8 7"/>',
+  estradas: '<path d="M4 21 9 3M20 21 15 3M12 6v2M12 11v2M12 16v2"/>',
+};
+const icAmb = (id) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC_AMB[id] || IC_AMB[String(id).replace(/\d+$/, "")] || IC_AMB[String(id).replace(/C$/, "")] || IC_AMB.camera}</svg>`;
 /** Roteiro guiado: casa cada item obrigatório com um ambiente fotografado (pelo vínculo ou pelo nome). */
 const KW_ROT = { fachada: /fachada|frente|portaria/, condominio: /condom|piscina|lazer|academia|sal[ãa]o de festa|playground/, sala: /sala/, cozinha: /cozinha/, dorm: /dormit|quarto|su[ií]te/, banho: /banheiro|lavabo|wc/, servico: /servi[cç]o|lavanderia/, externa: /quintal|externa|jardim|churrasq|piscina/, vaga: /garagem|vaga/, vista: /vista|varanda|sacada/, interna: /operacional|interna|galp[ãa]o/, pe_direito: /p[ée].?direito/, docas: /doca/, piso: /piso/, energia: /cabine|energia|transformador|quadro/, escritorios: /escrit|mezanino|administ/, apoio: /vesti|refeit|copa/, patio: /p[áa]tio|manobra/, acesso: /acesso|entorno|rua/, salao: /sal[ãa]o|loja|vitrine/, banhoC: /banheiro/, copa: /copa|dep[óo]sito/, entorno: /entorno|vizinh/, geral: /geral|drone|panor|vista/, frente: /frente|testada/, topografia: /topogra|declive|aclive|plano/, vizinhanca: /vizinh/, infra: /poste|infra|rede/, porteira: /porteira|entrada|acesso/, sede: /sede|casa principal/, sede_int: /sede.*(sala|cozinha|interior)/, producao: /pasto|pastagem|lavoura|planta[çc]/, agua: /represa|rio|nascente|po[çc]o|lago|a[çc]ude|[áa]gua/, benfeitorias: /curral|barrac|benfeit|caseiro|m[áa]quinas/, estradas: /estrada/ };
 function casarRoteiro(o) {
@@ -1249,15 +1288,15 @@ VIEWS.captacao = () => {
   const opts = (arr, v) => arr.map((x) => `<option ${String(v || "") === x ? "selected" : ""}>${esc(x)}</option>`).join("");
   const o = cur(); const usuarios = S.usuarios.filter((u) => u.ativo !== false);
   $("main").innerHTML = `<div id="capw" style="display:flex;flex-direction:column;gap:14px">
+  <div class="card rotcard"><div class="rothead"><div class="anel" id="ranel"></div><div class="grow"><h2>Registro fotográfico</h2><span class="hint" id="rtc"></span></div></div>
+  <button class="cta-cam" id="vguiada"><span class="ccam">${icAmb("camera")}</span><span class="t"><b id="vgt">Iniciar registro</b><small id="vgs"></small></span><span class="seta">›</span></button>
+  <div class="rotgrid" id="rot"></div><button class="g sm" id="ropc" hidden></button><input type="file" id="camR" accept="image/*" capture="environment" multiple hidden></div>
   <div class="card" id="fi"><h2>Imóvel</h2><div class="grid">
   <label>Tipo<select data-c="tipo">${opts(TIPOS_CAP, o.tipo)}</select></label><label>Operação<select data-c="operacao">${opts(["Venda", "Locação", "Locação / Venda"], o.operacao)}</select></label>
   <label>Cidade<input data-c="cidade" value="${esc(o.cidade || "")}"></label><label>Bairro / região<input data-c="regiao" value="${esc(o.regiao || "")}" placeholder="aparece no anúncio"></label>
   <label class="full">Endereço completo (privado, não sai no anúncio)<input data-c="endereco" value="${esc(o.endereco || "")}"></label>
   <label>Proprietário<input data-c="proprietario_nome" value="${esc(o.proprietario_nome || "")}"></label><label>Telefone do proprietário<input data-c="proprietario_tel" type="tel" value="${esc(o.proprietario_tel || "")}"></label>
   <label class="full">Captado por<select data-c="captador" ${ehAdmin() ? "" : "disabled"}>${(usuarios.length ? usuarios : EQUIPE_INICIAL).map((u) => `<option value="${esc(u.email)}" ${String(u.email).toLowerCase() === String(o.captador || "").toLowerCase() ? "selected" : ""}>${esc(u.nome)} · ${esc(creciFmt(u.creci))}</option>`).join("")}</select></label></div></div>
-  <div class="card"><div class="row" style="justify-content:space-between"><h2>Roteiro da visita</h2><span class="chip" id="rtc"></span></div>
-  <button class="p" id="vguiada">🎥 Visita guiada: câmera ambiente por ambiente</button>
-  <p class="hint">A câmera abre no primeiro ambiente que falta: você fotografa, fala sobre o ambiente, a IA descreve e o app passa para o próximo. Ou toque em 📷 em um item da lista.</p><div class="roteiro" id="rot"></div><input type="file" id="camR" accept="image/*" capture="environment" multiple hidden></div>
   <div class="card"><div class="row" style="justify-content:space-between"><h2>Ambientes</h2><span class="chip" id="nf"></span></div>
   <p class="hint">Para cada ambiente: fotografe (celular na horizontal), toque em <b>Falar</b> e descreva o que vê. A IA nomeia o ambiente, organiza a descrição e confere as fotos.</p>
   <div id="ambs"></div>
@@ -1282,7 +1321,7 @@ VIEWS.captacao = () => {
   if (!podeEditar) $("main").insertAdjacentHTML("afterbegin", `<p class="note">Captação de ${esc(perfilPorEmail(o.captador).nome)}: você pode ver, mas só quem captou ou o administrador altera.</p>`);
 
   const desenharNums = () => { const at = cur(); $("nums").innerHTML = camposCap(at.tipo).map(([k, l, u]) => u ? `<label class="u">${esc(l)}<input data-c="${k}" inputmode="decimal" value="${esc(fmtIn(k, PC.parseBR(at[k])))}"><span>${esc(u)}</span></label>` : `<label class="full">${esc(l)}<input data-c="${k}" value="${esc(at[k] || "")}"></label>`).join(""); };
-  const medidor = () => { const at = cur(); const cp = PC.completude(at); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : ""; $("ctxt").textContent = cp.ok ? "Ficha completa." : `Ficha ${cp.pct}% · falta: ${cp.faltam.filter((f) => !f.extra).map((f) => f.rotulo).join(", ")}`; $("nf").textContent = fotosDe(at) + " foto(s)"; if (typeof desenharRoteiro === "function" && $("rot")) desenharRoteiro(); };
+  const medidor = () => { if (!$("cbar")) return; const at = cur(); const cp = PC.completude(at); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : ""; $("ctxt").textContent = cp.ok ? "Ficha completa." : `Ficha ${cp.pct}% · falta: ${cp.faltam.filter((f) => !f.extra).map((f) => f.rotulo).join(", ")}`; $("nf").textContent = fotosDe(at) + " foto(s)"; if (typeof desenharRoteiro === "function" && $("rot")) desenharRoteiro(); };
   desenharNums();
   // salvar campos (debounce)
   let tSalvar = null; const lerCampos = () => { const p = {}; document.querySelectorAll("[data-c]").forEach((el) => (p[el.dataset.c] = el.value.trim())); p.anunciante = p.proprietario_nome; p.anunciante_contato = p.proprietario_tel; return p; };
@@ -1308,10 +1347,16 @@ VIEWS.captacao = () => {
     ligarAmbs(); medidor();
   };
   let itemFoto = null;
-  var desenharRoteiro = () => { const r = casarRoteiro(cur()); const obrig = r.itens.filter((x) => x.obrigatorio).length;
-    $("rtc").textContent = `${obrig - r.faltam.length}/${obrig} obrigatórias`;
-    $("rot").innerHTML = r.itens.map((it) => `<div class="ri ${it.amb ? "ok" : ""}"><span class="ic">${it.amb ? "✓" : ""}</span><b>${esc(it.nome)}${it.obrigatorio ? "" : ' <small>(opcional)</small>'}<br><small>${esc(it.amb ? (it.amb.fotos || []).length + " foto(s) · " + (it.amb.nome || "") : it.dica)}</small></b>${it.amb ? "" : `<button class="sm ${it.obrigatorio ? "p" : ""}" data-rf="${esc(it.id)}">📷</button>`}</div>`).join("");
-    document.querySelectorAll("[data-rf]").forEach((b) => (b.onclick = () => { itemFoto = r.itens.find((x) => x.id === b.dataset.rf); $("camR").value = ""; $("camR").click(); })); };
+  let verOpc = false;
+  var desenharRoteiro = () => { if (!$("ranel")) return; const r = casarRoteiro(cur()); const obrig = r.itens.filter((x) => x.obrigatorio); const feitas = obrig.length - r.faltam.length; const pct = obrig.length ? Math.round((feitas / obrig.length) * 100) : 0;
+    $("ranel").style.setProperty("--p", pct); $("ranel").innerHTML = `<b>${feitas}</b><small>/${obrig.length}</small>`;
+    $("rtc").textContent = r.faltam.length ? `${r.faltam.length} foto(s) obrigatória(s) faltando` : "Fotos obrigatórias completas ✓";
+    const prox = r.faltam[0]; $("vgt").textContent = !feitas ? "Iniciar registro" : prox ? "Continuar registro" : "Revisar o registro"; $("vgs").textContent = prox ? "Próximo: " + prox.nome : "Câmera guiada, ambiente por ambiente";
+    const opc = r.itens.filter((x) => !x.obrigatorio); const mostra = [...obrig, ...(verOpc ? opc : opc.filter((x) => x.amb))];
+    const tile = (it) => { const f = it.amb?.fotos?.[0]; return `<button class="rt ${it.amb ? "ok" : it.obrigatorio ? "obr" : "opc"}" data-rf="${esc(it.id)}" title="${esc(it.dica)}">${f ? `<img src="${fotoURL(f.k)}" alt="" loading="lazy">` : ""}<span class="ri2">${it.amb ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>' : icAmb(it.id)}</span><span class="rn">${esc(it.nome)}</span>${it.amb ? `<span class="rc">${(it.amb.fotos || []).length}</span>` : ""}</button>`; };
+    $("rot").innerHTML = mostra.map(tile).join("");
+    const nOpc = opc.filter((x) => !x.amb).length; const bo = $("ropc"); bo.hidden = !nOpc && !verOpc; bo.textContent = verOpc ? "Ocultar opcionais" : `+ ${nOpc} foto(s) opcional(is)`; bo.onclick = () => { verOpc = !verOpc; desenharRoteiro(); };
+    document.querySelectorAll("[data-rf]").forEach((b) => (b.onclick = async () => { parar(); clearTimeout(tSalvar); await salvar(lerCampos()); editing = false; go({ v: "visita", id: route.id, item: b.dataset.rf }); })); };
   const salvarFala = (id, v) => setAmbs((ambs) => { const a = ambs.find((y) => y.id === id); if (a) a.fala = v; });
   const setAmbs = async (fn) => { const at = cur(); const ambs = JSON.parse(JSON.stringify(at.captacao?.ambientes || [])); fn(ambs); return await salvar({ captacao: { ambientes: ambs } }); };
   const enviarFotos = async (files, ambId, item) => {
@@ -1454,10 +1499,11 @@ VIEWS.visita = () => {
   header("Visita guiada" + (o0.codigo ? " · " + o0.codigo : ""));
   if (MODO() === "escritorio" && !route.webcam) { $("main").innerHTML = cartaoCelular("Continue a visita no celular", "A câmera guiada foi feita para o celular, no local do imóvel. Abra este imóvel em Captar no celular e toque em Visita guiada.") + `<div class="card"><button id="wc">Usar a webcam deste computador mesmo assim</button></div>`; $("wc").onclick = () => { route.webcam = true; VIEWS.visita(); }; return; }
   const itens = () => { const r = casarRoteiro(O(route.id)); return [...r.itens.filter((x) => x.obrigatorio), ...r.itens.filter((x) => !x.obrigatorio)]; };
-  let idx = Math.max(0, itens().findIndex((x) => x.obrigatorio && !x.amb)); if (route.idx != null) idx = route.idx;
+  let idx = Math.max(0, itens().findIndex((x) => x.obrigatorio && !x.amb)); if (route.idx != null) idx = route.idx; else if (route.item) { const i = itens().findIndex((x) => x.id === route.item); if (i >= 0) idx = i; route.item = null; route.idx = idx; }
   let extraId = null; // ambiente extra em andamento
   $("main").innerHTML = `<div class="visita">
     <div class="vtop"><span id="vpos"></span><b id="vnome"></b><small id="vdica"></small><em class="vguia" id="vguia"></em></div>
+    <div class="vstrip" id="vstrip"></div>
     <div class="visor"><video id="vid" playsinline muted autoplay></video><div class="vflash" id="vflash"></div><p class="vmsg" id="vmsg">Abrindo a câmera…</p>
       <button class="obt" id="obt" aria-label="Tirar foto"></button><span class="vcont" id="vcont"></span></div>
     <label class="btn sm" id="vfb" hidden><input type="file" id="vfile" accept="image/*" capture="environment" multiple hidden>📷 Usar a câmera do celular</label>
@@ -1473,6 +1519,9 @@ VIEWS.visita = () => {
     $("vpos").textContent = extraId ? "Ambiente extra" : `${idx + 1} de ${L.length} · ${falt ? falt + " obrigatória(s) faltando" : "obrigatórias completas ✓"}`;
     $("vnome").textContent = extraId ? (a?.nome || "Ambiente extra") : it ? it.nome + (it.obrigatorio ? "" : " (opcional)") : "Roteiro concluído";
     $("vdica").textContent = extraId ? "Fotografe e fale: a IA dá o nome do ambiente." : it ? it.dica : "Toque em Concluir visita para gerar o anúncio.";
+    $("vstrip").innerHTML = L.map((x, i) => `<button class="vs ${x.amb ? "ok" : x.obrigatorio ? "obr" : ""} ${i === idx && !extraId ? "on" : ""}" data-vi="${i}" title="${esc(x.nome)}">${icAmb(x.id)}</button>`).join("");
+    $("vstrip").querySelectorAll("[data-vi]").forEach((b) => (b.onclick = () => irPara(Number(b.dataset.vi))));
+    const on = $("vstrip").querySelector(".on"); if (on) on.scrollIntoView({ block: "nearest", inline: "center" });
     const fotos = a?.fotos || []; $("vcont").textContent = fotos.length ? fotos.length + " foto(s)" : "";
     $("vthumbs").innerHTML = fotos.map((f) => `<div class="th"><img src="${fotoURL(f.k)}" alt=""></div>`).join("");
     const fa = $("vfala"); if (document.activeElement !== fa) fa.value = a?.fala || "";
@@ -1488,7 +1537,7 @@ VIEWS.visita = () => {
     await ambientesSalvar(route.id, (ambs) => ambs.push({ id, nome: it.nome, roteiro: it.id, nome_manual: true, fotos: [], fala: "", criado: now() }));
     return id;
   };
-  const st = (m, err) => { $("vst").className = "status" + (err ? " err" : ""); $("vst").textContent = m || ""; };
+  const st = (m, err) => { if (!$("vst")) return; $("vst").className = "status" + (err ? " err" : ""); $("vst").textContent = m || ""; };
   let descrevendo = false, deNovo = false;
   const descrever = async () => { const a = amb(); if (!a) return; if (descrevendo) { deNovo = true; return; } descrevendo = true; st("IA descrevendo o ambiente…");
     try { const r = await descreverAmbiente(route.id, a.id); st(r?.aplicados.length ? "Dados da fala aplicados: " + r.aplicados.map((k) => PC.CAMPOS[k]?.[0] || k).join(", ") : ""); } catch (e) { st("IA indisponível agora: " + e.message + ". Siga a visita; dá para descrever depois.", true); }
@@ -1532,6 +1581,7 @@ VIEWS.visita = () => {
   const mudar = async (d) => { if (window.__vozVisita) window.__vozVisita.parar(); const fa = $("vfala"); if (fa && fa.value !== (amb()?.fala || "")) await salvarFala(fa.value);
     const L = itens(); if (extraId) { extraId = null; desenhar(); return; } if (d > 0 && idx >= L.length - 1) return concluir(); idx = Math.max(0, Math.min(L.length - 1, idx + d)); route.idx = idx; st(""); desenhar(); };
   $("vprox").onclick = () => mudar(1); $("vant").onclick = () => mudar(-1);
+  const irPara = async (i) => { if (window.__vozVisita) window.__vozVisita.parar(); const fa = $("vfala"); if (fa && fa.value !== (amb()?.fala || "")) await salvarFala(fa.value); extraId = null; idx = i; route.idx = i; st(""); desenhar(); };
   $("vextra").onclick = async () => { const id = uid("a"); await ambientesSalvar(route.id, (ambs) => ambs.push({ id, nome: "Ambiente extra", fotos: [], fala: "", criado: now() })); extraId = id; st(""); desenhar(); };
   const concluir = () => { pararCamera(); const falt = itens().filter((x) => x.obrigatorio && !x.amb); if (falt.length) toast("Faltaram: " + falt.map((x) => x.nome).join(", ") + ". Você pode completar depois."); route.idx = null; const prev = stack[stack.length - 1]; const temFotos = (O(route.id)?.captacao?.ambientes || []).some((x) => (x.fotos || []).length); if (prev && prev.v === "captacao" && temFotos) prev.gerar = true; back(); };
   $("vfim").onclick = concluir;

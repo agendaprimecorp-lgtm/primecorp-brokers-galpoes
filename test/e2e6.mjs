@@ -32,7 +32,7 @@ await p.click('#vmic'); await W(500); ok(/Parar/.test(await txt('#vmic')), 'micr
 ok(await esperar(async () => /portão eletrônico/.test(await p.$eval('#vfala', (x) => x.value))), 'fala registrada no ambiente');
 ok(await esperar(async () => /Pronto: salve e siga/.test(await txt('#vguia'))), 'guia do passo: foto → descrever → salvar e seguir');
 ok(await esperar(async () => /Dados da fala aplicados/.test(await txt('#vst'))), 'números da fala aplicados na ficha (dormitórios, vagas)');
-await sh('02_visita_fala_ia');
+await sh('02_visita_fala_ia'); ok((await p.$$('#vstrip .vs')).length >= 9 && !!(await p.$('#vstrip .vs.on')), 'faixa de ambientes na visita'); await p.click('#vstrip [data-vi="2"]'); await W(300); ok((await txt('#vnome')) === 'Cozinha', 'tocar na faixa pula para o ambiente'); await p.click('#vstrip [data-vi="0"]'); await W(300);
 // 2) percorre o roteiro: fotografa as obrigatórias, pula as opcionais
 let guarda = 0;
 while (guarda++ < 30) {
@@ -49,7 +49,7 @@ await p.click('#vprox'); await W(300);
 await p.click('#vfim'); await W(800);
 ok(await esperar(async () => /3 dormitórios/.test(await p.$eval('[data-c="titulo"]', (x) => x.value)), 20000), 'ao concluir, volta e gera o anúncio com a IA');
 const vid = await p.$('#vid'); ok(!vid, 'câmera fechada ao sair da visita');
-const rtc = await txt('#rtc'); const [f1, t1] = rtc.match(/(\d+)\/(\d+)/).slice(1).map(Number); const faltam = await p.$$eval('.ri:not(.ok) b', (xs) => xs.map((x) => x.firstChild.textContent.trim()).filter((t) => !/opcional/.test(t)));
+const rtc = (await txt('#ranel')).replace(/\s/g, ''); const [f1, t1] = rtc.match(/(\d+)\/(\d+)/).slice(1).map(Number); const faltam = await p.$$eval('.rt.obr .rn', (xs) => xs.map((x) => x.textContent.trim()));
 ok(f1 === t1 || (t1 - f1 === 1 && faltam[0] === 'Banheiro 2'), 'roteiro na captação: ' + rtc + (faltam.length ? ' · o anúncio informou 2 banheiros e o roteiro passou a pedir: ' + faltam.join(', ') : ''));
 await sh('04_captacao_pos_visita');
 await p.evaluate(() => document.querySelector('#ambs').scrollIntoView()); await sh('05_ambientes_descritos');
