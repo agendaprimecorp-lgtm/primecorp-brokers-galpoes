@@ -6,6 +6,9 @@ fs.rmSync('test/www', { recursive: true, force: true }); fs.cpSync('public', 'te
 await build({ entryPoints: ['src/app.js', 'src/sala.js', 'src/anunciante.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
 const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default; const anun = (await import('./out/anunciante.mjs')).default; const imov = (await import('./out/imovel.mjs')).default;
 const MIME = { '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/json' };
+// leitura de link simulada: só o IP público de teste; o resto segue o fetch real
+const fetchReal = globalThis.fetch;
+globalThis.fetch = async (u, o) => { const s = String(u); if (s.startsWith('https://93.184.215.14/')) { if (s.includes('/bloqueado')) return new Response('<html>Access denied</html>', { status: 403, headers: { 'content-type': 'text/html' } }); return new Response(`<html><head><title>Apartamento 2 dormitórios no Cambuí</title><meta property="og:description" content="Apartamento 2 dormitórios, 1 suíte, 68 m², R$ 520 mil"></head><body><p>${'Apartamento 2 dormitórios com varanda, lazer completo. '.repeat(10)}</p></body></html>`, { headers: { 'content-type': 'text/html' } }); } return fetchReal(u, o); };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost:8899');
   const chunks = []; for await (const c of req) chunks.push(c); const body = chunks.length ? Buffer.concat(chunks) : undefined;

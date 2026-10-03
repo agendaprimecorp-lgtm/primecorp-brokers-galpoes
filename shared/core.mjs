@@ -18,11 +18,13 @@ PC.nf = function (n, dec) {
   const d = dec === undefined ? (Number.isInteger(n) ? 0 : 2) : dec;
   return n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 };
+PC.ha = n => (n ? Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' ha' : null);
+PC.titCor = c => (c && c.titulo) || 'Corretor de Imóveis';
 PC.m2 = n => (n ? PC.nf(Math.round(n), 0) + ' m²' : null);
 PC.brl = n => (n ? 'R$ ' + PC.nf(Math.round(n), 0) : null);
 PC.brl2 = n => (n ? 'R$ ' + PC.nf(n, 2) : null);
 PC.num = d => {
-  const k = ['terreno', 'construida', 'fabril', 'administrativo', 'apoio', 'pe_direito', 'piso_carga', 'docas', 'energia_kva', 'aluguel', 'venda', 'condominio', 'iptu', 'frente', 'dormitorios', 'suites', 'banheiros', 'vagas'];
+  const k = ['terreno', 'construida', 'fabril', 'administrativo', 'apoio', 'pe_direito', 'piso_carga', 'docas', 'energia_kva', 'aluguel', 'venda', 'condominio', 'iptu', 'frente', 'dormitorios', 'suites', 'banheiros', 'vagas', 'area_ha', 'distancia_asfalto'];
   const o = Object.assign({}, d);
   k.forEach(f => (o[f] = PC.parseBR(d[f])));
   o.diferenciais = PC.lines(d.diferenciais);
@@ -32,10 +34,14 @@ PC.num = d => {
 PC.lines = v => (Array.isArray(v) ? v : String(v || '').split('\n')).map(s => String(s).replace(/^[\s•\-–*·]+/, '').trim()).filter(Boolean);
 PC.areaRef = d => d.fabril || d.construida || d.terreno || null;
 
-PC.RESID_RE = /casa|apartamento|sobrado|cobertura|kitnet|studio|chácara|chacara|flat/i;
+PC.RESID_RE = /casa|apartamento|sobrado|cobertura|kitnet|studio|flat/i;
+PC.RURAL_RE = /fazenda|s[ií]tio|ch[áa]cara|rancho|haras|rural/i;
+PC.ALQ_SP = 2.42;
 PC.autoTitle = function (d) {
   const tipo = d.tipo || 'Galpão';
   const cid = d.cidade ? ' em ' + d.cidade : '';
+  if (PC.RURAL_RE.test(tipo)) return d.area_ha ? `${tipo} de ${PC.ha(d.area_ha)}${cid}` : tipo + cid;
+  if (/terreno|área|area/i.test(tipo) && d.terreno) return `${tipo} de ${PC.m2(d.terreno)}${cid}`;
   if (PC.RESID_RE.test(tipo)) {
     const q = d.dormitorios ? ` com ${PC.nf(d.dormitorios)} dormitório${d.dormitorios > 1 ? 's' : ''}` : d.construida ? ` de ${PC.m2(d.construida)}` : '';
     return `${tipo}${q}${cid}`;
@@ -62,7 +68,15 @@ PC.checks = function (d, history) {
     if (Math.abs(s - d.construida) / d.construida > 0.1)
       add('a', `Soma das áreas (${PC.m2(s)}) não fecha com a construída (${PC.m2(d.construida)}).`, 'Quadro de áreas: soma não fecha com a área construída');
   }
-  const galp = PC.grupo(d.tipo) === 'galpao';
+  const grp = PC.grupo(d.tipo); const galp = grp === 'galpao';
+  if (grp === 'rural') {
+    if (!d.area_ha) add('a', 'Área total (ha) não informada.', 'Área total em hectares a confirmar (matrícula / georreferenciamento)');
+    if (!d.car) add('a', 'CAR não informado.', 'CAR (Cadastro Ambiental Rural) a confirmar');
+    if (!d.ccir) add('a', 'CCIR/ITR não informados.', 'CCIR e ITR em dia a confirmar');
+    if (!d.georref && d.area_ha && d.area_ha >= 25) add('a', 'Imóvel com 25 ha ou mais sem georreferenciamento informado (exigido para transferir a matrícula, Dec. 4.449/02).', 'Georreferenciamento certificado no SIGEF/INCRA a confirmar');
+    if (!d.agua) add('a', 'Fontes de água não informadas.', 'Fontes de água (nascentes, rio, represa, poço) a confirmar');
+  }
+  if (grp === 'residencial' && d.aluguel && d.condominio && d.condominio > d.aluguel) add('a', 'Condomínio maior que o aluguel.', 'Valor do condomínio a confirmar');
   if (galp && d.aluguel && (d.construida || d.fabril)) {
     const base = d.construida || d.fabril;
     const v = d.aluguel / base;
@@ -124,7 +138,7 @@ PC.whats = function (d, chk) {
   if (it.length) { L.push(''); L.push('*A confirmar:* ' + it.slice(0, 5).join('; ') + '.'); }
   L.push('');
   L.push('Descritivo completo em PDF. Agende uma visita.');
-  L.push('Rodrigo França Viana · Corretor de Imóveis · CRECI-SP 297692');
+  L.push(`${d.corretor?.nome || 'Rodrigo França Viana'} · ${PC.titCor(d.corretor)} · ${d.corretor?.creci || 'CRECI-SP 297692'}`);
   return L.join('\n');
 };
 
@@ -187,8 +201,20 @@ PC.pdf = function (jsPDF, d, chk, logos) {
   // KPIs
   y += 12;
   // cartões: primeiro o que é conhecido, depois o que falta
-  const resid = PC.RESID_RE.test(d.tipo || '');
-  const cand = resid ? [
+  const resid = PC.RESID_RE.test(d.tipo || '') && !PC.RURAL_RE.test(d.tipo || '');
+  const rural = PC.RURAL_RE.test(d.tipo || ''); const lote = !rural && PC.grupo(d.tipo) === 'area';
+  const curto = (t, n = 16) => { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+  const cand = rural ? [
+    [d.area_ha && PC.ha(d.area_ha), 'Área total'],
+    [d.area_ha && PC.nf(Math.round(d.area_ha / PC.ALQ_SP * 10) / 10) + ' alq.', 'Alqueires paulistas'],
+    [d.aptidao && curto(d.aptidao), 'Aptidão / uso'],
+    [d.distancia_asfalto != null && d.distancia_asfalto !== '' && PC.nf(d.distancia_asfalto) + ' km', 'Até o asfalto'],
+  ] : lote ? [
+    [d.terreno && PC.m2(d.terreno), 'Área do terreno'],
+    [d.frente && PC.nf(d.frente) + ' m', 'Frente'],
+    [d.zoneamento && curto(d.zoneamento), 'Zoneamento'],
+    [d.topografia && curto(d.topografia), 'Topografia'],
+  ] : resid ? [
     [d.construida && PC.m2(d.construida), 'Área útil / construída'],
     [d.dormitorios && PC.nf(d.dormitorios), d.suites ? `Dormitórios (${PC.nf(d.suites)} suíte${d.suites > 1 ? 's' : ''})` : 'Dormitórios'],
     [d.vagas && PC.nf(d.vagas), 'Vagas'],
@@ -240,7 +266,19 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     return yy;
   };
   const tw = (IW - 12) / 2;
-  const areas = resid ? [
+  const areas = rural ? [
+    ['Área total', d.area_ha ? PC.ha(d.area_ha) : AC],
+    ['Alqueires paulistas', d.area_ha ? PC.nf(Math.round(d.area_ha / PC.ALQ_SP * 10) / 10) : AC],
+    ['Aptidão / uso', d.aptidao || AC],
+    ['Topografia', d.topografia || AC],
+    ['Água', d.agua || AC],
+    ['Benfeitorias', d.benfeitorias || AC],
+  ] : lote ? [
+    ['Área do terreno', d.terreno ? PC.m2(d.terreno) : AC],
+    ['Frente', d.frente ? PC.nf(d.frente) + ' m' : AC],
+    ['Topografia', d.topografia || AC],
+    ['Zoneamento', d.zoneamento || AC],
+  ] : resid ? [
     ['Área útil / construída', d.construida ? PC.m2(d.construida) : AC],
     ['Terreno', d.terreno ? PC.m2(d.terreno) : /apart|cobertura|flat|studio|kitnet/i.test(d.tipo || '') ? 'Não se aplica' : AC],
     ['Tipologia', d.tipologia || AC],
@@ -252,7 +290,19 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     ['Apoio / outros', d.apoio ? PC.m2(d.apoio) : (d.apoio_txt || AC)],
     ['Tipologia', d.tipologia || AC],
   ];
-  const estr = resid ? [
+  const estr = rural ? [
+    ['Matrícula', d.documentacao || AC],
+    ['CAR', d.car || AC],
+    ['CCIR e ITR', d.ccir || AC],
+    ['Georreferenciamento', d.georref || AC],
+    ['Até o asfalto', d.distancia_asfalto ? PC.nf(d.distancia_asfalto) + ' km' : AC],
+    ['Disponibilidade', d.disponibilidade || AC],
+  ] : lote ? [
+    ['Matrícula', d.documentacao || AC],
+    ['Disponibilidade', d.disponibilidade || AC],
+    ['Construção existente', d.construida ? PC.m2(d.construida) : 'Não informada'],
+    ['IPTU', d.iptu ? PC.brl(d.iptu) : AC],
+  ] : resid ? [
     ['Dormitórios', d.dormitorios ? PC.nf(d.dormitorios) : AC],
     ['Suítes', d.suites != null ? PC.nf(d.suites) || '0' : AC],
     ['Banheiros', d.banheiros ? PC.nf(d.banheiros) : AC],
@@ -264,15 +314,18 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     ['Pontes rolantes', d.pontes || 'Não informado'],
     ['AVCB / incêndio', d.avcb || AC],
   ];
-  const y1 = table(M, y, tw, 'ÁREAS', areas, [90]);
-  const y2 = table(M + tw + 12, y, tw, resid ? 'AMBIENTES' : 'ESTRUTURA', resid ? [...estr, ['Vagas', d.vagas ? PC.nf(d.vagas) : AC]] : estr, [90]);
+  const y1 = table(M, y, tw, rural ? 'ÁREA E USO' : 'ÁREAS', areas, [90]);
+  const y2 = table(M + tw + 12, y, tw, rural ? 'DOCUMENTAÇÃO E ACESSO' : lote ? 'DOCUMENTAÇÃO' : resid ? 'AMBIENTES' : 'ESTRUTURA', resid ? [...estr, ['Vagas', d.vagas ? PC.nf(d.vagas) : AC]] : estr, [90]);
   y = Math.max(y1, y2) + 14;
 
   // condições
   const cond = [];
-  const base = d.construida || d.fabril;
+  const base = rural || lote ? null : d.construida || d.fabril;
+  if (rural && d.venda && d.area_ha) cond.push(['Venda', PC.brl(d.venda), PC.brl(d.venda / d.area_ha) + '/ha']);
+  else if (lote && d.venda && d.terreno) cond.push(['Venda', PC.brl(d.venda), PC.brl2(d.venda / d.terreno) + '/m² de terreno']);
+  if ((rural || lote) && d.venda) d = { ...d, _vendaFeita: true };
   if (d.aluguel) cond.push(['Aluguel mensal', PC.brl(d.aluguel), base ? PC.brl2(d.aluguel / base) + '/m² ' + (d.construida ? 'construída' : 'fabril') : '']);
-  if (d.venda) cond.push(['Venda', PC.brl(d.venda), base ? PC.brl2(d.venda / base) + '/m² ' + (d.construida ? 'construída' : 'fabril') : '']);
+  if (d.venda && !d._vendaFeita) cond.push(['Venda', PC.brl(d.venda), base ? PC.brl2(d.venda / base) + '/m² ' + (d.construida ? 'construída' : 'fabril') : '']);
   if (!d.aluguel && !d.venda) cond.push(['Valor', 'Sob consulta', '']);
   cond.push(['Condomínio', d.condominio ? PC.brl(d.condominio) : (d.condominio_txt || AC), d.condominio ? 'mensal' : '']);
   const iptuAmb = d.iptu && d.iptu_periodo !== 'anual' && d.iptu_periodo !== 'mensal';
@@ -325,7 +378,7 @@ PC.pdf = function (jsPDF, d, chk, logos) {
   pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40);
   F(7.6, false); ink(C.t2);
   const cor = d.corretor || {};
-  T(`${cor.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${cor.creci || 'CRECI-SP 297692'} · ${cor.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
+  T(`${cor.nome || 'Rodrigo França Viana'} · ${PC.titCor(cor)} · ${cor.creci || 'CRECI-SP 297692'} · ${cor.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
   T((d.codigo ? 'Ref. ' + d.codigo + ' · ' : '') + '1/1', W - M, H - 27, { align: 'right' });
   return doc;
 };
@@ -340,7 +393,7 @@ PC.filename = function (d) {
 /* ===== v2: cruzamento, teaser, etapas ===== */
 PC.ETAPAS = [['teaser','Teaser'],['interesse','Interesse'],['termo','Termo assinado'],['parceria','Parceria'],['visita','Visita'],['proposta','Proposta'],['fechado','Fechado']];
 PC.etapaIdx = e => PC.ETAPAS.findIndex(x => x[0] === e);
-PC.areaOf = d => d.fabril || d.construida || d.terreno || null;
+PC.areaOf = d => (d.area_ha ? d.area_ha * 10000 : d.fabril || d.construida || d.terreno || null);
 PC.norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
 PC.score = function (oRaw, bRaw, chk) {
@@ -372,6 +425,10 @@ PC.score = function (oRaw, bRaw, chk) {
   // energia
   if (b.kvaMin) { if (!o.energia_kva) pen(8, 'Energia a confirmar'); else if (o.energia_kva < b.kvaMin) pen(20, `Energia (${PC.nf(o.energia_kva)} kVA) abaixo do pedido`); }
   // docas
+  if (b.dormMin) { if (!o.dormitorios) pen(8, 'Dormitórios a confirmar'); else if (o.dormitorios < b.dormMin) out = out || `${PC.nf(o.dormitorios)} dormitório(s), abaixo do pedido`; }
+  if (b.suitesMin) { if (o.suites == null) pen(4, 'Suítes a confirmar'); else if (o.suites < b.suitesMin) pen(12, 'Menos suítes que o pedido'); }
+  if (b.vagasMin) { if (!o.vagas) pen(5, 'Vagas a confirmar'); else if (o.vagas < b.vagasMin) pen(12, 'Menos vagas que o pedido'); }
+  if (b.aluguelMax && (!bo || bo.startsWith('loc'))) { if (!o.aluguel) pen(10, 'Aluguel a confirmar'); else if (o.aluguel > b.aluguelMax * 1.15) out = out || 'Aluguel acima do orçamento'; else if (o.aluguel > b.aluguelMax) pen(15, 'Aluguel pouco acima do orçamento'); }
   if (b.docasMin) { if (!o.docas) pen(4, 'Docas a confirmar'); else if (o.docas < b.docasMin) pen(10, 'Menos docas que o pedido'); }
   // preço
   if (b.precoMaxM2 && (!bo || bo.startsWith('loc'))) {
@@ -389,7 +446,9 @@ PC.score = function (oRaw, bRaw, chk) {
 };
 PC.numB = function (b) {
   const o = Object.assign({}, b);
-  ['areaMin', 'areaMax', 'peMin', 'kvaMin', 'docasMin', 'precoMaxM2', 'valorMax'].forEach(k => (o[k] = PC.parseBR(b[k])));
+  ['areaMin', 'areaMax', 'peMin', 'kvaMin', 'docasMin', 'precoMaxM2', 'valorMax', 'haMin', 'haMax', 'dormMin', 'vagasMin', 'suitesMin', 'aluguelMax'].forEach(k => (o[k] = PC.parseBR(b[k])));
+  if (o.haMin && !o.areaMin) o.areaMin = o.haMin * 10000;
+  if (o.haMax && !o.areaMax) o.areaMax = o.haMax * 10000;
   return o;
 };
 
@@ -410,8 +469,31 @@ PC.teaserLinhas = function (oRaw, chk) {
   const linhas = L.slice(1).filter(x => x.startsWith('▪')).map(x => x.replace(/^▪\s*/, ''));
   return { titulo, linhas };
 };
-PC.teaser = function (oRaw, chk, rotulo) {
-  const o = PC.num(oRaw); const L = [];
+PC.bandHa = function (h) { if (!h) return null; if (h < 10) return `entre ${PC.nf(Math.floor(h))} e ${PC.nf(Math.floor(h) + 1)} ha`; const st = h < 100 ? 10 : h < 1000 ? 50 : 500; const lo = Math.floor(h / st) * st; return `entre ${PC.nf(lo)} e ${PC.nf(lo + st)} ha`; };
+PC.bandAluguel = function (v) { if (v >= 10000) { const lo = Math.floor(v / 5000) * 5; return `faixa de R$ ${lo} a ${lo + 5} mil/mês`; } const lo = Math.floor(v / 500) * 500; return `faixa de R$ ${PC.nf(lo)} a ${PC.nf(lo + 500)}/mês`; };
+PC.teaser = function (oRaw, chk, rotulo, corretor) {
+  const o = PC.num(oRaw); const L = []; const g = PC.grupo(o.tipo);
+  const assin = `${(corretor && corretor.nome) || 'Rodrigo França Viana'} · ${(corretor && corretor.creci) || 'CRECI-SP 297692'}`;
+  if (g === 'residencial' || g === 'rural') {
+    const reg0 = (oRaw.regiao || '').trim() || 'região a informar';
+    L.push(`*${rotulo || 'Opção'} · ${o.tipo || 'Imóvel'} · ${reg0}*`);
+    if (g === 'residencial') {
+      const amb = [o.dormitorios && `${PC.nf(o.dormitorios)} dormitório${o.dormitorios > 1 ? 's' : ''}${o.suites ? ` (${PC.nf(o.suites)} suíte${o.suites > 1 ? 's' : ''})` : ''}`, o.vagas && `${PC.nf(o.vagas)} vaga${o.vagas > 1 ? 's' : ''}`].filter(Boolean);
+      if (amb.length) L.push('▪ ' + amb.join(' · '));
+      if (o.construida) L.push(`▪ Área útil ${PC.bandArea(o.construida)}`);
+      if (o.aluguel) L.push(`▪ Locação: ${PC.bandAluguel(o.aluguel)}`);
+    } else {
+      if (o.area_ha) L.push(`▪ Área ${PC.bandHa(o.area_ha)} (cerca de ${PC.nf(Math.round(o.area_ha / PC.ALQ_SP))} alqueires paulistas)`);
+      const usos = [o.aptidao && 'aptidão: ' + String(o.aptidao).toLowerCase(), o.agua && 'água: ' + String(o.agua).toLowerCase()].filter(Boolean);
+      if (usos.length) L.push('▪ ' + usos.join(' · ').replace(/^./, c => c.toUpperCase()));
+      if (o.aluguel) L.push(`▪ Arrendamento: valor sob consulta`);
+    }
+    if (o.venda) L.push(`▪ Venda: ${PC.bandValor(o.venda)}`);
+    const it = (chk ? chk.alerts : []).map(x => x.item).filter(Boolean).slice(0, 2);
+    if (it.length) L.push(`▪ A confirmar: ${it.map(t => t.replace(/ a confirmar.*$/i, '')).join('; ')}`);
+    L.push(''); L.push('Interesse? Envio a ficha completa e agendo a visita.'); L.push(assin);
+    return L.join('\n');
+  }
   const reg = (oRaw.regiao || '').trim() || 'região a informar';
   L.push(`*${rotulo || 'Opção'} · ${o.tipo || 'Imóvel'} · ${reg}*`);
   const a = PC.areaOf(o);
@@ -430,12 +512,12 @@ PC.teaser = function (oRaw, chk, rotulo) {
   if (uniq.length) L.push(`▪ A confirmar: ${uniq.join('; ')}`);
   L.push('');
   L.push('Interesse? Formalizamos a parceria e envio a ficha completa.');
-  L.push('Rodrigo França Viana · CRECI-SP 297692');
+  L.push(assin);
   return L.join('\n');
 };
 
 /* ===== v3: ficha mínima, completude, comissão e documento ao anunciante ===== */
-PC.grupo = tipo => (PC.RESID_RE.test(tipo || '') ? 'residencial' : /área|area|terreno|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja/i.test(tipo || '') ? 'comercial' : 'galpao');
+PC.grupo = tipo => (PC.RURAL_RE.test(tipo || '') ? 'rural' : PC.RESID_RE.test(tipo || '') ? 'residencial' : /área|area|terreno|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja/i.test(tipo || '') ? 'comercial' : 'galpao');
 // campo: [rótulo, pergunta objetiva, tipo de resposta]
 PC.CAMPOS = {
   cidade: ['Cidade', 'Em qual cidade fica o imóvel?', 'text'],
@@ -461,12 +543,22 @@ PC.CAMPOS = {
   suites: ['Suítes', 'Quantos dos dormitórios são suítes?', 'nº'],
   banheiros: ['Banheiros', 'Quantos banheiros no total?', 'nº'],
   vagas: ['Vagas', 'Quantas vagas de garagem?', 'nº'],
+  area_ha: ['Área total', 'Qual a área total, em hectares ou alqueires (paulista ou mineiro)?', 'ha'],
+  aptidao: ['Aptidão / uso', 'Qual o uso atual e a aptidão (pasto, lavoura, eucalipto, café, lazer)?', 'text'],
+  agua: ['Água', 'Quais as fontes de água (rio, nascente, represa, poço artesiano)?', 'text'],
+  benfeitorias: ['Benfeitorias', 'Quais as benfeitorias (sede, casas, curral, barracões, cercas, energia)?', 'text'],
+  topografia: ['Topografia', 'Como é a topografia (plana, levemente ondulada, acidentada)?', 'text'],
+  car: ['CAR', 'O imóvel tem CAR (Cadastro Ambiental Rural)? Qual a situação?', 'text'],
+  ccir: ['CCIR e ITR', 'O CCIR e o ITR estão em dia?', 'text'],
+  georref: ['Georreferenciamento', 'O imóvel é georreferenciado e certificado no SIGEF/INCRA?', 'text'],
+  distancia_asfalto: ['Distância do asfalto', 'Quantos km de estrada de terra até o asfalto?', 'km'],
 };
-PC.CAMPOS_NUM = ['dormitorios', 'suites', 'banheiros', 'vagas', 'construida', 'terreno', 'fabril', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'aluguel', 'venda', 'iptu', 'condominio', 'frente'];
+PC.CAMPOS_NUM = ['area_ha', 'distancia_asfalto', 'dormitorios', 'suites', 'banheiros', 'vagas', 'construida', 'terreno', 'fabril', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'aluguel', 'venda', 'iptu', 'condominio', 'frente'];
 PC.OBRIG = {
   galpao: ['cidade', 'regiao', 'construida', 'terreno', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'avcb', 'VALOR', 'iptu', 'disponibilidade', 'documentacao'],
   area: ['cidade', 'regiao', 'terreno', 'zoneamento', 'VALOR', 'iptu', 'disponibilidade', 'documentacao'],
   comercial: ['cidade', 'regiao', 'construida', 'VALOR', 'iptu', 'condominio', 'disponibilidade', 'documentacao'],
+  rural: ['cidade', 'regiao', 'area_ha', 'aptidao', 'agua', 'benfeitorias', 'VALOR', 'car', 'ccir', 'documentacao', 'disponibilidade'],
   residencial: ['cidade', 'regiao', 'construida', 'dormitorios', 'banheiros', 'vagas', 'VALOR', 'iptu', 'condominio', 'disponibilidade', 'documentacao'],
 };
 PC.completude = function (oRaw) {
@@ -547,11 +639,14 @@ PC.valorCampo = function (d, c) {
   if (u === 'm') return PC.nf(v) + ' m';
   if (u === 't/m²') return PC.nf(v) + ' t/m²';
   if (u === 'kVA') return PC.nf(v) + ' kVA';
+  if (u === 'ha') return PC.ha(v);
+  if (u === 'km') return PC.nf(v) + ' km';
   return String(v);
 };
 PC.conhecidos = function (oRaw) {
   const d = PC.num(oRaw);
   return ['cidade', 'regiao', 'construida', 'fabril', 'terreno', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'avcb', 'aluguel', 'venda', 'condominio', 'iptu', 'zoneamento', 'frente', 'disponibilidade', 'documentacao']
+    .concat(['dormitorios', 'suites', 'banheiros', 'vagas', 'area_ha', 'aptidao', 'agua', 'benfeitorias', 'topografia', 'car', 'ccir', 'georref', 'distancia_asfalto'])
     .map(c => [PC.CAMPOS[c][0], PC.valorCampo(d, c)]).filter(r => r[1]);
 };
 PC.pdfAnunciante = function (jsPDF, oRaw, o) {
@@ -649,7 +744,7 @@ PC.pdfAnunciante = function (jsPDF, oRaw, o) {
   for (let i = 1; i <= n; i++) {
     doc.setPage(i); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40);
     F(7.4, false); ink(C.t2);
-    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}${o.corretor?.whatsapp ? ' · ' + o.corretor.whatsapp : ''}`, M, H - 27);
+    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · ${PC.titCor(o.corretor)} · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}${o.corretor?.whatsapp ? ' · ' + o.corretor.whatsapp : ''}`, M, H - 27);
     T(`Ref. ${o.codigo || ''} · ${i}/${n}`, W - M, H - 27, { align: 'right' });
   }
   return doc;
@@ -721,7 +816,7 @@ PC.pdfAcordo = function (jsPDF, o) {
   }
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) { doc.setPage(i); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40); F(7.4, false); ink(C.t2);
-    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
+    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · ${PC.titCor(o.corretor)} · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
     T(`Ref. ${o.codigo || ''} · ${i}/${n}`, W - M, H - 27, { align: 'right' }); }
   return doc;
 };
@@ -770,7 +865,7 @@ PC.pdfDoc = function (jsPDF, o) {
   }
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) { doc.setPage(i); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40); F(7.4, false); ink(C.t2);
-    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
+    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · ${PC.titCor(o.corretor)} · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
     T(`${o.codigo ? 'Ref. ' + o.codigo + ' · ' : ''}${i}/${n}`, W - M, H - 27, { align: 'right' }); }
   return doc;
 };

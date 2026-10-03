@@ -24,7 +24,7 @@ function tela(p, msg) {
   $("main").innerHTML = `
   <div class="card"><span class="k">Ref. ${esc(p.codigo)} · ${esc(p.operacao)}</span><h2>${esc(p.titulo)}</h2>
   ${p.anunciante ? `<p class="hint">A/C: ${esc(p.anunciante)}</p>` : ""}
-  <p>Represento empresas e investidores que procuram imóveis. Gostaria de apresentar este imóvel aos meus clientes${p.perguntas.length && !p.perguntas.every((q) => q.resposta) ? ": faltam algumas informações básicas" : ""}.</p>
+  <p>Represento ${p.grupo === "residencial" ? "famílias e investidores" : p.grupo === "rural" ? "produtores e investidores" : "empresas e investidores"} que procuram imóveis${p.grupo === "rural" ? " rurais" : ""}. Gostaria de apresentar este imóvel aos meus clientes${p.perguntas.length && !p.perguntas.every((q) => q.resposta) ? ": faltam algumas informações básicas" : ""}.</p>
   ${p.demanda > 0 ? `<p class="note"><b>Tenho ${p.demanda} cliente${p.demanda > 1 ? "s" : ""} com demanda ativa compatível com este imóvel.</b></p>` : ""}
   ${msg ? `<p class="status">${esc(msg)}</p>` : ""}</div>
   ${p.conhecidos.length ? `<div class="card"><h3>Dados que já temos</h3><ul class="log">${p.conhecidos.map((r) => `<li><time>${esc(r[0])}</time><span><b>${esc(r[1])}</b></span></li>`).join("")}</ul></div>` : ""}

@@ -2,6 +2,8 @@
 import { getDatabase } from "@netlify/database";
 import { getUser } from "@netlify/identity";
 import Anthropic from "@anthropic-ai/sdk";
+import dns from "node:dns/promises";
+import net from "node:net";
 
 export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios"];
 
@@ -106,12 +108,18 @@ export async function proximoCodigoPC() {
 }
 
 /* ---------------- Extração com IA ---------------- */
-export const PROMPT_UM = `Você extrai dados de anúncios imobiliários brasileiros (galpões, áreas, imóveis comerciais) para a ficha de um corretor.
+export const PROMPT_UM = `Você extrai dados de anúncios imobiliários brasileiros de QUALQUER segmento (residencial, comercial, galpão, terreno, rural) para a ficha de um corretor.
 Responda SOMENTE um objeto JSON com estas chaves (null quando o anúncio não informar; NUNCA invente):
-{"tipo":"Galpão|Galpão em condomínio|Área / terreno|Prédio comercial|Imóvel comercial|Fazenda","operacao":"Locação|Venda|Locação / Venda","cidade":string,"uf":"SP","regiao":"região ampla ou eixo (ex.: 'Eixo Anhanguera (RMC)'), nunca bairro","subtitulo":"destaque de acesso SEM endereço (rodovia, aeroporto, distâncias)","tipologia":"Isolado|Em condomínio|null","terreno":número,"construida":número,"fabril":número,"administrativo":número,"apoio":número,"pe_direito":número,"piso_carga":número,"docas":número,"energia_kva":número,"pontes":"texto curto|null","avcb":"texto curto|null","aluguel":número mensal,"venda":número,"condominio":número mensal,"iptu":número,"iptu_periodo":"mensal|anual|null (só se explícito)","data_anuncio":"AAAA-MM-DD|null","anunciante":"nome da imobiliária/anunciante|null","titulo":"título curto, ex.: 'Galpão com 12.400 m² de área fabril em Sumaré'","descricao":"parágrafo de 350 a 550 caracteres, 3ª pessoa, só fatos do anúncio","diferenciais":["até 6 itens curtos"],"itens":["até 4 dúvidas específicas a confirmar"],"alertas_ia":[{"lvl":"a|v","msg":"inconsistência no próprio texto","item":"frase curta para itens a confirmar"}]}
-REGRAS: números puros (12400). Se total = útil = construída com número redondo, use construida e alerte que pode ser o terreno. Em titulo, subtitulo, descricao e diferenciais é PROIBIDO citar rua, número, bairro, nome de condomínio, imobiliária, corretor, portal, código do anúncio, telefone ou e-mail.`;
+{"tipo":"Casa|Casa em condomínio|Apartamento|Sobrado|Cobertura|Kitnet / studio|Sala comercial|Loja|Prédio comercial|Imóvel comercial|Galpão|Galpão em condomínio|Terreno|Área / terreno|Fazenda|Sítio|Chácara","operacao":"Locação|Venda|Locação / Venda","cidade":string,"uf":"SP","regiao":"bairro ou região ampla (residencial/rural) ou eixo (galpão, ex.: 'Eixo Anhanguera (RMC)')","subtitulo":"destaque SEM endereço (acesso, vista, lazer, rodovia)","tipologia":"Isolado|Em condomínio|null",
+"terreno":número m²,"construida":número m² (no residencial: área útil/privativa),"fabril":número,"administrativo":número,"apoio":número,"frente":número m,"zoneamento":string,"topografia":string,
+"dormitorios":número,"suites":número,"banheiros":número,"vagas":número,
+"pe_direito":número,"piso_carga":número,"docas":número,"energia_kva":número,"pontes":"texto curto|null","avcb":"texto curto|null",
+"area_ha":número em HECTARES (converta: alqueire paulista = 2,42 ha; alqueire mineiro/goiano = 4,84 ha; m² ÷ 10.000),"aptidao":string,"agua":string,"benfeitorias":string,"car":string,"ccir":string,"georref":string,"distancia_asfalto":número km,
+"aluguel":número mensal,"venda":número,"condominio":número mensal,"iptu":número,"iptu_periodo":"mensal|anual|null (só se explícito)","disponibilidade":string,"documentacao":string,"data_anuncio":"AAAA-MM-DD|null","anunciante":"nome da imobiliária/anunciante|null",
+"titulo":"título curto, ex.: 'Casa com 3 dormitórios em Sumaré', 'Fazenda de 48 ha em Mogi Mirim', 'Galpão com 12.400 m² de área fabril em Sumaré'","descricao":"parágrafo de 350 a 550 caracteres, 3ª pessoa, só fatos do anúncio","diferenciais":["até 6 itens curtos"],"itens":["até 4 dúvidas específicas a confirmar"],"alertas_ia":[{"lvl":"a|v","msg":"inconsistência no próprio texto","item":"frase curta para itens a confirmar"}]}
+REGRAS: números puros (12400). Área rural sempre em hectares em area_ha, com a unidade original citada em alertas_ia se houver conversão de alqueire. Se total = útil = construída com número redondo, use construida e alerte que pode ser o terreno. Em titulo, subtitulo, descricao e diferenciais é PROIBIDO citar rua, número, nome de condomínio, imobiliária, corretor, portal, código do anúncio, telefone ou e-mail.`;
 
-export const PROMPT_VARIOS = `O texto abaixo é um e-mail de alerta de portal imobiliário (ou uma lista colada) com VÁRIOS anúncios. Responda SOMENTE {"ofertas":[...]} com até 15 itens, um por anúncio, cada um com as chaves: tipo, operacao, cidade, uf, regiao (região ampla, nunca bairro), titulo (sem endereço), fabril, construida, terreno, pe_direito, docas, aluguel, venda, condominio, iptu, link (URL do anúncio se aparecer, senão null), anunciante (se aparecer). Números puros; null quando não houver; NUNCA invente.`;
+export const PROMPT_VARIOS = `O texto abaixo é um e-mail de alerta de portal imobiliário (ou uma lista colada) com VÁRIOS anúncios. Responda SOMENTE {"ofertas":[...]} com até 15 itens, um por anúncio, cada um com as chaves: tipo (Casa, Apartamento, Galpão, Terreno, Fazenda, Sítio, Sala comercial…), operacao, cidade, uf, regiao (bairro ou região ampla), titulo (sem endereço), fabril, construida, terreno, dormitorios, vagas, area_ha (hectares; alqueire paulista = 2,42 ha), pe_direito, docas, aluguel, venda, condominio, iptu, link (URL do anúncio se aparecer, senão null), anunciante (se aparecer). Números puros; null quando não houver; NUNCA invente.`;
 
 export function extrairJSON(txt) {
   const s = String(txt || "").trim();
@@ -148,12 +156,12 @@ export async function chamarIAImagem(prompt, texto, imagens = [], maxTokens = 15
 
 export const PROMPT_AMBIENTE = `Você ajuda um corretor de imóveis brasileiro que está captando um imóvel no local. Recebe foto(s) de UM ambiente e o que o corretor falou sobre ele (transcrição de voz, pode ter erros).
 Responda SOMENTE um objeto JSON:
-{"ambiente":"nome curto do ambiente (ex.: 'Sala de estar', 'Cozinha', 'Suíte master', 'Fachada', 'Área de lazer', 'Galpão – área operacional', 'Docas')","descricao":"1 a 2 frases objetivas sobre o ambiente, 3ª pessoa, só o que se vê nas fotos ou o corretor disse","caracteristicas":["até 6 itens curtos, ex.: 'Piso porcelanato', 'Armários planejados'"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"pe_direito":número|null,"docas":número|null,"aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null},"foto":{"ok":true|false,"problemas":["ex.: 'escura', 'tremida', 'torta', 'objetos pessoais à vista', 'pessoa na foto', 'placa de carro visível'"]}}
+{"ambiente":"nome curto do ambiente (ex.: 'Sala de estar', 'Cozinha', 'Suíte master', 'Fachada', 'Área de lazer', 'Galpão – área operacional', 'Docas', 'Sede', 'Curral', 'Pastagem', 'Represa', 'Vista do terreno')","descricao":"1 a 2 frases objetivas sobre o ambiente, 3ª pessoa, só o que se vê nas fotos ou o corretor disse","caracteristicas":["até 6 itens curtos, ex.: 'Piso porcelanato', 'Armários planejados'"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"pe_direito":número|null,"docas":número|null,"area_ha":número em hectares|null,"aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null},"foto":{"ok":true|false,"problemas":["ex.: 'escura', 'tremida', 'torta', 'objetos pessoais à vista', 'pessoa na foto', 'placa de carro visível'"]}}
 REGRAS: em "dados" só números DITOS pelo corretor (nunca estime pela foto); null quando não falou. Não invente materiais que não dá para ver. Não cite endereço.`;
 
 export const PROMPT_ANUNCIO = `Você redige o anúncio de um imóvel captado diretamente por um corretor de imóveis brasileiro (PrimeCorp Brokers), a partir dos dados da ficha, dos ambientes registrados no local e das falas do corretor.
 Responda SOMENTE um objeto JSON:
-{"titulo":"até 70 caracteres, ex.: 'Casa com 3 dormitórios e piscina no Jardim X, Sumaré'","subtitulo":"até 90 caracteres com o principal atrativo","descricao":"2 parágrafos, 500 a 800 caracteres no total, 3ª pessoa, tom profissional e acolhedor, só fatos fornecidos","destaques":["4 a 8 itens curtos"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null,"iptu_periodo":"mensal|anual|null","disponibilidade":"texto|null","documentacao":"texto|null"},"pendencias":["até 5 informações que faltam para um anúncio completo"]}
+{"titulo":"até 70 caracteres, ex.: 'Casa com 3 dormitórios e piscina no Jardim X, Sumaré'","subtitulo":"até 90 caracteres com o principal atrativo","descricao":"2 parágrafos, 500 a 800 caracteres no total, 3ª pessoa, tom profissional e acolhedor, só fatos fornecidos","destaques":["4 a 8 itens curtos"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"area_ha":número em hectares (alqueire paulista = 2,42 ha)|null,"aptidao":"texto|null","agua":"texto|null","benfeitorias":"texto|null","aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null,"iptu_periodo":"mensal|anual|null","disponibilidade":"texto|null","documentacao":"texto|null"},"pendencias":["até 5 informações que faltam para um anúncio completo"]}
 REGRAS: NUNCA invente números, materiais ou itens de lazer. Não cite rua, número, nome do proprietário nem telefone. Bairro e cidade podem aparecer. Em "dados", só números informados nas falas ou na ficha.`;
 
 export async function chamarIA(prompt, texto, maxTokens = 4000) {
@@ -166,6 +174,57 @@ export async function chamarIA(prompt, texto, maxTokens = 4000) {
   });
   const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
   return extrairJSON(out);
+}
+
+
+/* ---------------- Leitura de anúncio pelo link (melhor esforço) ---------------- */
+const ipPrivado = (ip) => {
+  if (net.isIPv6(ip)) { const x = ip.toLowerCase(); return x === "::" || x === "::1" || /^f[cd]/.test(x) || x.startsWith("fe80") || x.startsWith("::ffff:") || x.startsWith("64:ff9b:"); }
+  const [a, b] = ip.split(".").map(Number);
+  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+};
+export function htmlParaTexto(html) {
+  const h = String(html || "");
+  const meta = [];
+  const m = (re) => { const x = h.match(re); return x ? x[1] : ""; };
+  meta.push(m(/<title[^>]*>([\s\S]*?)<\/title>/i), m(/property=["']og:title["'][^>]*content=["']([^"']+)/i), m(/property=["']og:description["'][^>]*content=["']([^"']+)/i), m(/name=["']description["'][^>]*content=["']([^"']+)/i));
+  const ld = [...h.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)].map((x) => x[1].trim()).join("\n").slice(0, 8000);
+  const corpo = h.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<(br|\/p|\/div|\/li|\/h\d|\/tr)[^>]*>/gi, "\n").replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+  return [meta.filter(Boolean).join("\n"), ld && "DADOS ESTRUTURADOS:\n" + ld, corpo].filter(Boolean).join("\n\n");
+}
+async function validarURL(endereco) {
+  let u; try { u = new URL(endereco); } catch { throw new Error("link inválido"); }
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) throw new Error("link inválido");
+  const host = u.hostname.replace(/^\[|\]$/g, "");
+  if (/^(localhost|.*\.localhost|.*\.local|.*\.internal)$/i.test(host)) throw new Error("link não permitido");
+  const ips = net.isIP(host) ? [host] : (await dns.lookup(host, { all: true }).catch(() => [])).map((x) => x.address);
+  if (!ips.length) throw new Error("endereço não encontrado");
+  if (ips.some(ipPrivado)) throw new Error("link não permitido");
+  return u;
+}
+export async function lerPagina(endereco) {
+  let u = await validarURL(endereco);
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+  try {
+    let r;
+    for (let salto = 0; ; salto++) {
+      r = await fetch(u, { redirect: "manual", signal: ctl.signal, headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", "accept-language": "pt-BR,pt;q=0.9", accept: "text/html,application/xhtml+xml" } });
+      const loc = r.status >= 300 && r.status < 400 && r.headers.get("location");
+      if (!loc) break;
+      if (salto >= 4) throw new Error("redirecionamentos demais");
+      u = await validarURL(new URL(loc, u).toString()); // cada salto é revalidado (sem rede interna)
+    }
+    if (!r.ok) throw new Error(`o portal recusou a leitura (${r.status})`);
+    if (!/html|text/i.test(r.headers.get("content-type") || "")) throw new Error("o link não é uma página de anúncio");
+    const reader = r.body.getReader(); const partes = []; let tam = 0;
+    while (true) { const { done, value } = await reader.read(); if (done) break; tam += value.length; partes.push(value); if (tam > 2_500_000) { ctl.abort(); break; } }
+    const texto = htmlParaTexto(Buffer.concat(partes.map((x) => Buffer.from(x))).toString("utf8"));
+    if (texto.length < 200 || /captcha|access denied|attention required|verifique que você é humano/i.test(texto.slice(0, 2000))) throw new Error("o portal bloqueou a leitura automática");
+    return texto.slice(0, 16000);
+  } finally { clearTimeout(t); }
 }
 
 /* ---------------- Documentos (CNPJ/CPF) ---------------- */

@@ -165,3 +165,11 @@ label.btn{cursor:pointer;flex-direction:row;font:600 15px/1 Barlow,system-ui,san
 .passo{border-left:4px solid var(--line);padding:4px 0 10px 12px;display:flex;flex-direction:column;gap:8px}
 .passo.ok{border-left-color:var(--ok)}
 .passo b{font-size:15px}
+.segs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.segs .chip{border:1px solid var(--line);background:var(--card);font-size:13px;padding:8px 12px;min-height:0;cursor:pointer}
+.segs .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.boasvindas{border-top:4px solid var(--red)}
+.boasvindas h2{font-size:22px;line-height:1.15}
+.bv-passos{display:flex;flex-direction:column;gap:8px}
+.bv-passos button{justify-content:flex-start;gap:12px;text-align:left}
+.bv-passos b{width:28px;height:28px;border-radius:99px;background:var(--red);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex:none}

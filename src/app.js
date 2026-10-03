@@ -179,10 +179,10 @@ function fmtIn(f, v) {
   if (typeof v === "number") { const money = ["aluguel", "venda", "condominio", "iptu", "valor_base"].includes(f); return PC.nf(v, money ? (Number.isInteger(v) ? 0 : 2) : undefined); }
   return String(v);
 }
-const OF_FIELDS = ["tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "frente", "zoneamento", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "disponibilidade", "documentacao", "titulo", "descricao", "diferenciais", "itens"];
+const OF_FIELDS = ["dormitorios", "suites", "banheiros", "vagas", "area_ha", "distancia_asfalto", "aptidao", "agua", "benfeitorias", "topografia", "car", "ccir", "georref", "tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "frente", "zoneamento", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "disponibilidade", "documentacao", "titulo", "descricao", "diferenciais", "itens"];
 function fromAI(o) { const r = {}; OF_FIELDS.forEach((f) => { if (o[f] !== undefined && o[f] !== null) r[f] = fmtIn(f, o[f]); }); return r; }
 function ranking(b) { return S.ofertas.filter((o) => o.status !== "descartada" && o.status !== "captacao").map((o) => { const c = chkOf(o); return Object.assign({ o, c }, PC.score(o, b, c)); }).sort((x, y) => y.score - x.score); }
-function faixaArea(b) { const n = PC.numB(b); if (n.areaMin && n.areaMax) return PC.nf(n.areaMin) + " a " + PC.nf(n.areaMax) + " m²"; if (n.areaMin) return "a partir de " + PC.nf(n.areaMin) + " m²"; if (n.areaMax) return "até " + PC.nf(n.areaMax) + " m²"; return ""; }
+function faixaArea(b) { const n = PC.numB(b); if (n.haMin || n.haMax) return n.haMin && n.haMax ? PC.nf(n.haMin) + " a " + PC.nf(n.haMax) + " ha" : n.haMin ? "a partir de " + PC.nf(n.haMin) + " ha" : "até " + PC.nf(n.haMax) + " ha"; if (n.areaMin && n.areaMax) return PC.nf(n.areaMin) + " a " + PC.nf(n.areaMax) + " m²"; if (n.areaMin) return "a partir de " + PC.nf(n.areaMin) + " m²"; if (n.areaMax) return "até " + PC.nf(n.areaMax) + " m²"; return ""; }
 function confirmar2(btn, txt, fn) { let armed = false; btn.onclick = async () => { if (!armed) { armed = true; btn.dataset.orig = btn.textContent; btn.textContent = txt; setTimeout(() => { armed = false; if (btn.isConnected) btn.textContent = btn.dataset.orig; }, 4000); return; } btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } }; }
 
 /* ================= PAINEL ================= */
@@ -200,7 +200,13 @@ VIEWS.painel = () => {
     return `<div class="col"><h3><span>${l}</span><span class="muted">${ns.length}</span></h3>${ns.map((n) => { const o = O(n.oferta), b = B(n.briefing); return `<button class="deal" data-n="${n.id}"><b>${esc(o ? (o.codigo ? o.codigo + " · " : "") + tituloO(o) : "(oferta removida)")}</b><span>${esc(nomeB(b))}${n.parceiro ? " · " + esc(n.parceiro) : ""}</span></button>`; }).join("")}</div>`;
   }).join("");
   const capAbertas = S.ofertas.filter((o) => o.status === "captacao" && (ehAdmin() || o.captador === EU.usuario)).length;
+  const me = eu(); const chaveBV = "pc_boasvindas_" + (EU.usuario || ""); let bv = false; try { bv = !localStorage.getItem(chaveBV); } catch {}
+  const resid = me.foco === "residencial";
   $("main").innerHTML = `
+  ${bv ? `<div class="card boasvindas"><span class="k">${resid ? "Bem-vinda" : "Bem-vindo"}</span><h2>${esc(me.nome.split(" ")[0])}, seu escritório cabe na palma da mão.</h2>
+  <p class="hint">${resid ? "Casas e apartamentos: fotografe, fale e o anúncio sai pronto, com a sua assinatura e o seu CRECI." : "Galpões, áreas, terrenos e rurais: leia anúncios por link, cruze com as demandas e capte no local."}</p>
+  <div class="bv-passos"><button data-bv="captar"><b>1</b><span>Captar um imóvel</span></button><button data-bv="nova"><b>2</b><span>Ler um anúncio por link</span></button><button data-bv="editb"><b>3</b><span>Cadastrar a demanda de um cliente</span></button></div>
+  <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
   <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>Tecnologia Propto</em></span><span>›</span></button>
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
   ${novas.length ? `<button class="card" id="gonovas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot amarelo"></span><span style="flex:1"><b>${novas.length} oferta${novas.length > 1 ? "s" : ""} a revisar</b><br><span class="hint">Confira os dados antes de cruzar com os briefings.</span></span><span>›</span></button>` : ""}
@@ -211,12 +217,14 @@ VIEWS.painel = () => {
   ${cols ? `<div class="kanban">${cols}</div>` : '<p class="empty">Nenhum negócio aberto. Abra um briefing, escolha uma oferta do ranking e envie o teaser ou crie uma Sala do Cliente.</p>'}
   ${S.negocios.some((n) => n.etapa === "perdido") ? `<p class="hint">${S.negocios.filter((n) => n.etapa === "perdido").length} negócio(s) perdido(s) fora do quadro.</p>` : ""}</div>
   <div class="row"><button class="grow" id="qnova">+ Nova oferta</button><button class="grow" id="qbrief">+ Novo briefing</button></div>
-  <p class="foot">PrimeCorp Brokers · Rodrigo França Viana · CRECI-SP 297692</p>`;
+  <p class="foot">PrimeCorp Brokers · ${esc(eu().nome)} · ${esc(eu().creci)}</p>`;
   document.querySelectorAll("[data-n]").forEach((b) => (b.onclick = () => go({ v: "negocio", id: b.dataset.n })));
   const gn = $("gonovas"); if (gn) gn.onclick = () => go({ v: "ofertas", f: "nova" }, false);
   const gs = $("gosalas"); if (gs) gs.onclick = () => go({ v: "salas" });
   const gp = $("gopeds"); if (gp) gp.onclick = () => go({ v: "pedidos" });
   $("csv").onclick = exportCSV;
+  document.querySelectorAll("[data-bv]").forEach((b) => (b.onclick = () => go(b.dataset.bv === "editb" ? { v: "editb", id: null } : { v: b.dataset.bv }, b.dataset.bv !== "captar")));
+  const bx = $("bvx"); if (bx) bx.onclick = () => { try { localStorage.setItem(chaveBV, "1"); } catch {} render(); };
   $("qnova").onclick = () => go({ v: "nova" }); $("qcap").onclick = () => go({ v: "captar" }, false);
   $("qbrief").onclick = () => go({ v: "editb", id: null });
 };
@@ -249,8 +257,8 @@ VIEWS.contatos = () => {
   $("novo").onclick = () => go({ v: "editc", id: null });
 };
 const CF = [["nome", "Nome", "text", "full"], ["empresa", "Empresa", "text", ""], ["tipo", "Tipo", "sel:" + TIPOS_C.join("|"), ""], ["documento", "CNPJ / CPF", "text", ""], ["creci", "CRECI (corretor ou imobiliária)", "text", ""], ["cargo", "Cargo", "text", ""], ["telefone", "WhatsApp", "tel", ""], ["email", "E-mail", "text", ""], ["cidade", "Cidade", "text", ""], ["origem", "Como chegou", "text", ""], ["obs", "Observações", "area", "full"]];
-function fieldHTML([k, l, t, cls], val) {
-  const v = esc(val == null ? "" : val);
+function fieldHTML([k, l, t, cls, g], val) {
+  const v = esc(val == null ? "" : val); if (g) cls = `${cls}" data-g="${g}`;
   if (t.startsWith("sel:")) return `<label class="${cls}">${l}<select data-k="${k}">${t.slice(4).split("|").map((o) => `<option ${o === val ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
   if (t.startsWith("u:")) return `<label class="u ${cls}">${l}<input data-k="${k}" inputmode="decimal" value="${v}"><span>${t.slice(2)}</span></label>`;
   if (t === "area") return `<label class="${cls}">${l}<textarea data-k="${k}" rows="2">${v}</textarea></label>`;
@@ -258,6 +266,8 @@ function fieldHTML([k, l, t, cls], val) {
   if (t.startsWith("ref:")) { const tipos = t.slice(4).split("|"); const opts = S.contatos.filter((c) => tipos.some((x) => (c.tipo || "").startsWith(x))).sort((a, b) => nomeC(a).localeCompare(nomeC(b))); return `<label class="${cls}">${l}<select data-k="${k}"><option value="">— nenhum —</option>${opts.map((c) => `<option value="${c.id}" ${c.id === val ? "selected" : ""}>${esc(nomeC(c))}</option>`).join("")}</select></label>`; }
   return `<label class="${cls}">${l}<input data-k="${k}" type="${t === "tel" ? "tel" : "text"}" value="${v}"></label>`;
 }
+const GRUPOS_SEL = (tipo) => PC.grupo(tipo);
+function aplicarGrupo(root, tipo) { const g = PC.grupo(tipo); root.querySelectorAll("[data-g]").forEach((el) => (el.hidden = !el.dataset.g.split(" ").includes(g))); }
 const readK = (root) => { const o = {}; root.querySelectorAll("[data-k]").forEach((el) => (o[el.dataset.k] = el.value.trim())); return o; };
 VIEWS.editc = () => {
   const c = route.id ? C(route.id) : null; header(c ? "Editar contato" : "Novo contato");
@@ -305,19 +315,23 @@ VIEWS.briefings = () => {
 const BF = [
   ["nome", "Nome do briefing (interno)", "text", "full"],
   ["cliente", "Cliente (CRM)", "ref:Cliente|Proprietário|Outro", ""], ["parceiro_id", "Parceiro que trouxe (CRM)", "ref:Corretor|Imobiliária|Outro", ""],
-  ["tipo", "Tipo", "sel:Galpão|Galpão em condomínio|Área / terreno|Prédio comercial|Imóvel comercial|Fazenda", ""], ["operacao", "Operação", "sel:Locação|Venda", ""],
+  ["tipo", "Tipo", "sel:Casa|Casa em condomínio|Apartamento|Sobrado|Cobertura|Kitnet / studio|Sala comercial|Loja|Prédio comercial|Imóvel comercial|Galpão|Galpão em condomínio|Terreno|Área / terreno|Fazenda|Sítio|Chácara", ""], ["operacao", "Operação", "sel:Locação|Venda", ""],
   ["cidades", "Cidades aceitas (separe por vírgula)", "text", "full"], ["regiao", "Região / eixo", "text", "full"],
-  ["areaMin", "Área mínima", "u:m²", ""], ["areaMax", "Área máxima", "u:m²", ""], ["peMin", "Pé-direito mín.", "u:m", ""], ["kvaMin", "Energia mín.", "u:kVA", ""], ["docasMin", "Docas mín.", "num", ""],
-  ["precoMaxM2", "Aluguel máx. por m²", "u:R$", ""], ["valorMax", "Compra: valor máx.", "u:R$", ""], ["prazo", "Prazo de ocupação", "text", ""],
+  ["areaMin", "Área mínima", "u:m²", "", "galpao comercial area residencial"], ["areaMax", "Área máxima", "u:m²", "", "galpao comercial area residencial"],
+  ["haMin", "Área mínima", "u:ha", "", "rural"], ["haMax", "Área máxima", "u:ha", "", "rural"],
+  ["dormMin", "Dormitórios mín.", "num", "", "residencial"], ["suitesMin", "Suítes mín.", "num", "", "residencial"], ["vagasMin", "Vagas mín.", "num", "", "residencial"], ["aluguelMax", "Aluguel máx. (total)", "u:R$/mês", "", "residencial comercial"],
+  ["peMin", "Pé-direito mín.", "u:m", "", "galpao"], ["kvaMin", "Energia mín.", "u:kVA", "", "galpao"], ["docasMin", "Docas mín.", "num", "", "galpao"],
+  ["precoMaxM2", "Aluguel máx. por m²", "u:R$", "", "galpao comercial"], ["valorMax", "Compra: valor máx.", "u:R$", ""], ["prazo", "Prazo de ocupação", "text", ""],
   ["desejaveis", "Desejáveis", "area", "full"], ["obs", "Observações internas", "area", "full"], ["status", "Situação", "sel:ativo|pausado|encerrado", ""],
 ];
 VIEWS.editb = () => {
   const b = route.id ? B(route.id) : null; header(b ? "Editar briefing" : "Novo briefing");
-  const cur = { ...(b || { status: "ativo", tipo: "Galpão", operacao: "Locação" }), ...(route.draft || {}), ...(route.cliente ? { cliente: route.cliente } : {}), ...(route.parceiro_id ? { parceiro_id: route.parceiro_id } : {}) };
+  const cur = { ...(b || { status: "ativo", ...(eu().foco === "residencial" ? { tipo: "Casa", operacao: "Venda" } : { tipo: "Galpão", operacao: "Locação" }) }), ...(route.draft || {}), ...(route.cliente ? { cliente: route.cliente } : {}), ...(route.parceiro_id ? { parceiro_id: route.parceiro_id } : {}) };
   $("main").innerHTML = `<div class="card" id="fb"><p class="hint">Requisitos obrigatórios eliminam ofertas; o resto vira pontuação. Nomes de cliente e parceiro nunca aparecem no teaser.</p><div class="grid">${BF.map((f) => fieldHTML(f, cur[f[0]])).join("")}</div>
   <button class="g" id="nc">+ Cadastrar contato novo no CRM</button>
   <div class="row"><button class="p grow" id="sv">Salvar briefing</button>${b ? '<button class="g" id="del">Excluir</button>' : ""}</div><div class="status" id="st"></div></div>`;
   editing = true;
+  const tsel = $("fb").querySelector('[data-k="tipo"]'); aplicarGrupo($("fb"), tsel.value); tsel.onchange = () => aplicarGrupo($("fb"), tsel.value);
   $("nc").onclick = () => go({ v: "editc", id: null, volta: { v: "editb", id: route.id, draft: readK($("fb")) } });
   $("sv").onclick = async () => {
     const v = readK($("fb")); if (!v.nome) { $("st").className = "status err"; $("st").textContent = "Dê um nome ao briefing (ex.: Indústria X · galpão 12 mil)."; return; }
@@ -353,7 +367,7 @@ VIEWS.briefing = () => {
 /* ================= TEASER ================= */
 VIEWS.teaser = () => {
   const b = B(route.b), o = O(route.o); if (!b || !o) return back();
-  header("Teaser · nível 1"); const c = chkOf(o); const txt = PC.teaser(o, c, route.l || "Opção");
+  header("Teaser · nível 1"); const c = chkOf(o); const txt = PC.teaser(o, c, route.l || "Opção", eu());
   $("main").innerHTML = `<div class="card"><span class="k">Para: ${esc(nomeB(b))}</span><h2>${esc(tituloO(o))}</h2>
   <p class="hint">Faixas e região ampla. Nada de foto, endereço ou combinação rara de atributos. Envio privado, nunca em grupos.</p>
   ${!(o.regiao || "").trim() ? '<p class="note">Esta oferta está sem região. Preencha na oferta ou edite o texto.</p>' : ""}
@@ -403,7 +417,7 @@ VIEWS.novasala = () => {
       const opcoes = [];
       for (const o0 of sel) { const codigo = await garantirCodigo(o0); const o = O(o0.id) || o0; const t = PC.teaserLinhas(o, chkOf(o)); opcoes.push({ codigo, oferta: o.id, titulo: t.titulo, linhas: t.linhas }); }
       const token = tokenAleatorio(32); const ct = C($("ct").value); const dias = Number($("vd").value);
-      const sala = { id: token, briefing: b.id, contato: ct ? ct.id : null, titulo: $("tt").value.trim() || "Opções selecionadas", preparado_para: ct ? ct.empresa || ct.nome || "" : "", opcoes, termo_texto: termo, termo_versao: cfg.termo_versao || TERMO_VERSAO, expira: new Date(Date.now() + dias * 864e5).toISOString(), status: "ativa", criado: now(), interesses: [], contato_corretor: { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "", email: cfg.corretor_email || "" } };
+      const sala = { id: token, briefing: b.id, contato: ct ? ct.id : null, titulo: $("tt").value.trim() || "Opções selecionadas", preparado_para: ct ? ct.empresa || ct.nome || "" : "", opcoes, termo_texto: termo, termo_versao: cfg.termo_versao || TERMO_VERSAO, expira: new Date(Date.now() + dias * 864e5).toISOString(), status: "ativa", criado: now(), interesses: [], contato_corretor: eu() };
       editing = false; await store.save("salas", sala);
       await emitir({ tipo: "sala", sala_id: token, briefing_id: b.id, contato_id: sala.contato, destinatario: sala.preparado_para, conteudo: `${location.origin}/sala.html?t=${token}\n` + opcoes.map((x) => x.codigo + " · " + x.titulo).join("\n") });
       stack.pop(); route = { v: "sala", id: token }; render(); toast("Sala criada.");
@@ -521,7 +535,7 @@ async function gerarAcordo(n, o, b) {
     const d = o ? PC.num(o) : {}; const cli = b ? C(b.cliente) : null; const sl = n.sala ? S.salas.find((x) => x.id === n.sala) : null;
     const base = { codigo: o?.codigo || "", titulo: o ? tituloO(o) : "", tipo: d.tipo, cliente: (cli && (cli.empresa || cli.nome)) || sl?.aceite?.razao || (b ? nomeB(b) : ""), comissao: n.comissao };
     const texto = preencherDoc(texto0, PC.varsAcordo(base), o ? corretorDaOferta(o) : null);
-    const doc = PC.pdfAcordo(jsPDF, { ...base, texto, versao: cfg.acordo_versao || ACORDO_VERSAO, corretor: { nome: cfg.corretor_nome, creci: cfg.corretor_creci }, logos: LOGOS.dark ? LOGOS : null });
+    const doc = PC.pdfAcordo(jsPDF, { ...base, texto, versao: cfg.acordo_versao || ACORDO_VERSAO, corretor: o ? corretorDaOferta(o) : eu(), logos: LOGOS.dark ? LOGOS : null });
     const blob = doc.output("blob"); const nome = `Acordo_Divisao_Honorarios_${base.codigo || n.id}.pdf`;
     const c = PC.calcComissao(n.comissao);
     const em = await emitir({ tipo: "acordo_comissao", negocio_id: n.id, oferta_id: n.oferta, briefing_id: n.briefing, destinatario: c.partes.filter((p) => !PC.ehPC(p)).map((p) => p.nome || p.papel).join(", "), nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: `Honorários ${PC.brl2(c.total)} · ${PC.quadroComissao(n.comissao)}`, meta: { partes: c.partes.length } });
@@ -544,17 +558,21 @@ function cardComissao(n, o) {
 
 /* ================= OFERTAS ================= */
 VIEWS.ofertas = () => {
-  header("Ofertas"); const f = route.f || "todas";
+  header("Ofertas"); const f = route.f || "todas"; const sg = route.g || (eu().foco === "residencial" ? "residencial" : "todos");
+  const SEGS = [["todos", "Todos"], ["residencial", "Residencial"], ["comercial", "Galpões e comerciais"], ["rural", "Rurais e terrenos"]];
+  const noSeg = (o) => { const g = PC.grupo(o.tipo); return sg === "todos" || (sg === "residencial" && g === "residencial") || (sg === "comercial" && (g === "galpao" || g === "comercial")) || (sg === "rural" && (g === "rural" || g === "area")); };
   let os = [...S.ofertas].sort((a, b) => (b.criado || "").localeCompare(a.criado || ""));
   if (f === "nova") os = os.filter((o) => o.status === "nova"); else if (f === "descartada") os = os.filter((o) => o.status === "descartada"); else os = os.filter((o) => o.status !== "descartada");
-  $("main").innerHTML = `<button class="p" id="nv">+ Nova oferta</button><div class="seg">${[["todas", "Ativas"], ["nova", "A revisar"], ["descartada", "Descartadas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
+  os = os.filter(noSeg);
+  $("main").innerHTML = `<button class="p" id="nv">+ Nova oferta por link</button><div class="chips segs">${SEGS.map(([k, l]) => `<button class="chip ${sg === k ? "on" : ""}" data-g="${k}">${l}</button>`).join("")}</div><div class="seg">${[["todas", "Ativas"], ["nova", "A revisar"], ["descartada", "Descartadas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <input id="q" placeholder="Buscar por código, cidade, tipo ou título" value="${esc(route.q || "")}">
   <div class="card"><div class="list" id="ls"></div></div>`;
   const draw = () => { const q = PC.norm($("q").value); const rows = os.filter((o) => !q || PC.norm([o.codigo, tituloO(o), o.cidade, o.tipo, o.regiao, o.origem].join(" ")).includes(q));
     $("ls").innerHTML = rows.map((o) => { const c = chkOf(o); return `<button class="item" data-o="${o.id}"><span class="dot ${c.sem}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + tituloO(o))}</b><span>${esc([o.cidade, o.origem, o.status === "nova" ? "a revisar" : o.status === "captacao" ? "em captação" : ""].filter(Boolean).join(" · "))}</span></span><span class="chip">${esc(o.operacao || "")}</span></button>`; }).join("") || '<p class="empty">Nada por aqui.</p>';
     $("ls").querySelectorAll("[data-o]").forEach((x) => (x.onclick = () => { route.q = $("q").value; go({ v: "oferta", id: x.dataset.o }); })); };
   draw(); $("q").addEventListener("input", draw);
-  document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "ofertas", f: x.dataset.f }; render(); }));
+  document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "ofertas", f: x.dataset.f, g: sg }; render(); }));
+  document.querySelectorAll(".segs [data-g]").forEach((x) => (x.onclick = () => { route = { v: "ofertas", f, g: x.dataset.g }; render(); }));
   $("nv").onclick = () => go({ v: "nova" });
 };
 const OFORM = `
@@ -565,20 +583,30 @@ const OFORM = `
 <label>Anunciante é<select data-f="anunciante_tipo"><option>Imobiliária</option><option>Corretor</option><option>Proprietário</option></select></label><label>Anunciante<input data-f="anunciante"></label><label>Contato do anunciante<input data-f="anunciante_contato" type="tel"></label><label>CRECI do anunciante<input data-f="anunciante_creci"></label>
 </div></fieldset>
 <fieldset><legend>Identificação</legend><div class="grid">
-<label>Tipo<select data-f="tipo"><option>Galpão</option><option>Galpão em condomínio</option><option>Área / terreno</option><option>Prédio comercial</option><option>Imóvel comercial</option><option>Fazenda</option></select></label>
+<label>Tipo<select data-f="tipo"><option>Casa</option><option>Casa em condomínio</option><option>Apartamento</option><option>Sobrado</option><option>Cobertura</option><option>Kitnet / studio</option><option>Sala comercial</option><option>Loja</option><option>Prédio comercial</option><option>Imóvel comercial</option><option>Galpão</option><option>Galpão em condomínio</option><option>Terreno</option><option>Área / terreno</option><option>Fazenda</option><option>Sítio</option><option>Chácara</option></select></label>
 <label>Operação<select data-f="operacao"><option>Locação</option><option>Venda</option><option>Locação / Venda</option></select></label>
 <label>Cidade<input data-f="cidade"></label><label>UF<input data-f="uf" maxlength="2" style="text-transform:uppercase"></label>
-<label class="full">Região / eixo (vai no teaser e na sala)<input data-f="regiao" placeholder="Eixo Anhanguera (RMC)"></label>
+<label class="full">Região / bairro / eixo (vai no teaser e na sala)<input data-f="regiao" placeholder="Eixo Anhanguera (RMC) · Jardim X · zona rural"></label>
 <label class="full">Acesso / destaque (sem endereço)<input data-f="subtitulo" placeholder="acesso direto pela Rod. Anhanguera"></label>
 <label class="full">Tipologia<input data-f="tipologia" placeholder="Isolado / em condomínio"></label></div></fieldset>
-<fieldset><legend>Áreas</legend><div class="grid">
-<label class="u">Fabril / galpão<input data-f="fabril" inputmode="decimal"><span>m²</span></label>
-<label class="u">Construída<input data-f="construida" inputmode="decimal"><span>m²</span></label>
+<fieldset data-g="residencial"><legend>Residencial</legend><div class="grid">
+<label>Dormitórios<input data-f="dormitorios" inputmode="numeric"></label><label>Suítes<input data-f="suites" inputmode="numeric"></label>
+<label>Banheiros<input data-f="banheiros" inputmode="numeric"></label><label>Vagas<input data-f="vagas" inputmode="numeric"></label></div></fieldset>
+<fieldset data-g="rural"><legend>Rural</legend><div class="grid">
+<label class="u">Área total<input data-f="area_ha" inputmode="decimal"><span>ha</span></label><label class="u">Até o asfalto<input data-f="distancia_asfalto" inputmode="decimal"><span>km</span></label>
+<label class="full">Aptidão / uso<input data-f="aptidao" placeholder="pasto, lavoura, eucalipto, lazer"></label>
+<label class="full">Água<input data-f="agua" placeholder="rio, nascentes, represa, poço"></label>
+<label class="full">Benfeitorias<input data-f="benfeitorias" placeholder="sede, casas, curral, barracões, cercas"></label>
+<label>Topografia<input data-f="topografia"></label><label>CAR<input data-f="car"></label><label>CCIR e ITR<input data-f="ccir"></label><label>Georreferenciamento<input data-f="georref"></label></div>
+<p class="hint">1 alqueire paulista = 2,42 ha · 1 alqueire mineiro = 4,84 ha</p></fieldset>
+<fieldset data-g="galpao comercial area residencial"><legend>Áreas</legend><div class="grid">
+<label data-g="galpao comercial" class="u">Fabril / galpão<input data-f="fabril" inputmode="decimal"><span>m²</span></label>
+<label data-g="galpao comercial residencial" class="u">Construída<input data-f="construida" inputmode="decimal"><span>m²</span></label>
 <label class="u">Terreno<input data-f="terreno" inputmode="decimal"><span>m²</span></label>
-<label class="u">Administrativo<input data-f="administrativo" inputmode="decimal"><span>m²</span></label>
-<label class="u">Apoio / outros<input data-f="apoio" inputmode="decimal"><span>m²</span></label>
-<label class="u">Frente (terreno)<input data-f="frente" inputmode="decimal"><span>m</span></label><label>Zoneamento<input data-f="zoneamento"></label></div></fieldset>
-<fieldset><legend>Estrutura</legend><div class="grid3">
+<label data-g="galpao comercial" class="u">Administrativo<input data-f="administrativo" inputmode="decimal"><span>m²</span></label>
+<label data-g="galpao comercial" class="u">Apoio / outros<input data-f="apoio" inputmode="decimal"><span>m²</span></label>
+<label data-g="galpao comercial area" class="u">Frente (terreno)<input data-f="frente" inputmode="decimal"><span>m</span></label><label data-g="galpao comercial area">Zoneamento<input data-f="zoneamento"></label></div></fieldset>
+<fieldset data-g="galpao comercial"><legend>Estrutura</legend><div class="grid3">
 <label class="u">Pé-direito<input data-f="pe_direito" inputmode="decimal"><span>m</span></label>
 <label class="u">Piso<input data-f="piso_carga" inputmode="decimal"><span>t/m²</span></label>
 <label>Docas<input data-f="docas" inputmode="numeric"></label>
@@ -597,7 +625,7 @@ const OFORM = `
 <label>Descrição<textarea data-f="descricao" rows="4"></textarea></label>
 <label>Diferenciais (um por linha)<textarea data-f="diferenciais" rows="3"></textarea></label>
 <label>Itens a confirmar extras (um por linha)<textarea data-f="itens" rows="2"></textarea></label></fieldset>`;
-function fillForm(root, o) { root.querySelectorAll("[data-f]").forEach((el) => { const k = el.dataset.f; const v = o[k]; if (el.tagName === "SELECT") { const opt = [...el.options].find((x) => (x.value || x.text).toLowerCase() === String(v || "").toLowerCase()); if (opt) el.value = opt.value || opt.text; else el.selectedIndex = 0; } else el.value = fmtIn(k, v); }); }
+function fillForm(root, o) { root.querySelectorAll("[data-f]").forEach((el) => { const k = el.dataset.f; const v = o[k]; if (el.tagName === "SELECT") { const opt = [...el.options].find((x) => (x.value || x.text).toLowerCase() === String(v || "").toLowerCase()); if (opt) el.value = opt.value || opt.text; else el.selectedIndex = 0; } else el.value = fmtIn(k, v); }); const t = root.querySelector('[data-f="tipo"]'); if (t) { aplicarGrupo(root, t.value); t.addEventListener("change", () => aplicarGrupo(root, t.value)); } }
 function readForm(root) { const o = {}; root.querySelectorAll("[data-f]").forEach((el) => (o[el.dataset.f] = el.value.trim())); if (o.uf) o.uf = o.uf.toUpperCase(); return o; }
 const SEM = { verde: ["VERDE", "Pode circular com parceiros."], amarelo: ["AMARELO", "Circular com os itens a confirmar."], vermelho: ["VERMELHO", "Ligar para o anunciante antes de circular."] };
 VIEWS.oferta = () => {
@@ -656,28 +684,28 @@ VIEWS.nova = () => {
   header("Nova oferta"); const m = route.m || "um";
   $("main").innerHTML = `<div class="seg">${[["um", "Um anúncio"], ["varios", "E-mail de alerta"]].map(([k, l]) => `<button data-m="${k}" class="${m === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <div class="card">${m === "um"
-    ? `<p class="hint">No anúncio: toque e segure no texto → Selecionar tudo → Copiar. Cole aqui. O link fica registrado só para você.</p>
+    ? `<p class="hint">Cole o link do anúncio (portal, imobiliária ou corretor; qualquer segmento) e toque em <b>Ler anúncio</b>. Se o portal bloquear a leitura, copie o texto do anúncio e cole abaixo.</p>
      <label>Link do anúncio<input id="url" type="url" inputmode="url" placeholder="https://…"></label>
      <label>Origem<select id="org"><option>Portal</option><option>Imobiliária</option><option>Corretor parceiro</option><option>Leilão</option><option>Proprietário</option></select></label>
-     <label>Texto do anúncio<textarea id="src" rows="7" placeholder="Cole o texto completo do anúncio…"></textarea></label>
-     <div class="row"><button class="p grow" id="bx">Extrair dados</button><button class="g" id="bm">Preencher manual</button></div>`
+     <label>Texto do anúncio (se o link não abrir)<textarea id="src" rows="5" placeholder="Opcional: cole o texto completo do anúncio…"></textarea></label>
+     <div class="row"><button class="p grow" id="bx">Ler anúncio</button><button class="g" id="bm">Preencher manual</button></div>`
     : `<p class="hint">Cole o conteúdo inteiro de um e-mail de alerta (busca salva do portal). Cada anúncio vira uma oferta “a revisar”. Com a caixa de alertas configurada, isso acontece sozinho a cada 30 minutos.</p>
      <label>Conteúdo do e-mail<textarea id="src" rows="10" placeholder="Cole o e-mail inteiro…"></textarea></label>
      <button class="p" id="bx">Extrair ofertas</button>`}
   <div class="status" id="st"></div></div>`;
   editing = true; const st = $("st");
   document.querySelectorAll("[data-m]").forEach((x) => (x.onclick = () => { editing = false; route = { v: "nova", m: x.dataset.m }; render(); }));
-  const fail = (e) => { st.className = "status err"; st.textContent = "Não consegui extrair: " + e.message; };
+  const fail = (e) => { st.className = "status err"; st.textContent = e.status === 422 ? e.message : "Não consegui extrair: " + e.message; };
   if (m === "um") {
-    $("bm").onclick = async () => { const o = { id: uid("o"), link: $("url").value.trim(), origem: $("org").value, status: "nova", tipo: "Galpão", operacao: "Locação", criado: now(), atualizado: now() }; editing = false; await store.save("ofertas", o); stack.length = 0; go({ v: "oferta", id: o.id }, false); };
-    $("bx").onclick = async () => { const txt = $("src").value.trim();
-      if (txt.length < 40) { st.className = "status err"; st.textContent = "Cole o texto do anúncio (o link sozinho não basta)."; return; }
-      const b = $("bx"); b.disabled = true; b.textContent = "Extraindo…"; st.className = "status"; st.textContent = "Lendo o anúncio (10 a 40 s)…";
-      try { const x = await api("extrair", { method: "POST", body: JSON.stringify({ modo: "um", texto: txt }) });
+    $("bm").onclick = async () => { const o = { id: uid("o"), link: $("url").value.trim(), origem: $("org").value, status: "nova", tipo: eu().foco === "residencial" ? "Casa" : "Galpão", operacao: eu().foco === "residencial" ? "Venda" : "Locação", responsavel: EU.usuario, criado: now(), atualizado: now() }; editing = false; await store.save("ofertas", o); stack.length = 0; go({ v: "oferta", id: o.id }, false); };
+    $("bx").onclick = async () => { const txt = $("src").value.trim(); const url = $("url").value.trim();
+      if (txt.length < 40 && !/^https?:\/\/\S+\.\S+/.test(url)) { st.className = "status err"; st.textContent = url ? "Link inválido: copie o endereço completo do anúncio (começa com https://)." : "Cole o link do anúncio ou o texto dele."; return; }
+      const b = $("bx"); b.disabled = true; b.textContent = "Lendo…"; st.className = "status"; st.textContent = txt.length < 40 ? "Abrindo o link e lendo o anúncio (10 a 40 s)…" : "Lendo o anúncio (10 a 40 s)…";
+      try { const x = await api("extrair", { method: "POST", body: JSON.stringify({ modo: "um", texto: txt, url }) });
         const link = $("url").value.trim(); const dup = link && S.ofertas.find((y) => y.link === link);
-        const o = { id: uid("o"), link, origem: $("org").value, status: "nova", anunciante: x.anunciante || "", alertas_ia: Array.isArray(x.alertas_ia) ? x.alertas_ia : [], criado: now(), atualizado: now(), ...fromAI(x) };
+        const o = { id: uid("o"), link, origem: $("org").value, status: "nova", responsavel: EU.usuario, anunciante: x.anunciante || "", alertas_ia: Array.isArray(x.alertas_ia) ? x.alertas_ia : [], criado: now(), atualizado: now(), ...fromAI(x) };
         editing = false; await store.save("ofertas", o); stack.length = 0; go({ v: "oferta", id: o.id }, false); toast(dup ? "Atenção: esse link já existe na base (" + (dup.codigo || tituloO(dup)) + ")." : "Confira os dados e salve."); }
-      catch (e) { fail(e); } finally { b.disabled = false; b.textContent = "Extrair dados"; } };
+      catch (e) { fail(e); if (e.status === 422) $("src").focus(); } finally { b.disabled = false; b.textContent = "Ler anúncio"; } };
   } else {
     $("bx").onclick = async () => { const txt = $("src").value.trim();
       if (txt.length < 80) { st.className = "status err"; st.textContent = "Cole o conteúdo completo do e-mail."; return; }
@@ -808,7 +836,7 @@ function textoComissaoPedido(c) {
 function demandaPara(o) { return S.briefings.filter((b) => (b.status || "ativo") === "ativo").map((b) => ({ b, r: PC.score(o, b, chkOf(o)) })).filter((x) => !x.r.fora); }
 const creciTxt = (c) => (c ? (/creci/i.test(c) ? c : "CRECI " + c) : "");
 function partesHTML(partes, comNomes) {
-  const cfg = CFG(); partes = partes.map((p) => (PC.ehPC(p) && !p.nome ? { ...p, nome: cfg.corretor_nome || "Rodrigo França Viana", creci: p.creci || cfg.corretor_creci || "CRECI-SP 297692" } : p));
+  const me = eu(); partes = partes.map((p) => (PC.ehPC(p) && !p.nome ? { ...p, nome: me.nome, creci: p.creci || me.creci } : p));
   const opts = (sel) => S.contatos.filter((c) => /^(Corretor|Imobili)/.test(c.tipo || "")).sort((a, b) => nomeC(a).localeCompare(nomeC(b))).map((c) => `<option value="${c.id}" ${c.id === sel ? "selected" : ""}>${esc(nomeC(c))}</option>`).join("");
   return partes.map((p) => `<div class="parte">
   <label>Papel<select data-pp="papel">${PC.PAPEIS.map((x) => `<option ${x === p.papel ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
@@ -872,7 +900,7 @@ VIEWS.novopedido = () => {
       const token = tokenAleatorio(32); const ct = C($("ct").value);
       const ped = { id: token, oferta: atual.id, codigo, titulo: tituloO(atual), operacao: atual.operacao || "", tipo_termo: tipo, anunciante: $("an").value.trim(), contato: ct ? ct.id : null,
         demanda: $("dm") && $("dm").checked ? dem.length : 0, conhecidos: PC.conhecidos(atual), faltam: comp.faltam, comissao: com, termo_texto: termo, termo_versao: cfg.aut_versao || AUT_VERSAO,
-        modo: comp.ok ? "autorizacao" : "complementacao", expira: new Date(Date.now() + Number($("vd").value) * 864e5).toISOString(), status: "aberto", criado: now(), respostas: [],
+        grupo: PC.grupo(atual.tipo), modo: comp.ok ? "autorizacao" : "complementacao", expira: new Date(Date.now() + Number($("vd").value) * 864e5).toISOString(), status: "aberto", criado: now(), respostas: [],
         corretor: corretorDaOferta(atual) };
       editing = false; await store.save("pedidos", ped);
       if (!atual.anunciante && ped.anunciante) await store.save("ofertas", { ...atual, anunciante: ped.anunciante, atualizado: now() });
@@ -985,10 +1013,13 @@ const creciFmt = (c) => { const t = String(c || "").trim(); return !t ? "" : /cr
 function perfilPorEmail(email) {
   const e = String(email || "").toLowerCase(); const cfg = CFG();
   const u = S.usuarios.find((x) => String(x.email || "").toLowerCase() === e);
-  if (u) return { nome: u.nome || e, creci: creciFmt(u.creci), whatsapp: u.telefone || "", email: u.email };
+  if (u) return { nome: u.nome || e, creci: creciFmt(u.creci), whatsapp: u.telefone || "", email: u.email, foco: u.foco || "comercial", papel: u.papel, titulo: u.titulo || "" };
   return { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "(19) 99805-1985", email: cfg.corretor_email || "contato@primecorpconsultoria.com.br" };
 }
-const corretorDaOferta = (o) => perfilPorEmail(o && o.origem === "Captação própria" && o.captador ? o.captador : CFG().corretor_email || "contato@primecorpconsultoria.com.br");
+const eu = () => perfilPorEmail(EU.usuario || usuarioAtual?.email);
+const ehEquipe = (email) => !!email && (S.usuarios.some((u) => String(u.email).toLowerCase() === String(email).toLowerCase()) || String(email).toLowerCase() === String(CFG().corretor_email || "contato@primecorpconsultoria.com.br").toLowerCase());
+/** Corretor responsável: quem captou; senão quem cadastrou a oferta (se for da equipe); senão quem está usando o app. */
+const corretorDaOferta = (o) => perfilPorEmail((o && o.origem === "Captação própria" && o.captador) || (o && ehEquipe(o.responsavel) && o.responsavel) || (o && ehEquipe(o.criado_por) && o.criado_por) || EU.usuario || usuarioAtual?.email);
 function trocaCorretor(txt, c) {
   if (!c || /rodrigo/i.test(c.nome || "")) return txt;
   return String(txt).split(RODRIGO_ID).join(`${String(c.nome).toUpperCase()}, corretor(a) de imóveis inscrito(a) no ${c.creci || "CRECI"}`);
@@ -996,8 +1027,8 @@ function trocaCorretor(txt, c) {
 
 /* ---------- Equipe e permissões (administrador) ---------- */
 const EQUIPE_INICIAL = [
-  { nome: "Rodrigo França Viana", email: "contato@primecorpconsultoria.com.br", creci: "CRECI-SP 297692", telefone: "(19) 99805-1985", papel: "admin", ativo: true },
-  { nome: "Joselia Junqueira Viana", email: "comercial@primecorpconsultoria.com.br", creci: "CRECI-SP 300760", telefone: "(19) 99919-4447", papel: "corretor", ativo: true },
+  { nome: "Rodrigo França Viana", email: "contato@primecorpconsultoria.com.br", creci: "CRECI-SP 297692", telefone: "(19) 99805-1985", papel: "admin", foco: "comercial", ativo: true },
+  { nome: "Joselia Junqueira Viana", email: "comercial@primecorpconsultoria.com.br", creci: "CRECI-SP 300760", telefone: "(19) 99919-4447", papel: "corretor", foco: "residencial", titulo: "Corretora de Imóveis", ativo: true },
 ];
 const idUsuario = (email) => "u_" + String(email).toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 60);
 VIEWS.equipe = () => {
@@ -1020,6 +1051,8 @@ VIEWS.equipe = () => {
     <label class="full">E-mail de acesso<input id="ue" type="email" value="${esc(u.email || "")}" ${u.id ? "readonly" : ""}></label>
     <label>CRECI<input id="uc" value="${esc(u.creci || "")}"></label><label>WhatsApp<input id="ut" type="tel" value="${esc(u.telefone || "")}"></label>
     <label>Permissão<select id="up"><option value="corretor" ${u.papel !== "admin" ? "selected" : ""}>Corretor(a)</option><option value="admin" ${u.papel === "admin" ? "selected" : ""}>Administrador</option></select></label>
+    <label class="full">Foco de atuação<select id="uf"><option value="residencial" ${u.foco === "residencial" ? "selected" : ""}>Residencial (casas, apartamentos)</option><option value="comercial" ${u.foco !== "residencial" ? "selected" : ""}>Galpões, comerciais, terrenos e rurais</option></select></label>
+    <label>Assina como<select id="uti"><option ${u.titulo !== "Corretora de Imóveis" ? "selected" : ""}>Corretor de Imóveis</option><option ${u.titulo === "Corretora de Imóveis" ? "selected" : ""}>Corretora de Imóveis</option></select></label>
     <label>Situação<select id="ua"><option value="1" ${u.ativo !== false ? "selected" : ""}>Ativo</option><option value="0" ${u.ativo === false ? "selected" : ""}>Inativo (sem acesso)</option></select></label></div>
     <button class="p" id="us">Salvar</button><div class="status" id="ust"></div>`;
     f.scrollIntoView({ behavior: "smooth" });
@@ -1027,7 +1060,7 @@ VIEWS.equipe = () => {
       const email = $("ue").value.trim().toLowerCase(); const st = $("ust");
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { st.className = "status err"; st.textContent = "E-mail inválido."; return; }
       if (!$("un").value.trim()) { st.className = "status err"; st.textContent = "Informe o nome."; return; }
-      const reg = { ...u, id: u.id || idUsuario(email), email, nome: $("un").value.trim(), creci: creciFmt($("uc").value), telefone: $("ut").value.trim(), papel: $("up").value, ativo: $("ua").value === "1", atualizado: now(), criado: u.criado || now() };
+      const reg = { ...u, id: u.id || idUsuario(email), email, nome: $("un").value.trim(), creci: creciFmt($("uc").value), telefone: $("ut").value.trim(), papel: $("up").value, foco: $("uf").value, titulo: $("uti").value, ativo: $("ua").value === "1", atualizado: now(), criado: u.criado || now() };
       editing = false; try { await store.save("usuarios", reg); toast("Equipe atualizada."); VIEWS.equipe(); } catch { editing = true; }
     };
   };
@@ -1037,7 +1070,7 @@ VIEWS.equipe = () => {
 };
 
 /* ---------- Lista de captações ---------- */
-const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Chácara", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial"];
+const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial", "Fazenda", "Sítio", "Chácara"];
 const baseAnuncios = () => String(CFG().anuncio_dominio || "").trim().replace(/\/+$/, "") || location.origin;
 const fotosDe = (o) => (o.captacao?.ambientes || []).reduce((a, x) => a + (x.fotos || []).length, 0);
 const anuncioDe = (o) => o.anuncio_token ? S.anuncios.find((a) => a.id === o.anuncio_token) : null;
@@ -1058,7 +1091,7 @@ VIEWS.captar = () => {
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));
   document.querySelectorAll("[data-c]").forEach((x) => (x.onclick = () => go({ v: "captacao", id: x.dataset.c })));
   $("nc").onclick = async () => {
-    const o = { id: uid("o"), origem: "Captação própria", status: "captacao", captador: EU.usuario || usuarioAtual?.email, tipo: "Casa", operacao: "Venda", uf: "SP", anunciante_tipo: "Proprietário",
+    const o = { id: uid("o"), origem: "Captação própria", status: "captacao", captador: EU.usuario || usuarioAtual?.email, tipo: eu().foco === "residencial" ? "Casa" : "Galpão", operacao: "Venda", uf: "SP", anunciante_tipo: "Proprietário",
       captacao: { iniciada: now(), ambientes: [], fala_geral: "" }, criado: now(), atualizado: now() };
     try { await store.save("ofertas", o); go({ v: "captacao", id: o.id }); } catch {}
   };
@@ -1073,8 +1106,9 @@ async function miniDe(k) {
 const fotoURL = (k) => "/api/foto?k=" + encodeURIComponent(k);
 const CAMPOS_RES = [["construida", "Área útil / construída", "m²"], ["terreno", "Terreno", "m²"], ["dormitorios", "Dormitórios", ""], ["suites", "Suítes", ""], ["banheiros", "Banheiros", ""], ["vagas", "Vagas", ""]];
 const CAMPOS_GAL = [["construida", "Área construída", "m²"], ["fabril", "Galpão / fabril", "m²"], ["terreno", "Terreno", "m²"], ["pe_direito", "Pé-direito", "m"], ["docas", "Docas", ""], ["energia_kva", "Energia", "kVA"]];
-const camposCap = (tipo) => (PC.grupo(tipo) === "residencial" ? CAMPOS_RES : PC.grupo(tipo) === "area" ? [["terreno", "Terreno", "m²"], ["frente", "Frente", "m"], ["construida", "Construída", "m²"]] : CAMPOS_GAL);
-const NUM_IA = ["dormitorios", "suites", "banheiros", "vagas", "construida", "terreno", "fabril", "pe_direito", "docas", "aluguel", "venda", "condominio", "iptu"];
+const CAMPOS_RUR = [["area_ha", "Área total", "ha"], ["distancia_asfalto", "Até o asfalto", "km"], ["aptidao", "Aptidão / uso", ""], ["agua", "Água", ""], ["benfeitorias", "Benfeitorias", ""], ["topografia", "Topografia", ""], ["car", "CAR", ""], ["ccir", "CCIR e ITR", ""], ["georref", "Georreferenciamento", ""]];
+const camposCap = (tipo) => (PC.grupo(tipo) === "residencial" ? CAMPOS_RES : PC.grupo(tipo) === "rural" ? CAMPOS_RUR : PC.grupo(tipo) === "area" ? [["terreno", "Terreno", "m²"], ["frente", "Frente", "m"], ["construida", "Construída", "m²"], ["zoneamento", "Zoneamento", ""], ["topografia", "Topografia", ""]] : CAMPOS_GAL);
+const NUM_IA = ["area_ha", "dormitorios", "suites", "banheiros", "vagas", "construida", "terreno", "fabril", "pe_direito", "docas", "aluguel", "venda", "condominio", "iptu"];
 function mesclarDados(o, dados) { const p = {}; Object.entries(dados || {}).forEach(([k, v]) => { if (v === null || v === undefined || v === "") return; if (NUM_IA.includes(k) && !PC.parseBR(o[k])) p[k] = fmtIn(k, Number(v)); else if (!NUM_IA.includes(k) && !String(o[k] || "").trim()) p[k] = String(v); }); return p; }
 
 VIEWS.captacao = () => {
@@ -1116,7 +1150,7 @@ VIEWS.captacao = () => {
   editing = true;
   if (!podeEditar) $("main").insertAdjacentHTML("afterbegin", `<p class="note">Captação de ${esc(perfilPorEmail(o.captador).nome)}: você pode ver, mas só quem captou ou o administrador altera.</p>`);
 
-  const desenharNums = () => { const at = cur(); $("nums").innerHTML = camposCap(at.tipo).map(([k, l, u]) => `<label class="u">${esc(l)}<input data-c="${k}" inputmode="decimal" value="${esc(fmtIn(k, PC.parseBR(at[k])))}"><span>${esc(u)}</span></label>`).join(""); };
+  const desenharNums = () => { const at = cur(); $("nums").innerHTML = camposCap(at.tipo).map(([k, l, u]) => u ? `<label class="u">${esc(l)}<input data-c="${k}" inputmode="decimal" value="${esc(fmtIn(k, PC.parseBR(at[k])))}"><span>${esc(u)}</span></label>` : `<label class="full">${esc(l)}<input data-c="${k}" value="${esc(at[k] || "")}"></label>`).join(""); };
   const medidor = () => { const at = cur(); const cp = PC.completude(at); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : ""; $("ctxt").textContent = cp.ok ? "Ficha completa." : `Ficha ${cp.pct}% · falta: ${cp.faltam.filter((f) => !f.extra).map((f) => f.rotulo).join(", ")}`; $("nf").textContent = fotosDe(at) + " foto(s)"; };
   desenharNums();
   // salvar campos (debounce)
@@ -1199,7 +1233,7 @@ VIEWS.captacao = () => {
     parar(); clearTimeout(tSalvar); await salvar({ ...lerCampos(), captacao: { fala_geral: $("fg").value } });
     const at = cur(); const b = $("ga"); b.disabled = true; b.textContent = "Gerando…";
     try {
-      const ficha = {}; ["tipo", "operacao", "cidade", "regiao", ...NUM_IA, "iptu_periodo", "disponibilidade", "documentacao"].forEach((k) => { if (at[k]) ficha[k] = at[k]; });
+      const ficha = {}; ["tipo", "operacao", "cidade", "regiao", ...NUM_IA, "iptu_periodo", "disponibilidade", "documentacao", "aptidao", "agua", "benfeitorias", "topografia", "car", "ccir", "georref", "zoneamento", "frente"].forEach((k) => { if (at[k]) ficha[k] = at[k]; });
       const r = await api("ia/anuncio", { method: "POST", body: JSON.stringify({ ficha, ambientes: (at.captacao?.ambientes || []).map((a) => ({ nome: a.nome, descricao: a.descricao, caracteristicas: a.caracteristicas, fala: a.fala, fotos: (a.fotos || []).length })), fala_geral: at.captacao?.fala_geral || "" }) });
       const p = { ...mesclarDados(at, r.dados), titulo: r.titulo || at.titulo, subtitulo: r.subtitulo || at.subtitulo, descricao: r.descricao || at.descricao, diferenciais: (r.destaques || []).join("\n") || at.diferenciais, pendencias: r.pendencias || [] };
       await salvar(p, "Anúncio gerado. Revise o texto.");
@@ -1242,8 +1276,10 @@ VIEWS.captacao = () => {
   const publicar = async () => {
     clearTimeout(tSalvar); await salvar(lerCampos());
     const at = cur(); const d = PC.num(at); const codigo = await garantirCodigo(at); const a2 = cur();
-    const res = PC.grupo(d.tipo) === "residencial";
-    const fatos = (res ? [[d.construida && PC.m2(d.construida), "Área útil"], [d.dormitorios && PC.nf(d.dormitorios) + (d.suites ? ` (${PC.nf(d.suites)} suíte${d.suites > 1 ? "s" : ""})` : ""), "Dormitórios"], [d.banheiros && PC.nf(d.banheiros), "Banheiros"], [d.vagas && PC.nf(d.vagas), "Vagas"], [d.terreno && PC.m2(d.terreno), "Terreno"]]
+    const res = PC.grupo(d.tipo) === "residencial"; const rur = PC.grupo(d.tipo) === "rural"; const lot = PC.grupo(d.tipo) === "area";
+    const fatos = (rur ? [[d.area_ha && PC.ha(d.area_ha), "Área total"], [d.area_ha && PC.nf(Math.round(d.area_ha / PC.ALQ_SP * 10) / 10), "Alqueires paulistas"], [a2.aptidao, "Aptidão"], [a2.agua, "Água"], [d.distancia_asfalto && PC.nf(d.distancia_asfalto) + " km", "Até o asfalto"]]
+      : lot ? [[d.terreno && PC.m2(d.terreno), "Terreno"], [d.frente && PC.nf(d.frente) + " m", "Frente"], [a2.zoneamento, "Zoneamento"], [a2.topografia, "Topografia"]]
+      : res ? [[d.construida && PC.m2(d.construida), "Área útil"], [d.dormitorios && PC.nf(d.dormitorios) + (d.suites ? ` (${PC.nf(d.suites)} suíte${d.suites > 1 ? "s" : ""})` : ""), "Dormitórios"], [d.banheiros && PC.nf(d.banheiros), "Banheiros"], [d.vagas && PC.nf(d.vagas), "Vagas"], [d.terreno && PC.m2(d.terreno), "Terreno"]]
       : [[d.construida && PC.m2(d.construida), "Área construída"], [d.fabril && PC.m2(d.fabril), "Galpão"], [d.terreno && PC.m2(d.terreno), "Terreno"], [d.pe_direito && PC.nf(d.pe_direito) + " m", "Pé-direito"], [d.docas && PC.nf(d.docas), "Docas"], [d.energia_kva && PC.nf(d.energia_kva) + " kVA", "Energia"]]).filter((x) => x[0]).map(([v, l]) => [l, v]);
     const valores = [[d.venda && PC.brl(d.venda), "Venda"], [d.aluguel && PC.brl(d.aluguel) + "/mês", "Aluguel"], [d.condominio && PC.brl(d.condominio) + "/mês", "Condomínio"], [d.iptu && PC.brl(d.iptu) + (d.iptu_periodo === "anual" ? "/ano" : d.iptu_periodo === "mensal" ? "/mês" : ""), "IPTU"]].filter((x) => x[0]).map(([v, l]) => [l, v]);
     const ambs = a2.captacao?.ambientes || []; let fotos = ambs.flatMap((a) => (a.fotos || []).map((f) => ({ k: f.k, ambiente: a.nome })));

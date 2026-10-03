@@ -6,13 +6,14 @@ import { json, erro, obterRegistro, salvarRegistro, registrarEmissao, soDig, cnp
 // Nunca expõe cliente, briefing ou identificadores internos.
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 const lim = (s: unknown, n: number) => String(s ?? "").trim().slice(0, n);
-const NUM = ["construida", "terreno", "fabril", "pe_direito", "docas", "energia_kva", "piso_carga", "aluguel", "venda", "iptu", "condominio", "frente"];
+const NUM = ["area_ha", "distancia_asfalto", "dormitorios", "suites", "banheiros", "vagas", "construida", "terreno", "fabril", "pe_direito", "docas", "energia_kva", "piso_carga", "aluguel", "venda", "iptu", "condominio", "frente"];
 
 function publico(p: Record<string, any>) {
   return {
     codigo: p.codigo || "",
     titulo: p.titulo || "",
     operacao: p.operacao || "",
+    grupo: p.grupo || "",
     tipo_termo: p.tipo_termo || "parceria",
     anunciante: p.anunciante || "",
     demanda: p.demanda || 0,

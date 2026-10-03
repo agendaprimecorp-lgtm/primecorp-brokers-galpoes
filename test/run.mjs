@@ -232,5 +232,48 @@ await t("residencial: completude, título e ficha PDF", async () => {
   const { jsPDF } = await import("jspdf"); const doc = PC.pdf(jsPDF, { ...PC.num({ tipo: "Casa", cidade: "Sumaré", dormitorios: "3", suites: "1", vagas: "2", construida: "140", venda: "850000" }), corretor: { nome: "Joselia Junqueira Viana", creci: "CRECI-SP 300760", email: "comercial@primecorpconsultoria.com.br" } }, { alerts: [], sem: "verde" }, null);
   fsx.writeFileSync("test/out/ficha_casa.pdf", doc.output(), "binary");
 });
+
+await t("rural: grupo, completude, título, checks, ficha e teaser sem endereço", async () => {
+  assert.equal(PC.grupo("Fazenda"), "rural"); assert.equal(PC.grupo("Sítio"), "rural"); assert.equal(PC.grupo("Chácara"), "rural"); assert.equal(PC.grupo("Casa"), "residencial"); assert.equal(PC.grupo("Galpão"), "galpao");
+  const base = { tipo: "Fazenda", operacao: "Venda", cidade: "Itapetininga", regiao: "Sudoeste paulista", area_ha: "48,4", aptidao: "Pecuária e grãos", agua: "Rio e 2 represas", benfeitorias: "Sede, curral, barracão", venda: "6.200.000", car: "SP-123", ccir: "Sim", documentacao: "Matrícula ok", disponibilidade: "Imediata", endereco: "Estrada X km 9" };
+  const c = PC.completude(base); assert.equal(c.ok, true, JSON.stringify(c.faltam)); assert.equal(c.grupo, "rural");
+  const o = PC.num(base); assert.equal(PC.areaOf(o), 484000);
+  assert.match(PC.autoTitle(o), /Fazenda de 48,4 ha em Itapetininga/);
+  const sem = PC.checks(PC.num({ ...base, car: "", area_ha: "150" }), []); assert.ok(sem.alerts.some((a) => /CAR/.test(a.msg)), JSON.stringify(sem.alerts)); assert.ok(sem.alerts.some((a) => /georref/i.test(a.msg)));
+  const jose = { nome: "Joselia Junqueira Viana", creci: "CRECI-SP 300760", whatsapp: "(19) 99919-4447" };
+  const tz = PC.teaser(base, { sem: "verde", alerts: [] }, "PC-0099", jose);
+  assert.ok(!/Estrada X/.test(tz), "teaser não pode ter endereço"); assert.match(tz, /ha/); assert.match(tz, /Joselia/); assert.ok(!/RODRIGO|Rodrigo/.test(tz));
+  const { jsPDF } = await import("jspdf"); const doc = PC.pdf(jsPDF, { ...o, codigo: "PC-0099", corretor: jose }, PC.checks(o, []), null);
+  const txt = doc.output(); assert.ok(txt.length > 3000); fsx.writeFileSync("test/out/ficha_fazenda.pdf", txt, "binary");
+  const lote = PC.num({ tipo: "Terreno", cidade: "Cotia", terreno: "1.200", venda: "900.000" }); assert.match(PC.autoTitle(lote), /Terreno de 1\.200 m² em Cotia/);
+});
+await t("cruzamento: briefing residencial e rural", async () => {
+  const casa = { tipo: "Casa", operacao: "Locação", cidade: "Sumaré", dormitorios: "3", suites: "1", vagas: "2", aluguel: "4.200", construida: "140" };
+  assert.ok(PC.score(casa, { tipo: "Casa", operacao: "Locação", dormMin: "3", vagasMin: "2", aluguelMax: "4.500" }).score >= 80);
+  assert.match(PC.score(casa, { tipo: "Casa", operacao: "Locação", dormMin: "4" }).fora, /dormit/);
+  assert.match(PC.score(casa, { tipo: "Casa", operacao: "Locação", aluguelMax: "3.000" }).fora, /orçamento/);
+  const faz = { tipo: "Fazenda", operacao: "Venda", area_ha: "48", venda: "6.000.000" };
+  assert.ok(PC.score(faz, { tipo: "Fazenda", operacao: "Venda", haMin: "40", haMax: "60" }).score >= 80);
+  assert.match(PC.score(faz, { tipo: "Fazenda", operacao: "Venda", haMin: "100" }).fora, /abaixo do mínimo/);
+});
+await t("ler pelo link: bloqueia rede interna e lê página pública", async () => {
+  for (const u of ["http://localhost/x", "http://127.0.0.1/x", "http://10.0.0.5/a", "http://169.254.169.254/latest", "http://192.168.0.1/", "file:///etc/passwd", "http://user:pw@200.1.1.1/", "http://[::1]/", "http://[::ffff:127.0.0.1]/", "http://0.0.0.0/", "http://x.localhost/"]) {
+    const r = await J(await api(R("POST", "/api/extrair", { modo: "um", texto: "", url: u }), ctx())); assert.equal(r.s, 422, u); assert.match(r.j.erro, /cole aqui/);
+  }
+  const orig = globalThis.fetch; let pedido;
+  globalThis.fetch = async (u, o) => { pedido = String(u); return new Response(`<html><head><title>Casa 3 dorm Sumaré</title><meta property="og:description" content="Casa com 3 dormitórios, 2 vagas, R$ 850 mil"><script type="application/ld+json">{"@type":"House","numberOfRooms":3}</script><script>var lixo=1</script></head><body><h1>Casa à venda</h1><p>${"Ótima casa em bairro tranquilo. ".repeat(12)}</p></body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } }); };
+  try {
+    const r = await J(await api(R("POST", "/api/extrair", { modo: "um", texto: "", url: "https://93.184.215.14/anuncio/1" }), ctx()));
+    assert.equal(r.s, 200, JSON.stringify(r.j)); assert.equal(r.j._lido_pelo_link, true); assert.match(pedido, /93\.184/);
+    const m0 = globalThis.__iaReq.messages[0].content; const ultimo = typeof m0 === "string" ? m0 : m0.map((x) => x.text || "").join(""); { assert.match(ultimo, /3 dormitórios/); assert.match(ultimo, /numberOfRooms/); assert.ok(!/lixo/.test(ultimo)); }
+    globalThis.fetch = async () => new Response("", { status: 302, headers: { location: "http://169.254.169.254/latest/meta-data" } });
+    const rd = await J(await api(R("POST", "/api/extrair", { modo: "um", url: "https://93.184.215.14/r" }), ctx())); assert.equal(rd.s, 422); assert.match(rd.j.erro, /não permitido/);
+    globalThis.fetch = async () => new Response("<html>Access denied</html>", { status: 403, headers: { "content-type": "text/html" } });
+    const b = await J(await api(R("POST", "/api/extrair", { modo: "um", url: "https://93.184.215.14/x" }), ctx())); assert.equal(b.s, 422); assert.match(b.j.erro, /recusou/);
+    globalThis.fetch = async () => new Response("<html><body>" + "Verifique que você é humano captcha ".repeat(20) + "</body></html>", { headers: { "content-type": "text/html" } });
+    const c = await J(await api(R("POST", "/api/extrair", { modo: "um", url: "https://93.184.215.14/y" }), ctx())); assert.equal(c.s, 422); assert.match(c.j.erro, /bloqueou/);
+  } finally { globalThis.fetch = orig; }
+  const tx = await J(await api(R("POST", "/api/extrair", { modo: "um", texto: "x".repeat(60), url: "http://localhost/" }), ctx())); assert.equal(tx.s, 200, "com texto colado o link não é lido");
+});
 console.log(`\n${ok} testes OK`);
 await db.stop(); process.exit(0);

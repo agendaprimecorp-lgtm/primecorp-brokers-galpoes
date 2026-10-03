@@ -60,6 +60,8 @@ Depois de criar ou mudar variáveis, faça um novo deploy.
 O AI Gateway da Netlify já entrega a IA da Anthropic às functions **sem chave**, cobrando em créditos Netlify. Ele é ativado no primeiro deploy de produção.
 Se preferir pagar direto na Anthropic, cadastre `ANTHROPIC_API_KEY`: a sua chave tem prioridade.
 
+**Leitura pelo link (todos os segmentos).** Em *Nova oferta*, basta colar o link: o servidor abre a página (até 12 s, 2,5 MB), extrai título, descrição, dados estruturados e texto, e a IA reconhece o tipo (casa, apartamento, galpão, terreno, fazenda, sítio…) e preenche os campos do segmento. Proteções: só http/https, sem usuário/senha no link, sem rede interna (localhost, IPs privados, metadados de nuvem), cada redirecionamento é revalidado. Portais grandes às vezes bloqueiam robôs (captcha/403): o app avisa e pede para colar o texto do anúncio, que funciona sempre.
+
 ### 5. Coleta automática de alertas
 1. Crie um Gmail só para isso (ex.: `alertas.primecorp@gmail.com`).
 2. Ative a verificação em duas etapas e gere uma **senha de app** (Conta Google → Segurança → Senhas de app).
@@ -107,4 +109,4 @@ Abra o endereço do site no Safari → Compartilhar → **Adicionar à Tela de I
 - O site não é indexado por buscadores.
 
 ## Testes (para desenvolvedor)
-`npm install` e depois `node test/build.mjs && node test/run.mjs`: 18 testes de API, sala e backup com um Postgres local.
+`npm install` e depois `npm test` (38 testes de API, permissões, segmentos, documentos e leitura por link, com Postgres local). Telas: `node test/server.mjs` e, em outro terminal, `node test/e2e.mjs`, `e2e2`, `e2e3` (captação) e `e2e4` (Joselia, residencial, rural e leitura por link). Reinicie o servidor entre um e2e e outro.

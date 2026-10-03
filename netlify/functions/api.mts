@@ -4,7 +4,7 @@ import { verifyRequestOrigin } from "@netlify/identity";
 import {
   COLECOES, db, json, erro, usuario, papelDe, perfilDe, env,
   listarTudo, salvarRegistro, obterRegistro, registrarEmissao, proximoCodigoPC,
-  chamarIA, chamarIAImagem, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
+  chamarIA, chamarIAImagem, lerPagina, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
 } from "../../shared/servidor.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -109,11 +109,15 @@ export default async (req: Request, context: Context) => {
     /* ---------- extração com IA ---------- */
     if (rota === "extrair" && req.method === "POST") {
       const body = await req.json().catch(() => null);
-      const texto = String(body?.texto || "").trim();
+      let texto = String(body?.texto || "").trim();
       const modo = body?.modo === "varios" ? "varios" : "um";
+      let lido = false;
+      if (modo === "um" && texto.length < 40 && body?.url) {
+        try { texto = await lerPagina(String(body.url)); lido = true; } catch (e) { return erro("Não consegui ler pelo link: " + (e instanceof Error ? e.message : String(e)) + ". Abra o anúncio, copie o texto e cole aqui.", 422); }
+      }
       if (texto.length < 40) return erro("Texto curto demais.");
       const r = await chamarIA(modo === "varios" ? PROMPT_VARIOS : PROMPT_UM, texto.slice(0, modo === "varios" ? 30000 : 16000), modo === "varios" ? 6000 : 3000);
-      return json(r);
+      return json(lido ? { ...r, _lido_pelo_link: true } : r);
     }
 
     /* ---------- fotos da captação ---------- */
