@@ -159,10 +159,18 @@ await t("acordo de divisão: 2 e 4 partes, recebedor e texto preenchido", async 
   assert.equal(PC.recebedor({ ...c2, recebe: 1 }).papel, "PrimeCorp (indicação)");
   const v = PC.varsAcordo({ codigo: "PC-0009", titulo: "Galpão X", cliente: "Indústria X", comissao: c2 });
   assert.equal(v.TOTAL, "R$ 48.000,00"); assert.equal(v.QUADRO, "Imob Sul (Imobiliária anunciante): 50%; Rodrigo França Viana · PrimeCorp Brokers (indicação): 50%");
-  const txt = PC.preencher(ACORDO_PADRAO, v); assert.ok(!/\{\{/.test(txt)); assert.ok(txt.includes("Indústria X"));
+  const { varsPrazos, pendencias, CORRETOR_PADRAO } = await import("../src/termo.js");
+  let txt = PC.preencher(ACORDO_PADRAO, v); assert.deepEqual(pendencias(txt).sort(), ["{{CORRETOR}}", "{{FORO}}", "{{PRAZO_NAO_CONTORNO}}", "{{PRAZO_REPASSE}}"]);
+  txt = PC.preencher(txt, { ...varsPrazos({ prazo_repasse: "5", prazo_nao_contorno: "12", foro: "Sumaré/SP" }), CORRETOR: CORRETOR_PADRAO });
+  assert.deepEqual(pendencias(txt), []); assert.ok(txt.includes("5 (cinco) dias úteis")); assert.ok(txt.includes("12 (doze) meses")); assert.ok(txt.includes("Indústria X"));
   const c4 = { base: "venda", valor_base: "7.500.000", pct: "6", recebe: 0, partes: [{ papel: "Imobiliária anunciante", pct: 40, nome: "Imob", creci: "J-1" }, { papel: "Corretor do anunciante", pct: 10, nome: "Ana", creci: "111" }, { papel: "Corretor parceiro", pct: 25, nome: "Marcos", creci: "222" }, { papel: "PrimeCorp (indicação)", pct: 25 }] };
   for (const c of [c2, c4]) { const doc = PC.pdfAcordo(jsPDF, { codigo: "PC-0009", titulo: "Galpão X", tipo: "Galpão", cliente: "Indústria X", comissao: c, texto: PC.preencher(ACORDO_PADRAO, PC.varsAcordo({ codigo: "PC-0009", titulo: "Galpão X", cliente: "Indústria X", comissao: c })), versao: "v1" });
     const out = doc.output(); assert.ok(out.startsWith("%PDF")); fsx.writeFileSync(`test/out/acordo_${c.partes.length}.pdf`, out, "binary"); }
+  const { CLAUSULA_SPLIT, RECIBO_PADRAO, VISITA_PADRAO, MANDATO_PADRAO, reaisExtenso } = await import("../src/termo.js");
+  assert.equal(reaisExtenso(112500), "cento e doze mil e quinhentos reais");
+  for (const t of [VISITA_PADRAO, MANDATO_PADRAO]) assert.ok(pendencias(PC.preencher(t, { ...varsPrazos({ prazo_cliente: "24", prazo_mandato: "90", prazo_pos_autorizacao: "6", foro: "Sumaré/SP" }), CORRETOR: CORRETOR_PADRAO, OPERACAO: "compra", COMISSAO_VENDA: "6%" })).length === 0);
+  const d = PC.pdfDoc(jsPDF, { kicker: "FICHA DE VISITA", titulo: "Ficha de visita", dados: [["Visitante", "Indústria X"], ["Endereço", ""]], texto: PC.preencher(VISITA_PADRAO, { PRAZO_CLIENTE: "24 (vinte e quatro) meses", CORRETOR: CORRETOR_PADRAO }), assinaturas: [{ nome: "Ana", sub: "Visitante" }, { nome: "Rodrigo", sub: "Corretor" }] });
+  fsx.writeFileSync("test/out/visita.pdf", d.output(), "binary");
 });
 
 /* ===== v4: equipe, permissões, fotos, IA da captação e landing ===== */

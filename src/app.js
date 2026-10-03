@@ -3,7 +3,7 @@ import { jsPDF } from "jspdf";
 import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, requestPasswordRecovery } from "@netlify/identity";
 import { tratarFoto, blobB64 } from "./foto.js";
 import { ditar, vozDisponivel } from "./voz.js";
-import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO } from "./termo.js";
+import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO, VISITA_PADRAO, RECIBO_PADRAO, CLAUSULA_SPLIT, MANDATO_PADRAO, VERSAO_DOCS, PRAZOS, CORRETOR_PADRAO, varsPrazos, pendencias, extenso, reaisExtenso } from "./termo.js";
 
 /* ================= Utilidades ================= */
 const $ = (id) => document.getElementById(id);
@@ -59,6 +59,14 @@ async function emitir(e) { try { return await api("emissoes", { method: "POST", 
 async function novoCodigo() { return (await api("codigo", { method: "POST" })).codigo; }
 async function garantirCodigo(o) { if (o.codigo) return o.codigo; const codigo = await novoCodigo(); await store.save("ofertas", { ...o, codigo }); return codigo; }
 const CFG = () => S.config.find((c) => c.id === "geral") || {};
+/* ---- documentos: preenchimento padrão (prazos manuais, foro, corretor responsável) ---- */
+function idCorretor(c) { if (!c || /rodrigo/i.test(c.nome || "")) return CORRETOR_PADRAO; const n = String(c.creci || "").replace(/\D/g, ""); return `${String(c.nome).toUpperCase()}, corretor(a) de imóveis inscrito(a) no CRECI-SP sob o nº ${n || "______"}`; }
+function pctTexto(p) { const n = PC.parseBR(p) || 0; return `${PC.nf(n)}% (${extenso(Math.floor(n))}${n % 1 ? " vírgula " + extenso(Math.round((n % 1) * 100)) : ""} por cento)`; }
+function alugTexto(a) { const n = PC.parseBR(a) || 0; return `${PC.nf(n)} (${extenso(Math.floor(n))}) ${n === 1 ? "aluguel mensal" : "aluguéis mensais"}`; }
+function docVars(extra = {}, corretor) { const cfg = CFG(); return { FORO: "Sumaré/SP", ...varsPrazos(cfg), CORRETOR: idCorretor(corretor), COMISSAO_VENDA: pctTexto(cfg.com_venda_pct || 6), COMISSAO_LOCACAO: alugTexto(cfg.com_locacao_alugueis || 1), ...extra }; }
+function preencherDoc(txt, extra, corretor) { return trocaCorretor(PC.preencher(txt, docVars(extra, corretor)), corretor); }
+const faltasDoc = (t) => pendencias(t).filter((x) => /PRAZO|FORO|\[__/.test(x));
+function avisoFaltas(f) { const nomes = f.map((x) => (PRAZOS.find((p) => "{{" + p[1] + "}}" === x) || [0, 0, x === "{{FORO}}" ? "Foro" : "campo [__]"])[2]); return "Preencha em Mais → Configurações → Prazos: " + [...new Set(nomes)].join("; ") + "."; }
 
 /* ================= Autenticação ================= */
 let usuarioAtual = null;
@@ -70,7 +78,7 @@ function telaLogin(msg) {
   telaAuth(`<div class="card"><h2>Entrar</h2>${msg ? `<p class="note">${esc(msg)}</p>` : ""}
   <label>E-mail<input id="le" type="email" autocomplete="username"></label>
   <label>Senha<input id="ls" type="password" autocomplete="current-password"></label>
-  <button class="p" id="lb">Entrar</button><button class="g" id="lr">Esqueci a senha</button><div class="status" id="st"></div></div>`);
+  <button class="p" id="lb">Entrar</button><button class="g" id="lr">Esqueci a senha</button><div class="status" id="st"></div></div><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`);
   const st = $("st");
   $("lb").onclick = async () => {
     st.className = "status"; st.textContent = "Entrando…";
@@ -126,7 +134,7 @@ const TOP = ["painel", "briefings", "captar", "ofertas", "contatos", "mais"];
 const TABS = [
   ["painel", "Painel", '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>'],
   ["briefings", "Briefings", '<path d="M8 4h8v3H8zM6 6H4v15h16V6h-2M8 12h8M8 16h5"/>'],
-  ["captar", "Captar", '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/>'],
+  ["captar", "Captar", '<path d="M9 31.5 32 11l23 20.5" stroke-width="6.5"/><rect x="18.5" y="40" width="6.5" height="13" rx="3.25" fill="currentColor" stroke="none"/><rect x="28.75" y="33.5" width="6.5" height="19.5" rx="3.25" fill="currentColor" stroke="none"/><rect x="39" y="37" width="6.5" height="16" rx="3.25" fill="currentColor" stroke="none"/>'],
   ["ofertas", "Ofertas", '<path d="M3 21V9l9-6 9 6v12H3zM9 21v-6h6v6"/>'],
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
@@ -135,7 +143,7 @@ const PAI = { captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "b
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = "tabs-in c6";
-  $("tabs").innerHTML = TABS.map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
+  $("tabs").innerHTML = TABS.map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="${k === "captar" ? "5 7 54 49" : "0 0 24 24"}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
   $("tabs").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { stack.length = 0; go({ v: b.dataset.tab }, false); }));
 }
 function header(title) {
@@ -193,7 +201,7 @@ VIEWS.painel = () => {
   }).join("");
   const capAbertas = S.ofertas.filter((o) => o.status === "captacao" && (ehAdmin() || o.captador === EU.usuario)).length;
   $("main").innerHTML = `
-  <button class="captar-cta" id="qcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small></span><span>›</span></button>
+  <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>Tecnologia Propto</em></span><span>›</span></button>
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
   ${novas.length ? `<button class="card" id="gonovas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot amarelo"></span><span style="flex:1"><b>${novas.length} oferta${novas.length > 1 ? "s" : ""} a revisar</b><br><span class="hint">Confira os dados antes de cruzar com os briefings.</span></span><span>›</span></button>` : ""}
   ${pedNovos.length ? `<button class="card" id="gopeds" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot verde"></span><span style="flex:1"><b>${pedNovos.length} resposta(s) de anunciante</b><br><span class="hint">Dados completados ou autorizações de indicação recebidas.</span></span><span>›</span></button>` : ""}
@@ -327,14 +335,14 @@ VIEWS.briefing = () => {
   <h2>${esc([b.tipo, b.operacao].filter(Boolean).join(" · "))}</h2>
   <p class="hint">${esc([b.cidades || b.regiao, faixaArea(b), b.peMin && "pé-direito ≥ " + b.peMin + " m", b.kvaMin && "energia ≥ " + b.kvaMin + " kVA", b.precoMaxM2 && "até R$ " + b.precoMaxM2 + "/m²", b.valorMax && "até R$ " + b.valorMax, b.prazo].filter(Boolean).join(" · "))}</p>
   <div class="row">${cli ? `<button class="sm" data-c="${cli.id}">Cliente: ${esc(nomeC(cli))}</button>` : ""}${par ? `<button class="sm" data-c="${par.id}">Parceiro: ${esc(nomeC(par))}</button>` : ""}</div>
-  <button class="p" id="sala">Criar Sala do Cliente</button>
+  <button class="p" id="sala">Criar Sala do Cliente</button><button class="sm" id="mand">Mandato de busca (contrato com o cliente)</button>
   ${salas.length ? `<div class="list">${salas.map((s) => `<button class="item" data-s="${s.id}"><span class="t"><b>${esc(s.titulo || "Sala")}</b><span>${s.aceite ? "Aceite " + fdt(s.aceite.em) : "Aguardando aceite"} · ${(s.opcoes || []).length} opção(ões) · ${(s.interesses || []).length} interesse(s)</span></span></button>`).join("")}</div>` : ""}</div>
   <div class="card"><div class="row" style="justify-content:space-between"><h2>Ranking</h2><span class="hint">${ok.length} aderente(s)</span></div>
   <div class="list">${ok.map((x, i) => { const neg = negs.find((n) => n.oferta === x.o.id); return `<div class="item" style="cursor:default;flex-wrap:wrap"><span class="dot ${x.c.sem}"></span><span class="t"><b>${esc((x.o.codigo ? x.o.codigo + " · " : "") + tituloO(x.o))}</b><span>${esc([x.o.cidade, x.o.origem].filter(Boolean).join(" · "))}</span><span class="reasons">${esc(x.motivos.slice(0, 3).join(" · ") || "Atende a todos os critérios")}</span></span><span class="score">${x.score}</span>
   <div class="row" style="width:100%;justify-content:flex-end">${neg ? `<button class="sm" data-n="${neg.id}">Negócio · ${esc(etapaNome(neg.etapa))}</button>` : `<button class="sm p" data-t="${x.o.id}" data-l="Opção ${String.fromCharCode(65 + (i % 26))}">Teaser</button>`}<button class="sm" data-o="${x.o.id}">Oferta</button></div></div>`; }).join("") || '<p class="empty">Nenhuma oferta aderente ainda.</p>'}</div>
   ${fora.length ? `<details><summary class="hint" style="cursor:pointer;padding:6px 0">${fora.length} fora do briefing</summary><div class="list">${fora.map((x) => `<button class="item" data-o="${x.o.id}"><span class="dot ${x.c.sem}"></span><span class="t"><b>${esc(tituloO(x.o))}</b><span>${esc(x.fora)}</span></span></button>`).join("")}</div></details>` : ""}</div>`;
   $("ed").onclick = () => go({ v: "editb", id: b.id });
-  $("sala").onclick = () => go({ v: "novasala", b: b.id });
+  $("mand").onclick = () => gerarMandato(b); $("sala").onclick = () => go({ v: "novasala", b: b.id });
   document.querySelectorAll("[data-t]").forEach((x) => (x.onclick = () => go({ v: "teaser", b: b.id, o: x.dataset.t, l: x.dataset.l })));
   document.querySelectorAll("[data-o]").forEach((x) => (x.onclick = () => go({ v: "oferta", id: x.dataset.o })));
   document.querySelectorAll("[data-n]").forEach((x) => (x.onclick = () => go({ v: "negocio", id: x.dataset.n })));
@@ -369,9 +377,9 @@ VIEWS.teaser = () => {
 /* ================= SALA DO CLIENTE (admin) ================= */
 VIEWS.novasala = () => {
   const b = B(route.b); if (!b) return back(); header("Nova Sala do Cliente");
-  const cfg = CFG(); const termo = cfg.termo || "";
-  if (!cfg.termo_revisado || !termo.trim() || termo.includes("[__")) {
-    $("main").innerHTML = `<div class="card"><h2>Revise o termo antes</h2><p class="hint">A Sala do Cliente exige que o cliente aceite o Termo de Apresentação, Confidencialidade e Não-Contorno. Preencha os campos marcados com [__] e confirme a revisão em Configurações.</p><button class="p" id="cf">Abrir configurações</button></div>`;
+  const cfg = CFG(); const termo = preencherDoc(cfg.termo || TERMO_PADRAO, {}, perfilPorEmail(EU.usuario));
+  if (!cfg.termo_revisado || faltasDoc(termo).length) {
+    $("main").innerHTML = `<div class="card"><h2>Revise o termo antes</h2><p class="hint">A Sala do Cliente exige que o cliente aceite o Termo de Apresentação, Confidencialidade e Não-Contorno. ${faltasDoc(termo).length ? esc(avisoFaltas(faltasDoc(termo))) : "Confirme a revisão do termo em Configurações."}</p><button class="p" id="cf">Abrir configurações</button></div>`;
     $("cf").onclick = () => go({ v: "config" }); return;
   }
   const ok = ranking(b).filter((x) => !x.fora);
@@ -395,7 +403,7 @@ VIEWS.novasala = () => {
       const opcoes = [];
       for (const o0 of sel) { const codigo = await garantirCodigo(o0); const o = O(o0.id) || o0; const t = PC.teaserLinhas(o, chkOf(o)); opcoes.push({ codigo, oferta: o.id, titulo: t.titulo, linhas: t.linhas }); }
       const token = tokenAleatorio(32); const ct = C($("ct").value); const dias = Number($("vd").value);
-      const sala = { id: token, briefing: b.id, contato: ct ? ct.id : null, titulo: $("tt").value.trim() || "Opções selecionadas", preparado_para: ct ? ct.empresa || ct.nome || "" : "", opcoes, termo_texto: cfg.termo, termo_versao: cfg.termo_versao || TERMO_VERSAO, expira: new Date(Date.now() + dias * 864e5).toISOString(), status: "ativa", criado: now(), interesses: [], contato_corretor: { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "", email: cfg.corretor_email || "" } };
+      const sala = { id: token, briefing: b.id, contato: ct ? ct.id : null, titulo: $("tt").value.trim() || "Opções selecionadas", preparado_para: ct ? ct.empresa || ct.nome || "" : "", opcoes, termo_texto: termo, termo_versao: cfg.termo_versao || TERMO_VERSAO, expira: new Date(Date.now() + dias * 864e5).toISOString(), status: "ativa", criado: now(), interesses: [], contato_corretor: { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "", email: cfg.corretor_email || "" } };
       editing = false; await store.save("salas", sala);
       await emitir({ tipo: "sala", sala_id: token, briefing_id: b.id, contato_id: sala.contato, destinatario: sala.preparado_para, conteudo: `${location.origin}/sala.html?t=${token}\n` + opcoes.map((x) => x.codigo + " · " + x.titulo).join("\n") });
       stack.pop(); route = { v: "sala", id: token }; render(); toast("Sala criada.");
@@ -444,6 +452,9 @@ VIEWS.negocio = () => {
   <div class="card"><h2>Histórico</h2><div class="row"><input id="nt" placeholder="Anotação (ligação, retorno, pendência…)" style="flex:1"><button class="sm d" id="add">Registrar</button></div>
   <ul class="log">${[...(n.log || [])].reverse().map((e) => `<li><time>${esc(fdt(e.t))}</time><span>${esc(e.ev)}</span></li>`).join("")}</ul></div>
   ${cardComissao(n, o)}
+  <div class="card"><h2>Documentos do negócio</h2><p class="hint">Padronizados, com base no Código Civil (arts. 722–729), na Lei 6.530/78 e no Código de Ética do COFECI.</p>
+  <div class="row"><button class="grow" id="dvis">Ficha de visita</button>${n.comissao ? `<button class="grow" id="drec">Recibo da nossa parcela</button>` : ""}</div>
+  ${n.comissao ? `<button id="dspl">Cláusula de pagamento direto (copiar para o contrato)</button>` : '<p class="hint">Defina a comissão para gerar o recibo e a cláusula de pagamento direto.</p>'}</div>
   ${n.teaser ? `<div class="card"><h3>Teaser enviado</h3><pre class="wa">${esc(n.teaser)}</pre></div>` : ""}`;
   const save = async (patch, ev) => { const atual = N(n.id) || n; try { await store.save("negocios", { ...atual, ...patch, atualizado: now(), log: [...(atual.log || []), { t: now(), ev }] }); } catch {} };
   let armFech = false;
@@ -460,14 +471,56 @@ VIEWS.negocio = () => {
     const r = await gerarPDF(o, { negocio: n, briefing: b, destinatario: n.parceiro, incompleta: !comp.ok }); if (r) save({}, `Ficha PDF emitida (${r})${comp.ok ? "" : " · incompleta"}`); };
   const ec = $("edcom"); if (ec) ec.onclick = () => go({ v: "comissao", id: n.id });
   const ap = $("acpdf"); if (ap) ap.onclick = () => gerarAcordo(n, o, b);
+  $("dvis").onclick = () => gerarVisita(n, o, b);
+  const dr = $("drec"); if (dr) dr.onclick = () => gerarRecibo(n, o);
+  const ds = $("dspl"); if (ds) ds.onclick = () => copiarClausula(n);
 };
+function clienteDo(n, b) { const cli = b ? C(b.cliente) : null; const sl = n.sala ? S.salas.find((x) => x.id === n.sala) : null; return { nome: (cli && (cli.empresa || cli.nome)) || sl?.aceite?.razao || n.parceiro || "", doc: cli?.documento || sl?.aceite?.documento || "", resp: (cli && cli.empresa ? cli.nome : "") || sl?.aceite?.responsavel || "", tel: cli?.telefone || sl?.aceite?.telefone || n.tel || "" }; }
+async function emitirDoc(tipo, doc, nome, n, o, conteudo) { const blob = doc.output("blob"); await emitir({ tipo, negocio_id: n.id, oferta_id: n.oferta, briefing_id: n.briefing, nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo }); const at = N(n.id) || n; await store.save("negocios", { ...at, atualizado: now(), log: [...(at.log || []), { t: now(), ev: conteudo.split("\n")[0] }] }); await compartilharOuBaixar(blob, nome); }
+async function gerarVisita(n, o, b) {
+  const cor = o ? corretorDaOferta(o) : perfilPorEmail(EU.usuario); const texto = preencherDoc(VISITA_PADRAO, {}, cor); const f = faltasDoc(texto); if (f.length) { toast(avisoFaltas(f)); return; }
+  const cl = clienteDo(n, b);
+  const doc = PC.pdfDoc(jsPDF, { kicker: "FICHA DE VISITA", ref: `NEGÓCIO · ${o?.codigo || ""}`, titulo: "Ficha de visita a imóvel", codigo: o?.codigo, corretor: cor, logos: LOGOS.dark ? LOGOS : null,
+    dados: [["Visitante (nome / razão social)", cl.nome], ["CPF / CNPJ", cl.doc], ["Responsável", cl.resp], ["Telefone", cl.tel], ["Imóvel", o ? `${o.codigo || ""} · ${tituloO(o)}` : ""], ["Endereço do imóvel", o?.endereco || ""], ["Data e hora da visita", ""]],
+    tituloTexto: "DECLARAÇÃO", texto, versao: "Documento " + VERSAO_DOCS, assinaturas: [{ nome: cl.resp || cl.nome || "Visitante", sub: "Visitante" }, { nome: cor.nome, sub: `Corretor(a) · ${cor.creci}` }] });
+  await emitirDoc("ficha_visita", doc, `Ficha_Visita_${o?.codigo || n.id}.pdf`, n, o, `Ficha de visita emitida · ${cl.nome || "visitante"}`);
+}
+async function gerarRecibo(n, o) {
+  const c = PC.calcComissao(n.comissao); const pc = c.partes.find(PC.ehPC); if (!pc) { toast("A PrimeCorp não está na divisão deste negócio."); return; }
+  const cor = o ? corretorDaOferta(o) : perfilPorEmail(EU.usuario); const rec = PC.recebedor(n.comissao);
+  const pagador = rec && !PC.ehPC(rec) ? rec.nome || rec.papel : "";
+  const vars = { PAGADOR: pagador || "______________________________", VALOR_RECIBO: PC.brl2(pc.valor), VALOR_EXTENSO: reaisExtenso(pc.valor), OPERACAO: c.base === "venda" ? "venda" : "locação", CODIGO: o?.codigo || "", TITULO: o ? tituloO(o) : "", PCT: PC.nf(pc.pct) + "%", TOTAL: PC.brl2(c.total) };
+  const texto = preencherDoc(RECIBO_PADRAO, vars, cor);
+  const doc = PC.pdfDoc(jsPDF, { kicker: "RECIBO DE HONORÁRIOS", ref: `REF. ${o?.codigo || ""}`, titulo: `Recibo · ${PC.brl2(pc.valor)}`, codigo: o?.codigo, corretor: cor, logos: LOGOS.dark ? LOGOS : null,
+    dados: [["Recebedor", `${cor.nome} · ${cor.creci}`], ["Pagador", pagador], ["CPF / CNPJ do pagador", ""], ["Valor", `${PC.brl2(pc.valor)} (${reaisExtenso(pc.valor)})`], ["Forma de pagamento", ""]],
+    tituloTexto: "RECIBO", texto, assinaturas: [{ nome: cor.nome, sub: `Corretor(a) de imóveis · ${cor.creci}` }] });
+  await emitirDoc("recibo", doc, `Recibo_Honorarios_${o?.codigo || n.id}.pdf`, n, o, `Recibo da parcela PrimeCorp: ${PC.brl2(pc.valor)}`);
+}
+function textoClausula(com) {
+  const c = PC.calcComissao(com); const venda = c.base === "venda";
+  const linhas = c.partes.map((p, i) => `${String.fromCharCode(97 + i)}) ${PC.nomeParte(p)} (${PC.ehPC(p) ? "corretor de imóveis" : p.papel.toLowerCase()}), ${p.creci || (PC.ehPC(p) ? "CRECI-SP 297692" : "CRECI ______")}: ${PC.nf(p.pct)}%, equivalente a ${PC.brl2(p.valor)} (${reaisExtenso(p.valor)}), por PIX ou depósito: ${p.pix || "______________________"};`).join("\n");
+  return PC.preencher(CLAUSULA_SPLIT, { PAGADOR_PAPEL: venda ? "VENDEDOR" : "LOCADOR", TOTAL: PC.brl2(c.total), TOTAL_EXTENSO: reaisExtenso(c.total), MOMENTO: venda ? "no ato da assinatura deste instrumento" : "no ato da assinatura deste contrato", LINHAS_SPLIT: linhas });
+}
+async function copiarClausula(n) { const t = textoClausula(n.comissao); await copiar(t); toast("Cláusula copiada: cole no contrato de locação ou no compromisso de compra e venda."); }
+async function gerarMandato(b) {
+  const cor = perfilPorEmail(EU.usuario); const op = PC.norm(b.operacao || ""); const texto = preencherDoc(MANDATO_PADRAO, { OPERACAO: op.startsWith("venda") || op.startsWith("compra") ? "compra" : op.includes("venda") ? "compra ou locação" : "locação" }, cor);
+  const f = faltasDoc(texto); if (f.length) { toast(avisoFaltas(f)); return; }
+  const cli = C(b.cliente);
+  const doc = PC.pdfDoc(jsPDF, { kicker: "MANDATO DE BUSCA", ref: "CONTRATO COM O CLIENTE", titulo: "Contrato de intermediação para busca de imóvel", corretor: cor, logos: LOGOS.dark ? LOGOS : null,
+    dados: [["Cliente (nome / razão social)", cli ? cli.empresa || cli.nome : ""], ["CPF / CNPJ", cli?.documento || ""], ["Representante", cli && cli.empresa ? cli.nome : ""], ["E-mail / telefone", [cli?.email, cli?.telefone].filter(Boolean).join(" · ")], ["Demanda (briefing)", [b.tipo, b.operacao, b.cidades || b.regiao, faixaArea(b)].filter(Boolean).join(" · ")], ["Exclusividade", "(  ) Sim   (  ) Não"]],
+    tituloTexto: "CLÁUSULAS", texto, versao: "Documento " + VERSAO_DOCS, assinaturas: [{ nome: cli ? cli.nome || cli.empresa : "Cliente", sub: "Contratante" }, { nome: cor.nome, sub: `Contratado · ${cor.creci}` }] });
+  const blob = doc.output("blob"); const nome = `Mandato_Busca_${(nomeB(b) || "cliente").replace(/[^\w]+/g, "_").slice(0, 40)}.pdf`;
+  await emitir({ tipo: "mandato", briefing_id: b.id, contato_id: b.cliente || null, destinatario: cli ? nomeC(cli) : "", nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: "Mandato de busca · " + nomeB(b) });
+  await compartilharOuBaixar(blob, nome);
+}
 async function gerarAcordo(n, o, b) {
   const cfg = CFG(); const texto0 = cfg.acordo || ACORDO_PADRAO;
-  if (!cfg.acordo_revisado || texto0.includes("[__")) { toast("Antes: preencha os campos [__] do acordo em Mais → Configurações, revise com seu advogado e marque a revisão."); return go({ v: "config" }); }
+  const falt = faltasDoc(preencherDoc(texto0, {}, null));
+  if (!cfg.acordo_revisado || falt.length) { toast(falt.length ? avisoFaltas(falt) : "Antes: revise o acordo com seu advogado e marque a revisão em Configurações."); return go({ v: "config" }); }
   try {
     const d = o ? PC.num(o) : {}; const cli = b ? C(b.cliente) : null; const sl = n.sala ? S.salas.find((x) => x.id === n.sala) : null;
     const base = { codigo: o?.codigo || "", titulo: o ? tituloO(o) : "", tipo: d.tipo, cliente: (cli && (cli.empresa || cli.nome)) || sl?.aceite?.razao || (b ? nomeB(b) : ""), comissao: n.comissao };
-    const texto = PC.preencher(texto0, PC.varsAcordo(base));
+    const texto = preencherDoc(texto0, PC.varsAcordo(base), o ? corretorDaOferta(o) : null);
     const doc = PC.pdfAcordo(jsPDF, { ...base, texto, versao: cfg.acordo_versao || ACORDO_VERSAO, corretor: { nome: cfg.corretor_nome, creci: cfg.corretor_creci }, logos: LOGOS.dark ? LOGOS : null });
     const blob = doc.output("blob"); const nome = `Acordo_Divisao_Honorarios_${base.codigo || n.id}.pdf`;
     const c = PC.calcComissao(n.comissao);
@@ -643,13 +696,13 @@ VIEWS.mais = () => {
   $("main").innerHTML = `<div class="card"><div class="menu">
   <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button>' : ""}
   <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
-  <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p>`;
+  <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
   if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
   $("m8").onclick = () => go({ v: "anuncios" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
 };
-const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
+const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
   header("Relatórios emitidos"); $("main").innerHTML = `<div class="card"><p class="hint">Carregando…</p></div>`;
   let em = []; try { em = (await api("emissoes?limite=500")).emissoes; } catch (e) { $("main").innerHTML = `<div class="card"><p class="status err">${esc(e.message)}</p></div>`; return; }
@@ -681,9 +734,15 @@ VIEWS.config = async () => {
   const termo = c.termo || TERMO_PADRAO;
   $("main").innerHTML = `<div class="card" id="fc"><h2>Seus dados na Sala do Cliente</h2><div class="grid">
   <label>Nome<input data-k="corretor_nome" value="${esc(c.corretor_nome || "Rodrigo França Viana")}"></label><label>CRECI<input data-k="corretor_creci" value="${esc(c.corretor_creci || "CRECI-SP 297692")}"></label>
+  <label class="full">Endereço dos anúncios (opcional)<input data-k="anuncio_dominio" value="${esc(c.anuncio_dominio || "")}" placeholder="https://www.propto.com.br"></label>
   <label>WhatsApp<input data-k="corretor_whatsapp" value="${esc(c.corretor_whatsapp || "(19) 99805-1985")}"></label><label>E-mail<input data-k="corretor_email" value="${esc(c.corretor_email || "contato@primecorpconsultoria.com.br")}"></label></div>
+  <h2>Prazos e foro dos documentos</h2>
+  <p class="hint">Preenchimento manual. Os documentos usam estes valores escritos por extenso, ex.: "12 (doze) meses". Enquanto algum prazo usado por um documento estiver vazio, aquele documento não é emitido.</p>
+  <div class="grid">${PRAZOS.map(([k, , l, un]) => `<label class="u">${esc(l)}<input data-k="${k}" inputmode="numeric" value="${esc(c[k] || "")}" placeholder="—"><span>${esc(un)}</span></label>`).join("")}
+  <label>Foro (comarca)<input data-k="foro" value="${esc(c.foro || "Sumaré/SP")}"></label></div>
+  <p class="hint">Documentos ${esc(VERSAO_DOCS)} · ${["{{CORRETOR}}", "{{PRAZO_…}}", "{{FORO}}"].join(", ")} são preenchidos automaticamente (o corretor é quem captou ou conduz o negócio).</p>
   <h2>Termo de Apresentação, Confidencialidade e Não-Contorno</h2>
-  <p class="hint">É o texto que o cliente aceita antes de ver as opções. Preencha os campos [__] e revise com seu advogado. Cada sala guarda a versão aceita.</p>
+  <p class="hint">É o texto que o cliente aceita antes de ver as opções. Revise com seu advogado. Cada sala guarda a versão aceita. <button class="sm g" data-rest="termo">Restaurar texto padrão ${esc(VERSAO_DOCS)}</button></p>
   <label>Versão<input data-k="termo_versao" value="${esc(c.termo_versao || TERMO_VERSAO)}"></label>
   <label>Texto<textarea data-k="termo" rows="16">${esc(termo)}</textarea></label>
   <label class="check"><input type="checkbox" id="rv" ${c.termo_revisado ? "checked" : ""}> Revisei o termo e autorizo o uso nas Salas do Cliente</label>
@@ -692,19 +751,23 @@ VIEWS.config = async () => {
   <h3>Modelos de divisão</h3><div id="fm"></div><button class="sm" id="addm">+ Modelo</button>
   <label class="check"><input type="checkbox" id="cr" ${c.com_revisada ? "checked" : ""}> Conferi os percentuais e os modelos de divisão</label>
   <h2>Termos de autorização do anunciante</h2>
-  <p class="hint">O anunciante aceita um destes textos pelo link ou no PDF. O sistema preenche {{CODIGO}}, {{TITULO}}, {{OPERACAO}}, {{COMISSAO}}, {{QUADRO}} e {{VALOR}}. Os campos [__] você define com seu advogado.</p>
+  <p class="hint">O anunciante aceita um destes textos pelo link ou no PDF. O sistema preenche {{CODIGO}}, {{TITULO}}, {{OPERACAO}}, {{COMISSAO}}, {{QUADRO}}, {{VALOR}}, {{CORRETOR}}, os prazos e o foro.</p>
   <label>Versão<input data-k="aut_versao" value="${esc(c.aut_versao || AUT_VERSAO)}"></label>
+  <p><button class="sm g" data-rest="aut_parceria">Restaurar parceria padrão</button> <button class="sm g" data-rest="aut_proprietario">Restaurar autorização padrão</button></p>
   <label>Parceria com imobiliária ou corretor<textarea data-k="aut_parceria" rows="12">${esc(c.aut_parceria || AUT_PARCERIA)}</textarea></label>
   <label>Autorização do proprietário<textarea data-k="aut_proprietario" rows="12">${esc(c.aut_proprietario || AUT_PROPRIETARIO)}</textarea></label>
   <label class="check"><input type="checkbox" id="ra" ${c.aut_revisado ? "checked" : ""}> Revisei os dois termos de autorização e autorizo o uso</label>
   <h2>Acordo de divisão de honorários</h2>
   <p class="hint">Documento que todas as partes do negócio assinam (imobiliária, corretor parceiro e PrimeCorp). O sistema preenche {{OPERACAO}}, {{CODIGO}}, {{TITULO}}, {{CLIENTE}}, {{COMISSAO}}, {{VALOR}}, {{TOTAL}}, {{QUADRO}} e {{RECEBEDOR}}.</p>
   <label>Versão<input data-k="acordo_versao" value="${esc(c.acordo_versao || ACORDO_VERSAO)}"></label>
+  <p><button class="sm g" data-rest="acordo">Restaurar acordo padrão</button></p>
   <label>Texto<textarea data-k="acordo" rows="14">${esc(c.acordo || ACORDO_PADRAO)}</textarea></label>
   <label class="check"><input type="checkbox" id="rac" ${c.acordo_revisado ? "checked" : ""}> Revisei o acordo de divisão e autorizo o uso</label>
   <button class="p" id="sv">Salvar configurações</button><div class="status" id="st"></div></div>
   <div class="card"><h2>Coleta automática de alertas</h2><div id="cs"><p class="hint">Verificando…</p></div></div>`;
   editing = true;
+  const PADROES = { termo: TERMO_PADRAO, aut_parceria: AUT_PARCERIA, aut_proprietario: AUT_PROPRIETARIO, acordo: ACORDO_PADRAO };
+  document.querySelectorAll("[data-rest]").forEach((b) => confirmar2(b, "Toque de novo para substituir o texto", async () => { const t = document.querySelector(`[data-k="${b.dataset.rest}"]`); if (t) { t.value = PADROES[b.dataset.rest]; toast("Texto padrão restaurado. Salve para aplicar."); } }));
   let mods = JSON.parse(JSON.stringify(Array.isArray(c.modelos) && c.modelos.length ? c.modelos : PC.MODELOS_PADRAO));
   const lerMods = () => [...$("fm").querySelectorAll("[data-m]")].map((el, i) => ({ id: mods[i]?.id || uid("m"), nome: el.querySelector("[data-mn]").value.trim(), partes: lerPartes(el).map((p) => ({ papel: p.papel, pct: PC.parseBR(p.pct) || 0 })) }));
   const drawMods = () => {
@@ -718,9 +781,11 @@ VIEWS.config = async () => {
   $("addm").onclick = () => { mods = lerMods(); mods.push({ id: uid("m"), nome: "Novo modelo", partes: [{ papel: "PrimeCorp (indicação)", pct: 100 }] }); drawMods(); };
   $("sv").onclick = async () => { const v = readK($("fc")); const rev = $("rv").checked, ra = $("ra").checked, cr = $("cr").checked, rac = $("rac").checked; const st = $("st");
     const err = (m) => { st.className = "status err"; st.textContent = m; };
-    if (rev && v.termo.includes("[__")) return err("O termo do cliente ainda tem campos [__] sem preencher.");
-    if (ra && (v.aut_parceria.includes("[__") || v.aut_proprietario.includes("[__"))) return err("Os termos de autorização ainda têm campos [__] sem preencher.");
-    if (rac && v.acordo.includes("[__")) return err("O acordo de divisão ainda tem campos [__] sem preencher.");
+    if (PRAZOS.some(([k]) => v[k] && !/^\d{1,4}$/.test(v[k]))) return err("Prazos: use só números inteiros.");
+    if (v.anuncio_dominio && !/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}$/i.test(v.anuncio_dominio.replace(/\/+$/, ""))) return err("Endereço dos anúncios: use o formato https://www.propto.com.br");
+    if (rev && v.termo.includes("[__")) return err("O termo do cliente ainda tem campos [__]: restaure o texto padrão ou preencha.");
+    if (ra && (v.aut_parceria.includes("[__") || v.aut_proprietario.includes("[__"))) return err("Os termos de autorização ainda têm campos [__]: restaure o texto padrão ou preencha.");
+    if (rac && v.acordo.includes("[__")) return err("O acordo de divisão ainda tem campos [__]: restaure o texto padrão ou preencha.");
     const ms = lerMods(); const ruim = ms.find((m) => !m.nome || !m.partes.length || Math.abs(m.partes.reduce((a, p) => a + p.pct, 0) - 100) > 0.01);
     if (ruim) return err(`O modelo "${ruim.nome || "sem nome"}" precisa somar 100%.`);
     if (!PC.parseBR(v.com_venda_pct) || !PC.parseBR(v.com_locacao_alugueis)) return err("Informe a comissão padrão de venda e de locação.");
@@ -748,7 +813,7 @@ function partesHTML(partes, comNomes) {
   return partes.map((p) => `<div class="parte">
   <label>Papel<select data-pp="papel">${PC.PAPEIS.map((x) => `<option ${x === p.papel ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
   <label class="u">Participação<input data-pp="pct" inputmode="decimal" value="${esc(p.pct ?? "")}"><span>%</span></label>
-  ${comNomes ? `<label>Contato no CRM<select data-pp="contato"><option value="">—</option>${opts(p.contato)}</select></label><label>Nome<input data-pp="nome" value="${esc(p.nome || "")}"></label><label class="full">CRECI<input data-pp="creci" value="${esc(p.creci || "")}"></label>` : ""}
+  ${comNomes ? `<label>Contato no CRM<select data-pp="contato"><option value="">—</option>${opts(p.contato)}</select></label><label>Nome<input data-pp="nome" value="${esc(p.nome || "")}"></label><label>CRECI<input data-pp="creci" value="${esc(p.creci || "")}"></label><label>PIX / dados bancários<input data-pp="pix" value="${esc(p.pix || "")}" placeholder="para pagamento direto"></label>` : ""}
   <div class="val"><span data-pv></span><button class="sm g" data-rm>Remover</button></div></div>`).join("");
 }
 function lerPartes(root) { return [...root.querySelectorAll(".parte")].map((el) => { const o = {}; el.querySelectorAll("[data-pp]").forEach((x) => (o[x.dataset.pp] = x.value.trim())); return o; }); }
@@ -761,9 +826,9 @@ function ligarPartes(root, onChange, comNomes) {
 VIEWS.novopedido = () => {
   const o = O(route.o); if (!o) return back(); header("Pedido ao anunciante");
   const cfg = CFG();
-  const pend = !cfg.aut_revisado || [cfg.aut_parceria, cfg.aut_proprietario].some((t) => !t || t.includes("[__")) || !cfg.com_revisada;
+  const pend = !cfg.aut_revisado || [cfg.aut_parceria || AUT_PARCERIA, cfg.aut_proprietario || AUT_PROPRIETARIO].some((t) => faltasDoc(preencherDoc(t, {}, null)).length) || !cfg.com_revisada;
   if (pend) {
-    $("main").innerHTML = `<div class="card"><h2>Revise os termos e a comissão antes</h2><p class="hint">O anunciante vai aceitar um termo com a divisão de honorários. Em Configurações: preencha os campos [__] dos dois termos de autorização, confira os percentuais padrão de comissão e os modelos de divisão, e marque as revisões.</p><button class="p" id="cf">Abrir configurações</button></div>`;
+    $("main").innerHTML = `<div class="card"><h2>Revise os termos e a comissão antes</h2><p class="hint">O anunciante vai aceitar um termo com a divisão de honorários. Em Configurações: preencha os prazos, confira os percentuais padrão de comissão e os modelos de divisão, e marque as revisões dos termos.</p><button class="p" id="cf">Abrir configurações</button></div>`;
     $("cf").onclick = () => go({ v: "config" }); return;
   }
   const comp = PC.completude(o); const dem = demandaPara(o); const base = baseDe(o); const cp = comPadrao();
@@ -803,7 +868,7 @@ VIEWS.novopedido = () => {
       const codigo = await garantirCodigo(o); const atual = O(o.id) || o;
       const tipo = $("tt").value; const d = PC.num(atual);
       const vars = { CODIGO: codigo, TITULO: PC.autoTitle(d), OPERACAO: (atual.operacao || "locação").toLowerCase(), COMISSAO: com.texto, QUADRO: PC.quadroComissao(com), VALOR: [d.venda && PC.brl(d.venda) + " (venda)", d.aluguel && PC.brl(d.aluguel) + "/mês (locação)"].filter(Boolean).join(" ou ") || "a definir" };
-      const termo = trocaCorretor(PC.preencher(tipo === "proprietario" ? cfg.aut_proprietario : cfg.aut_parceria, vars), corretorDaOferta(atual));
+      const termo = preencherDoc(tipo === "proprietario" ? cfg.aut_proprietario || AUT_PROPRIETARIO : cfg.aut_parceria || AUT_PARCERIA, vars, corretorDaOferta(atual));
       const token = tokenAleatorio(32); const ct = C($("ct").value);
       const ped = { id: token, oferta: atual.id, codigo, titulo: tituloO(atual), operacao: atual.operacao || "", tipo_termo: tipo, anunciante: $("an").value.trim(), contato: ct ? ct.id : null,
         demanda: $("dm") && $("dm").checked ? dem.length : 0, conhecidos: PC.conhecidos(atual), faltam: comp.faltam, comissao: com, termo_texto: termo, termo_versao: cfg.aut_versao || AUT_VERSAO,
@@ -973,6 +1038,7 @@ VIEWS.equipe = () => {
 
 /* ---------- Lista de captações ---------- */
 const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Chácara", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial"];
+const baseAnuncios = () => String(CFG().anuncio_dominio || "").trim().replace(/\/+$/, "") || location.origin;
 const fotosDe = (o) => (o.captacao?.ambientes || []).reduce((a, x) => a + (x.fotos || []).length, 0);
 const anuncioDe = (o) => o.anuncio_token ? S.anuncios.find((a) => a.id === o.anuncio_token) : null;
 function etapaCap(o) {
@@ -986,7 +1052,7 @@ function etapaCap(o) {
 VIEWS.captar = () => {
   header("Captação no local"); const f = route.f || (ehAdmin() ? "todas" : "minhas");
   const caps = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada" && (f === "todas" || o.captador === EU.usuario)).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
-  $("main").innerHTML = `<button class="captar-cta" id="nc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg><span><b>Nova captação</b><small>Fotografe cada ambiente e fale sobre ele</small></span><span>›</span></button>
+  $("main").innerHTML = `<button class="captar-cta" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Nova captação</b><small>Fotografe cada ambiente e fale sobre ele</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
   <div class="seg">${[["minhas", "Minhas"], ["todas", "Todas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <div class="card"><div class="list">${caps.map((o) => { const [cor, et] = etapaCap(o); const an = anuncioDe(o); return `<button class="item" data-c="${o.id}"><span class="dot ${cor}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação sem título"))}</b><span>${esc([et, fotosDe(o) + " foto(s)", perfilPorEmail(o.captador).nome.split(" ")[0], an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhuma captação ainda.</p>'}</div></div>`;
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));
@@ -1149,7 +1215,7 @@ VIEWS.captacao = () => {
     const at = cur(); const an = anuncioDe(at); const pedAb = S.pedidos.filter((p) => p.oferta === at.id).sort((a, b) => (b.criado || "").localeCompare(a.criado || ""))[0];
     const aut = at.autorizacao || at.autorizacao_manual; const nf = fotosDe(at);
     const falta = [!at.titulo && "título", !at.descricao && "descrição", nf < 3 && "pelo menos 3 fotos", !(PC.parseBR(at.venda) || PC.parseBR(at.aluguel)) && "valor"].filter(Boolean);
-    const link = an ? `${location.origin}/i/${an.id}` : "";
+    const link = an ? `${baseAnuncios()}/i/${an.id}` : "";
     $("fx").innerHTML = `<h2>Próximos passos</h2>
     <div class="passo ${aut ? "ok" : ""}"><b>1 · Autorização de comercialização</b>
       ${at.autorizacao ? `<p class="tag ok">Autorizado por ${esc(at.autorizacao.responsavel || at.autorizacao.razao)} em ${esc(fdt(at.autorizacao.em))}</p>` : at.autorizacao_manual ? `<p class="tag ok">Autorização por escrito fora do sistema, registrada por ${esc(at.autorizacao_manual.por)} em ${esc(fdt(at.autorizacao_manual.em))}</p>` : pedAb ? `<p class="hint">Enviada em ${esc(fdt(pedAb.criado))}: ${esc(STATUS_P[pedAb.status] || pedAb.status)}.</p><button class="sm" id="vped">Ver pedido</button>` : `<p class="hint">O proprietário recebe a ficha do imóvel e aceita a autorização pelo celular (link) ou no PDF.</p>`}
@@ -1187,7 +1253,7 @@ VIEWS.captacao = () => {
     try {
       await store.save("anuncios", reg);
       await salvar({ anuncio_token: token, status: a2.status === "captacao" ? "revisada" : a2.status, codigo });
-      await emitir({ tipo: "anuncio_publicado", oferta_id: a2.id, destinatario: "Página pública", conteudo: `${location.origin}/i/${token}\n${a2.titulo} · ${fotos.length} foto(s) · ${corretorDaOferta(a2).nome}`, meta: { token, atualizacao: !!ant } });
+      await emitir({ tipo: "anuncio_publicado", oferta_id: a2.id, destinatario: "Página pública", conteudo: `${baseAnuncios()}/i/${token}\n${a2.titulo} · ${fotos.length} foto(s) · ${corretorDaOferta(a2).nome}`, meta: { token, atualizacao: !!ant } });
       toast(ant ? "Página atualizada." : "Anúncio publicado."); header("Captação " + codigo); passos();
     } catch {}
   };

@@ -43,6 +43,7 @@ ul.dest{list-style:none;display:flex;flex-wrap:wrap;gap:8px}ul.dest li{backgroun
 .gal{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}.gal img{height:180px;border-radius:10px;scroll-snap-align:start;cursor:zoom-in;flex:none}
 .cor{background:var(--ink);color:#fff;border-radius:14px;padding:18px;margin-top:28px}.cor b{font-size:19px}.cor span{display:block;color:#C9CDD2;font-size:14px;margin-top:4px}
 .nota{font-size:13px;color:var(--ink2);margin-top:18px;line-height:1.45}
+.feito{display:flex;align-items:center;gap:8px;font-size:12px;color:#626C79;margin-top:22px}.feito img{width:104px;height:auto;display:block}
 .cta{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;z-index:6}
 .cta a{flex:1;text-align:center;text-decoration:none;font-weight:700;font-size:17px;padding:14px;border-radius:12px;background:var(--red);color:#fff}
 .cta a.s{flex:none;background:#fff;color:var(--ink);border:1px solid var(--line);padding:14px 16px}
@@ -61,6 +62,7 @@ ${(a.destaques || []).length ? `<h2>Destaques</h2><ul class="dest">${a.destaques
 ${grupos.length ? `<h2>Ambientes</h2>${grupos.map((g) => `<div class="amb"><h3>${esc(g.nome)}</h3>${ambDesc[g.nome] ? `<p>${esc(ambDesc[g.nome])}</p>` : ""}<div class="gal">${g.itens.map((x) => `<img loading="lazy" src="${img(x.i)}" alt="${esc(g.nome)}" data-i="${x.i}">`).join("")}</div></div>`).join("")}` : ""}
 <div class="cor" id="contato"><b>${esc(a.corretor?.nome || "PrimeCorp Brokers")}</b><span>Corretor(a) de imóveis${a.corretor?.creci ? " · " + esc(a.corretor.creci) : ""} · PrimeCorp Brokers</span>${a.corretor?.whatsapp ? `<span>WhatsApp ${esc(a.corretor.whatsapp)}</span>` : ""}</div>
 <p class="nota">Informações fornecidas pelo proprietário e sujeitas a confirmação em visita e na documentação do imóvel. Endereço informado no agendamento da visita. Ref. ${esc(a.codigo || "")}.</p>
+<p class="feito">Anúncio criado com <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img src="/marca/propto-horizontal.svg" alt="Propto"></a></p>
 </div>
 ${wa ? `<div class="cta"><a href="${wa}" target="_blank" rel="noopener">Agendar visita pelo WhatsApp</a></div>` : ""}
 <div id="lb"><img alt=""></div>

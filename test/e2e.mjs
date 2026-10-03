@@ -20,6 +20,7 @@ await p.click('#sv'); await W(); await sh('04briefing'); console.log('score', aw
 // Sala bloqueada → config
 await p.click('#sala'); await W(); console.log('bloqueio:', await p.textContent('main h2')); await p.click('#cf'); await W(600);
 const termo = await p.$eval('[data-k="termo"]', t => t.value); await p.fill('[data-k="termo"]', termo.replace('[__] meses', '24 meses').replace('[__]% do valor', '6% do valor').replace('[__] aluguel', '1 aluguel'));
+for (const [k, v] of [['prazo_cliente', '24'], ['prazo_indicacao', '12'], ['prazo_repasse', '5'], ['prazo_nao_contorno', '12'], ['prazo_autorizacao', '90'], ['prazo_pos_autorizacao', '6'], ['prazo_mandato', '90']]) await p.fill(`[data-k="${k}"]`, v);
 await p.check('#rv'); await p.click('#sv'); await W(); await sh('05config');
 await p.click('[data-tab="briefings"]'); await p.click('[data-b]'); await W(); await p.click('#sala'); await W(); await sh('06novasala'); await p.click('#cr'); await W(1200); await sh('07sala');
 const link = await p.textContent('#lk'); console.log('link', link);

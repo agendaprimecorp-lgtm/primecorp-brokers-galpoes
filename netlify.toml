@@ -9,3 +9,16 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
   external_node_modules = ["imapflow", "mailparser"]
+
+# Domínio da marca Propto (opcional): a raiz mostra a página da Propto; /i/<token> continua servindo os anúncios.
+[[redirects]]
+  from = "https://propto.com.br/"
+  to = "/propto.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://www.propto.com.br/"
+  to = "/propto.html"
+  status = 200
+  force = true

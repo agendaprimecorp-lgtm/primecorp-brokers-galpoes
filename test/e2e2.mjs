@@ -42,6 +42,7 @@ for (const k of ['aut_parceria', 'aut_proprietario']) {
 }
 const tv = await p.$eval('[data-k="termo"]', t => t.value); await p.fill('[data-k="termo"]', tv.replace('[__] meses', '24 meses').replace('[__]% do valor', '6% do valor').replace('[__] aluguel', '1 aluguel'));
 const av = await p.$eval('[data-k="acordo"]', t => t.value); await p.fill('[data-k="acordo"]', av.replace('[__] dias úteis', '5 dias úteis').replace('[__] meses', '12 meses'));
+for (const [k, v] of [['prazo_cliente', '24'], ['prazo_indicacao', '12'], ['prazo_repasse', '5'], ['prazo_nao_contorno', '12'], ['prazo_autorizacao', '90'], ['prazo_pos_autorizacao', '6'], ['prazo_mandato', '90']]) await p.fill(`[data-k="${k}"]`, v);
 await p.check('#rv'); await p.check('#ra'); await p.check('#cr'); await p.check('#rac');
 await p.evaluate(() => document.querySelector('#fm').scrollIntoView()); await sh('02_config_modelos');
 await p.click('#sv'); await W(700);
@@ -100,6 +101,9 @@ await p.evaluate(() => document.querySelector('#edcom').closest('.card').scrollI
 const [dla] = await Promise.all([p.waitForEvent("download"), p.click("#acpdf")]); await dla.saveAs(OUT + '/acordo_3partes.pdf'); await W(800);
 ok(/Acordo_Divisao_Honorarios_PC-/.test(dla.suggestedFilename()), 'acordo de divisão baixado: ' + dla.suggestedFilename());
 ok(/Acordo de divisão emitido/.test(await p.textContent('main')), 'histórico registra o acordo');
+const [dv] = await Promise.all([p.waitForEvent('download'), p.click('#dvis')]); await dv.saveAs(OUT + '/ficha_visita.pdf'); ok(/Ficha_Visita/.test(dv.suggestedFilename()), 'ficha de visita: ' + dv.suggestedFilename()); await W(600);
+const [dr] = await Promise.all([p.waitForEvent('download'), p.click('#drec')]); await dr.saveAs(OUT + '/recibo.pdf'); ok(/Recibo_Honorarios/.test(dr.suggestedFilename()), 'recibo da parcela PrimeCorp: ' + dr.suggestedFilename()); await W(600);
+await p.evaluate(() => document.querySelector('#dvis').closest('.card').scrollIntoView()); await sh('15d_documentos');
 // 6b) negócio direto com a imobiliária: 2 partes
 await put('negocios', { id: 'n2', briefing: 'b2', oferta: 'o7', parceiro: 'Investidor', etapa: 'proposta', criado: t0, atualizado: t0, log: [{ t: t0, ev: 'Proposta enviada' }] });
 await p.reload(); await W(1000); await p.click('[data-n="n2"]').catch(async () => { await p.evaluate(() => location.hash = '#negocio/n2'); }); await W(700);

@@ -727,4 +727,52 @@ PC.pdfAcordo = function (jsPDF, o) {
 };
 PC.varsAcordo = (o) => { const c = PC.calcComissao(o.comissao); return { OPERACAO: c.base === 'venda' ? 'Venda' : 'Locação', CODIGO: o.codigo || '', TITULO: o.titulo || '', CLIENTE: o.cliente || 'a identificar', COMISSAO: PC.textoComissao(o.comissao), VALOR: (PC.brl(c.valor) || '—') + (c.base === 'venda' ? '' : '/mês'), TOTAL: PC.brl2(c.total) || '—', QUADRO: c.partes.map(p => `${PC.nomeParte(p)} (${PC.ehPC(p) ? 'indicação' : p.papel}): ${PC.nf(p.pct)}%`).join('; '), RECEBEDOR: PC.nomeParte(PC.recebedor(o.comissao)) }; };
 
+/* --- Documento padrão (ficha de visita, recibo, cláusula, mandato) --- */
+PC.pdfDoc = function (jsPDF, o) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+  const W = 595.28, H = 841.89, M = 38, IW = W - 2 * M, BOT = H - 58;
+  const C = { g: [30, 34, 39], r: [200, 16, 46], p: [244, 245, 247], z: [250, 250, 251], t: [30, 34, 39], t2: [90, 96, 104], ln: [217, 220, 225], w: [255, 255, 255] };
+  const fill = k => doc.setFillColor(k[0], k[1], k[2]), ink = k => doc.setTextColor(k[0], k[1], k[2]), pen = k => doc.setDrawColor(k[0], k[1], k[2]);
+  const F = (sz, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(sz); };
+  const clean = x => String(x == null ? '' : x).replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x00-\xFF–—•²³ºª·€§]/g, '');
+  const T = (x, a, b, op) => doc.text(clean(x), a, b, op);
+  const wrap = (x, w) => doc.splitTextToSize(clean(x), w);
+  let y = 0;
+  const cab = () => { fill(C.r); doc.rect(0, 0, W, 8, 'F'); F(8.2, true); ink(C.r); T(o.kicker || o.titulo, M, 34); F(7.6, false); ink(C.t2); T(o.ref || '', M, 46);
+    if (o.logos && o.logos.dark) { const lh = 24, lw = lh * o.logos.ratio; doc.addImage(o.logos.dark, 'PNG', W - M - lw, 18, lw, lh); } y = 72; };
+  const precisa = h => { if (y + h > BOT) { doc.addPage(); cab(); } };
+  const secao = t => { precisa(40); F(8.6, true); ink(C.r); T(t, M, y); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, y + 5, W - M, y + 5); y += 18; };
+  cab();
+  F(16, true); ink(C.t); wrap(o.titulo, IW).forEach(l => { T(l, M, y); y += 20; }); y += 4;
+  if ((o.dados || []).length) {
+    secao(o.tituloDados || 'IDENTIFICAÇÃO');
+    o.dados.forEach((r, i) => { const v = wrap(r[1] || '_______________________________________', IW - 170); const h = Math.max(17, v.length * 11 + 6); precisa(h); fill(i % 2 ? C.z : C.p); doc.rect(M, y, IW, h, 'F'); F(8.2, false); ink(C.t2); T(r[0], M + 8, y + 11.5); F(8.4, true); ink(C.t); v.forEach((l, k) => T(l, M + 160, y + 11.5 + k * 11)); y += h; });
+    y += 12;
+  }
+  if ((o.tabela || []).length) {
+    const cols = o.colunas || [];
+    precisa(40); fill(C.g); doc.rect(M, y, IW, 18, 'F'); F(7.8, true); ink(C.w); cols.forEach(cn => T(cn[0], cn[2] === 'r' ? M + cn[1] : M + cn[1], y + 12, cn[2] === 'r' ? { align: 'right' } : undefined)); y += 18;
+    o.tabela.forEach((row, i) => { precisa(18); fill(i % 2 ? C.z : C.p); doc.rect(M, y, IW, 18, 'F'); F(8.2, false); ink(C.t); row.forEach((c, j) => { const cn = cols[j]; T(wrap(c, 160)[0] || '', M + cn[1], y + 12, cn[2] === 'r' ? { align: 'right' } : undefined); }); y += 18; });
+    y += 12;
+  }
+  if (o.texto) {
+    secao(o.tituloTexto || 'CONDIÇÕES');
+    if (o.versao) { F(7.4, true); ink(C.t2); T(o.versao, M, y); y += 11; }
+    String(o.texto).split(/\n\s*\n/).forEach(bl => { const first = bl.trim(); F(first === first.toUpperCase() && first.length < 90 ? 9 : 8.4, first === first.toUpperCase() && first.length < 90); ink(C.t); wrap(first, IW).forEach(l => { precisa(13); T(l, M, y); y += 12; }); y += 5; });
+  }
+  if ((o.assinaturas || []).length) {
+    precisa(70 + Math.ceil(o.assinaturas.length / 2) * 64);
+    secao('ASSINATURAS'); F(7.8, false); ink(C.t2); T(o.localData || 'Local e data: ______________________________________', M, y + 6); y += 26;
+    const cw = (IW - 24) / 2;
+    for (let i = 0; i < o.assinaturas.length; i += 2) { precisa(64);
+      [o.assinaturas[i], o.assinaturas[i + 1]].forEach((a, j) => { if (!a) return; const x = M + j * (cw + 24); pen(C.t2); doc.setLineWidth(0.6); doc.line(x, y + 26, x + cw, y + 26); F(8, true); ink(C.t); T(wrap(a.nome, cw)[0], x, y + 38); F(7.4, false); ink(C.t2); T(wrap(a.sub || '', cw)[0] || '', x, y + 49); });
+      y += 64; }
+  }
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40); F(7.4, false); ink(C.t2);
+    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
+    T(`${o.codigo ? 'Ref. ' + o.codigo + ' · ' : ''}${i}/${n}`, W - M, H - 27, { align: 'right' }); }
+  return doc;
+};
+
 export default PC;
