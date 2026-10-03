@@ -117,3 +117,12 @@ Abra o endereço do site no Safari → Compartilhar → **Adicionar à Tela de I
 
 ## Módulo de usuários (pré-estruturado, desligado)
 A pasta `propto/` guarda o módulo para corretores, imobiliárias e proprietários externos (cadastro por tipo, planos com cobrança Asaas, roteiro guiado, landing, PDF e exportação), com interface PrimeCorp e Tecnologia Propto. Não é publicado agora: quando for a hora, siga `propto/LEIAME.md` (site próprio no Netlify, base directory `propto`, banco separado). O código de roteiro e exportação é compartilhado em `shared/`.
+
+## Acesso da Joselia (e de quem mais entrar na equipe)
+1. No app, como administrador: **Mais → Equipe e permissões → Cadastrar Joselia** (ou **+ Pessoa**), com o e-mail `comercial@primecorpconsultoria.com.br`.
+2. No Netlify: **Project configuration → Identity → Invite users** com o mesmo e-mail.
+3. Ela abre o convite no e-mail, toca no link e cria a própria senha.
+Ela entra no mesmo sistema (base de imóveis, briefings e clientes compartilhada), com o perfil de corretora: tudo para operar; sem Configurações, Backup, Equipe e exclusões. O painel abre no foco residencial dela e os documentos saem com o nome e o CRECI dela.
+
+## Registro fotográfico
+Captar → **Iniciar registro fotográfico** → escolha o tipo (casa, galpão, barracão, terreno, rural…) → a câmera guia ambiente por ambiente: foto, descrever detalhes por voz, salvar e seguir. No fim, a IA escreve o anúncio e o fluxo continua (autorização, página, pacote).

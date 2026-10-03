@@ -190,3 +190,8 @@ label.btn{cursor:pointer;flex-direction:row;font:600 15px/1 Barlow,system-ui,san
 .vflash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}.vflash.on{animation:vfl .35s ease-out}
 @keyframes vfl{from{opacity:.85}to{opacity:0}}
 .vcard textarea{min-height:64px}.vnav button{min-height:52px}
+.gtit{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2,#5A6068);margin:6px 0 0}
+.tiposel{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}.tiposel button{min-height:52px;font-size:15px}.tiposel button.on{border-color:#C8102E;color:#C8102E;background:#FFF5F6;box-shadow:0 0 0 1px #C8102E}
+.vguia{font-style:normal;font-weight:700;font-size:15px;color:#1E7B4F;margin-top:4px}
+.mic.pulse{border-color:#C8102E;color:#C8102E;animation:pul 1.4s ease-in-out infinite}
+@keyframes pul{0%,100%{box-shadow:0 0 0 0 rgba(200,16,46,.35)}50%{box-shadow:0 0 0 8px rgba(200,16,46,0)}}

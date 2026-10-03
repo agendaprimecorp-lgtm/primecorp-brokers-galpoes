@@ -1,11 +1,11 @@
 // Roteiro guiado de visita: fotos e dados obrigatórios por tipo de imóvel.
 
-export const TIPOS = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Sala comercial", "Loja", "Prédio comercial", "Galpão", "Galpão em condomínio", "Terreno", "Área / terreno", "Fazenda", "Sítio", "Chácara"];
+export const TIPOS = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Sala comercial", "Loja", "Prédio comercial", "Galpão", "Galpão em condomínio", "Barracão", "Terreno", "Área / terreno", "Fazenda", "Sítio", "Chácara"];
 
 export function grupo(tipo) {
   const t = String(tipo || "").toLowerCase();
   if (/fazenda|s[ií]tio|ch[áa]cara|rancho|haras|rural/.test(t)) return "rural";
-  if (/galp|armaz|log[ií]st|industr/.test(t)) return "galpao";
+  if (/galp|barrac|armaz|dep[óo]sito|log[ií]st|industr/.test(t)) return "galpao";
   if (/terreno|área|area|lote/.test(t)) return "area";
   if (/sala|loja|pr[ée]dio|comercial|ponto/.test(t)) return "comercial";
   return "residencial";

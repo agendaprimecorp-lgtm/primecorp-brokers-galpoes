@@ -68,7 +68,7 @@ await sh('07_briefing_rural');
 
 // 6) Rodrigo: captação rural
 await comoRodrigo();
-await p.click('[data-tab="captar"]'); await W(500); await p.click('#nc'); await W(800);
+await p.click('[data-tab="captar"]'); await W(500); await p.click('#nc'); await W(500); await p.click('[data-ti="Fazenda"]'); await W(200); await p.click('#iniManual'); await W(800);
 await p.selectOption('[data-c="tipo"]', 'Fazenda'); await W(500);
 ok(!!(await p.$('[data-c="area_ha"]')) && !!(await p.$('[data-c="aptidao"]')), 'captação rural mostra hectares e aptidão');
 ok(!(await p.$('[data-c="dormitorios"]')), 'captação rural sem dormitórios');

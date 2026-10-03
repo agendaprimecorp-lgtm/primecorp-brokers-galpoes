@@ -19,17 +19,18 @@ const txt = (s = 'main') => p.textContent(s);
 await p.goto(HOST + '/'); await W(900);
 
 // 1) nova captação → visita guiada
-await p.click('[data-tab="captar"]'); await W(400); await p.click('#nc'); await W(900);
-await p.selectOption('[data-c="tipo"]', 'Casa'); await p.fill('[data-c="cidade"]', 'Sumaré'); await p.fill('[data-c="regiao"]', 'Jardim Exemplo'); await W(900);
-await p.click('#vguiada'); await W(600);
+await p.click('[data-tab="captar"]'); await W(400); ok(/Iniciar registro fotográfico/.test(await txt()), 'botão Iniciar registro fotográfico'); await p.click('#nc'); await W(500);
+await p.click('[data-ti="Casa"]'); await W(250); ok(/Fachada · Sala · Cozinha/.test(await txt()), 'roteiro da casa mostrado antes de começar'); await sh('00_iniciar_tipo');
+await p.click('#ini'); await W(800);
 ok(await esperar(async () => p.$eval('#vid', (v) => v.videoWidth > 0 && !v.paused)), 'câmera ao vivo aberta dentro do app');
 ok(/1 de \d+/.test(await txt('#vpos')) && (await txt('#vnome')) === 'Fachada', 'começa pelo primeiro ambiente do roteiro: Fachada');
 await sh('01_visita_fachada');
-await p.click('#obt'); ok(await esperar(async () => (await p.$$('#vthumbs img')).length === 1), 'disparo registra a foto');
+ok(/Tire a foto/.test(await txt('#vguia')), 'guia: tire a foto'); await p.click('#obt'); ok(await esperar(async () => (await p.$$('#vthumbs img')).length === 1), 'disparo registra a foto'); ok(await esperar(async () => /descreva os detalhes/.test(await txt('#vguia')) && (await p.$eval('#vmic', (b) => b.classList.contains('pulse')))), 'guia: agora descreva os detalhes (microfone em destaque)');
 ok(await esperar(async () => !(await p.$eval('#vdesc', (x) => x.hidden))), 'IA descreve o ambiente depois da foto');
 await p.evaluate(() => (window.__fala = 'fachada com portão eletrônico, a casa tem 3 dormitórios e 2 vagas'));
 await p.click('#vmic'); await W(500); ok(/Parar/.test(await txt('#vmic')), 'microfone gravando'); await p.click('#vmic');
 ok(await esperar(async () => /portão eletrônico/.test(await p.$eval('#vfala', (x) => x.value))), 'fala registrada no ambiente');
+ok(await esperar(async () => /Pronto: salve e siga/.test(await txt('#vguia'))), 'guia do passo: foto → descrever → salvar e seguir');
 ok(await esperar(async () => /Dados da fala aplicados/.test(await txt('#vst'))), 'números da fala aplicados na ficha (dormitórios, vagas)');
 await sh('02_visita_fala_ia');
 // 2) percorre o roteiro: fotografa as obrigatórias, pula as opcionais
@@ -58,7 +59,7 @@ const descs = await p.$$eval('#ambs .desc', (xs) => xs.length); ok(descs >= 5, `
 // 3) câmera bloqueada: alternativa da câmera nativa
 const c2 = await novoCtx(); await c2.addInitScript(() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new Error('negado'), { name: 'NotAllowedError' })); });
 const p2 = await c2.newPage(); p2.on('pageerror', (e) => errs.push(e.message));
-await p2.goto(HOST + '/'); await p2.waitForTimeout(900); await p2.click('[data-tab="captar"]'); await p2.waitForTimeout(400); await p2.click('#nc'); await p2.waitForTimeout(800); await p2.click('#vguiada'); await p2.waitForTimeout(700);
+await p2.goto(HOST + '/'); await p2.waitForTimeout(900); await p2.click('[data-tab="captar"]'); await p2.waitForTimeout(400); await p2.click('#nc'); await p2.waitForTimeout(500); await p2.click('[data-ti="Galpão"]'); await p2.waitForTimeout(200); await p2.click('#ini'); await p2.waitForTimeout(900);
 ok(/bloqueada/.test(await p2.textContent('#vmsg')) && !(await p2.$eval('#vfb', (x) => x.hidden)), 'câmera bloqueada: oferece a câmera do celular');
 await p2.setInputFiles('#vfile', [FOT + 'f1.jpg']); ok(await (async () => { for (let i = 0; i < 40; i++) { if ((await p2.$$('#vthumbs img')).length === 1) return true; await p2.waitForTimeout(250); } return false; })(), 'foto pela câmera nativa registrada no ambiente');
 await sh('06_camera_bloqueada', p2); await c2.close();

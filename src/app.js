@@ -142,7 +142,7 @@ const TABS = [
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
 ];
-const PAI = { visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
+const PAI = { iniciar: "captar", visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = "tabs-in c6";
@@ -321,7 +321,7 @@ VIEWS.briefings = () => {
 const BF = [
   ["nome", "Nome do briefing (interno)", "text", "full"],
   ["cliente", "Cliente (CRM)", "ref:Cliente|Proprietário|Outro", ""], ["parceiro_id", "Parceiro que trouxe (CRM)", "ref:Corretor|Imobiliária|Outro", ""],
-  ["tipo", "Tipo", "sel:Casa|Casa em condomínio|Apartamento|Sobrado|Cobertura|Kitnet / studio|Sala comercial|Loja|Prédio comercial|Imóvel comercial|Galpão|Galpão em condomínio|Terreno|Área / terreno|Fazenda|Sítio|Chácara", ""], ["operacao", "Operação", "sel:Locação|Venda", ""],
+  ["tipo", "Tipo", "sel:Casa|Casa em condomínio|Apartamento|Sobrado|Cobertura|Kitnet / studio|Sala comercial|Loja|Prédio comercial|Imóvel comercial|Galpão|Galpão em condomínio|Barracão|Terreno|Área / terreno|Fazenda|Sítio|Chácara", ""], ["operacao", "Operação", "sel:Locação|Venda", ""],
   ["cidades", "Cidades aceitas (separe por vírgula)", "text", "full"], ["regiao", "Região / eixo", "text", "full"],
   ["areaMin", "Área mínima", "u:m²", "", "galpao comercial area residencial"], ["areaMax", "Área máxima", "u:m²", "", "galpao comercial area residencial"],
   ["haMin", "Área mínima", "u:ha", "", "rural"], ["haMax", "Área máxima", "u:ha", "", "rural"],
@@ -589,7 +589,7 @@ const OFORM = `
 <label>Anunciante é<select data-f="anunciante_tipo"><option>Imobiliária</option><option>Corretor</option><option>Proprietário</option></select></label><label>Anunciante<input data-f="anunciante"></label><label>Contato do anunciante<input data-f="anunciante_contato" type="tel"></label><label>CRECI do anunciante<input data-f="anunciante_creci"></label>
 </div></fieldset>
 <fieldset><legend>Identificação</legend><div class="grid">
-<label>Tipo<select data-f="tipo"><option>Casa</option><option>Casa em condomínio</option><option>Apartamento</option><option>Sobrado</option><option>Cobertura</option><option>Kitnet / studio</option><option>Sala comercial</option><option>Loja</option><option>Prédio comercial</option><option>Imóvel comercial</option><option>Galpão</option><option>Galpão em condomínio</option><option>Terreno</option><option>Área / terreno</option><option>Fazenda</option><option>Sítio</option><option>Chácara</option></select></label>
+<label>Tipo<select data-f="tipo"><option>Casa</option><option>Casa em condomínio</option><option>Apartamento</option><option>Sobrado</option><option>Cobertura</option><option>Kitnet / studio</option><option>Sala comercial</option><option>Loja</option><option>Prédio comercial</option><option>Imóvel comercial</option><option>Galpão</option><option>Galpão em condomínio</option><option>Barracão</option><option>Terreno</option><option>Área / terreno</option><option>Fazenda</option><option>Sítio</option><option>Chácara</option></select></label>
 <label>Operação<select data-f="operacao"><option>Locação</option><option>Venda</option><option>Locação / Venda</option></select></label>
 <label>Cidade<input data-f="cidade"></label><label>UF<input data-f="uf" maxlength="2" style="text-transform:uppercase"></label>
 <label class="full">Região / bairro / eixo (vai no teaser e na sala)<input data-f="regiao" placeholder="Eixo Anhanguera (RMC) · Jardim X · zona rural"></label>
@@ -1126,7 +1126,7 @@ VIEWS.equipe = () => {
 };
 
 /* ---------- Lista de captações ---------- */
-const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial", "Fazenda", "Sítio", "Chácara"];
+const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Barracão", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial", "Fazenda", "Sítio", "Chácara"];
 const baseAnuncios = () => String(CFG().anuncio_dominio || "").trim().replace(/\/+$/, "") || location.origin;
 const fotosDe = (o) => (o.captacao?.ambientes || []).reduce((a, x) => a + (x.fotos || []).length, 0);
 const anuncioDe = (o) => o.anuncio_token ? S.anuncios.find((a) => a.id === o.anuncio_token) : null;
@@ -1141,16 +1141,35 @@ function etapaCap(o) {
 VIEWS.captar = () => {
   header("Captação no local"); const f = route.f || (ehAdmin() ? "todas" : "minhas");
   const caps = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada" && (f === "todas" || o.captador === EU.usuario)).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
-  $("main").innerHTML = `<button class="captar-cta" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Nova captação</b><small>Fotografe cada ambiente e fale sobre ele</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
+  $("main").innerHTML = `<button class="captar-cta" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Iniciar registro fotográfico</b><small>Escolha o tipo: o app pede cada foto, você descreve e a IA organiza</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
   <div class="seg">${[["minhas", "Minhas"], ["todas", "Todas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <div class="card"><div class="list">${caps.map((o) => { const [cor, et] = etapaCap(o); const an = anuncioDe(o); return `<button class="item" data-c="${o.id}"><span class="dot ${cor}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação sem título"))}</b><span>${esc([et, fotosDe(o) + " foto(s)", perfilPorEmail(o.captador).nome.split(" ")[0], an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhuma captação ainda.</p>'}</div></div>`;
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));
   document.querySelectorAll("[data-c]").forEach((x) => (x.onclick = () => go({ v: "captacao", id: x.dataset.c })));
-  $("nc").onclick = async () => {
-    const o = { id: uid("o"), origem: "Captação própria", status: "captacao", captador: EU.usuario || usuarioAtual?.email, tipo: eu().foco === "residencial" ? "Casa" : "Galpão", operacao: "Venda", uf: "SP", anunciante_tipo: "Proprietário",
-      captacao: { iniciada: now(), ambientes: [], fala_geral: "" }, criado: now(), atualizado: now() };
-    try { await store.save("ofertas", o); go({ v: "captacao", id: o.id }); } catch {}
+  $("nc").onclick = () => go({ v: "iniciar" });
+};;
+
+/* ---------- Iniciar registro fotográfico: tipo → visita guiada ---------- */
+const GRUPOS_CAP = [["Residencial", ["Casa", "Casa em condomínio", "Sobrado", "Apartamento", "Cobertura", "Kitnet / studio"]], ["Galpões e comerciais", ["Galpão", "Galpão em condomínio", "Barracão", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial"]], ["Terrenos e áreas", ["Terreno", "Área / terreno"]], ["Rurais", ["Fazenda", "Sítio", "Chácara"]]];
+VIEWS.iniciar = () => {
+  header("Registro fotográfico"); let tipo = ""; let op = eu().foco === "residencial" ? "Venda" : "Locação"; let cid = "", reg = "";
+  const desenhar = () => {
+    $("main").innerHTML = `<div class="card"><span class="k">Passo 1 de 2</span><h2>Que imóvel você vai fotografar?</h2><p class="hint">O roteiro de fotos e as perguntas mudam conforme o tipo.</p>
+    ${GRUPOS_CAP.map(([g, ts]) => `<h3 class="gtit">${g}</h3><div class="tiposel">${ts.map((t) => `<button data-ti="${esc(t)}" class="${tipo === t ? "on" : ""}">${esc(t)}</button>`).join("")}</div>`).join("")}
+    <div class="grid"><label>Operação<select id="iop">${["Venda", "Locação", "Locação / Venda"].map((x) => `<option ${x === op ? "selected" : ""}>${x}</option>`).join("")}</select></label><label>Cidade<input id="icid" value="${esc(cid)}"></label><label class="full">Bairro / região (aparece no anúncio)<input id="ireg" value="${esc(reg)}"></label></div></div>
+    <div class="card"><span class="k">Passo 2 de 2</span>${tipo ? `<p>Roteiro de <b>${esc(tipo)}</b>: ${roteiroFotos(tipo, {}).filter((x) => x.obrigatorio).map((x) => esc(x.nome)).join(" · ")}.</p>` : '<p class="hint">Escolha o tipo acima.</p>'}
+    <button class="p" id="ini" ${tipo ? "" : "disabled"}>📷 Começar: câmera guiada</button><button class="g" id="iniManual" ${tipo ? "" : "disabled"}>Abrir a ficha sem câmera</button></div>`;
+    document.querySelectorAll("[data-ti]").forEach((b) => (b.onclick = () => { tipo = b.dataset.ti; op = $("iop").value; cid = $("icid").value; reg = $("ireg").value; desenhar(); }));
+    $("iop").onchange = () => (op = $("iop").value);
+    const criar = async (visita) => {
+      const o = { id: uid("o"), origem: "Captação própria", status: "captacao", captador: EU.usuario || usuarioAtual?.email, tipo, operacao: $("iop").value, cidade: $("icid").value.trim(), regiao: $("ireg").value.trim(), uf: "SP", anunciante_tipo: "Proprietário", captacao: { iniciada: now(), ambientes: [], fala_geral: "" }, criado: now(), atualizado: now() };
+      try { await store.save("ofertas", o); } catch { return; }
+      stack.length = 0; stack.push({ v: "captar" }); route = { v: "captacao", id: o.id };
+      if (visita) go({ v: "visita", id: o.id }); else { render(); window.scrollTo(0, 0); }
+    };
+    $("ini").onclick = () => criar(true); $("iniManual").onclick = () => criar(false);
   };
+  desenhar();
 };
 
 /* ---------- Captação de um imóvel ---------- */
@@ -1409,16 +1428,16 @@ VIEWS.visita = () => {
   let idx = Math.max(0, itens().findIndex((x) => x.obrigatorio && !x.amb)); if (route.idx != null) idx = route.idx;
   let extraId = null; // ambiente extra em andamento
   $("main").innerHTML = `<div class="visita">
-    <div class="vtop"><span id="vpos"></span><b id="vnome"></b><small id="vdica"></small></div>
+    <div class="vtop"><span id="vpos"></span><b id="vnome"></b><small id="vdica"></small><em class="vguia" id="vguia"></em></div>
     <div class="visor"><video id="vid" playsinline muted autoplay></video><div class="vflash" id="vflash"></div><p class="vmsg" id="vmsg">Abrindo a câmera…</p>
       <button class="obt" id="obt" aria-label="Tirar foto"></button><span class="vcont" id="vcont"></span></div>
     <label class="btn sm" id="vfb" hidden><input type="file" id="vfile" accept="image/*" capture="environment" multiple hidden>📷 Usar a câmera do celular</label>
     <div class="thumbs" id="vthumbs"></div>
-    <div class="card vcard"><div class="row"><button class="mic grow" id="vmic">🎙 Falar sobre este ambiente</button></div>
+    <div class="card vcard"><div class="row"><button class="mic grow" id="vmic">🎙 Descrever detalhes</button></div>
       <textarea id="vfala" rows="2" placeholder="O que tem neste ambiente? Acabamento, tamanho, estado, diferenciais…"></textarea>
       <p class="desc" id="vdesc" hidden></p><p class="note" id="vprob" hidden></p><p class="status" id="vst"></p></div>
     <div class="row vnav"><button id="vant">‹ Anterior</button><button class="grow p" id="vprox">Próximo ambiente ›</button></div>
-    <div class="row"><button class="sm" id="vextra">+ Ambiente extra</button><button class="sm g" id="vfim">Concluir visita</button></div></div>`;
+    <div class="row"><button class="sm" id="vextra">+ Ambiente extra</button><button class="sm g" id="vfim">Concluir registro</button></div></div>`;
   const amb = () => { const it = itens()[idx]; const at = O(route.id); if (extraId) return (at.captacao?.ambientes || []).find((a) => a.id === extraId) || null; return it && it.amb ? (at.captacao?.ambientes || []).find((a) => a.id === it.amb.id) : null; };
   const desenhar = () => {
     const L = itens(); const it = L[idx]; const a = amb(); const falt = L.filter((x) => x.obrigatorio && !x.amb).length;
@@ -1430,7 +1449,9 @@ VIEWS.visita = () => {
     const fa = $("vfala"); if (document.activeElement !== fa) fa.value = a?.fala || "";
     $("vdesc").hidden = !a?.descricao; $("vdesc").textContent = a?.descricao || "";
     $("vprob").hidden = !(a?.avisos || []).length; $("vprob").textContent = (a?.avisos || []).length ? "⚠ " + a.avisos.join(" · ") : "";
-    $("vant").disabled = idx === 0 && !extraId; $("vprox").textContent = idx >= L.length - 1 && !extraId ? "Concluir visita ✓" : fotos.length || !it?.obrigatorio || extraId ? "Próximo ambiente ›" : "Pular por enquanto ›";
+    $("vant").disabled = idx === 0 && !extraId; $("vprox").textContent = idx >= L.length - 1 && !extraId ? "Concluir registro ✓" : fotos.length || !it?.obrigatorio || extraId ? "Salvar e seguir ›" : "Pular por enquanto ›";
+    const passo = !fotos.length ? "1 · Tire a foto deste ambiente" : !(a?.fala || "").trim() ? "2 · Agora descreva os detalhes (toque em Descrever)" : "3 · Pronto: salve e siga para o próximo";
+    $("vguia").textContent = passo; $("vmic").classList.toggle("pulse", !!fotos.length && !(a?.fala || "").trim() && !window.__vozVisita);
   };
   const garantirAmb = async () => {
     const a = amb(); if (a) return a.id; const it = itens()[idx]; const id = uid("a");
@@ -1476,8 +1497,8 @@ VIEWS.visita = () => {
     if (!vozDisponivel()) { $("vfala").focus(); toast("Use o microfone do teclado para ditar."); return; }
     b.classList.add("on"); b.textContent = "■ Parar e descrever";
     window.__vozVisita = ditar({ aoTexto: (t) => { const fa = $("vfala"); if (!fa) return; fa.value = (fa.value ? fa.value.replace(/\s+$/, "") + " " : "") + t; },
-      aoFim: async () => { window.__vozVisita = null; const bb = $("vmic"); if (!bb) return; bb.classList.remove("on"); bb.textContent = "🎙 Falar sobre este ambiente"; await salvarFala($("vfala").value); descrever(); },
-      aoErro: (e) => { window.__vozVisita = null; const bb = $("vmic"); if (bb) { bb.classList.remove("on"); bb.textContent = "🎙 Falar sobre este ambiente"; } toast(e === "not-allowed" ? "Libere o microfone para este site." : "Ditado indisponível: use o microfone do teclado."); } });
+      aoFim: async () => { window.__vozVisita = null; const bb = $("vmic"); if (!bb) return; bb.classList.remove("on"); bb.textContent = "🎙 Descrever detalhes"; await salvarFala($("vfala").value); descrever(); },
+      aoErro: (e) => { window.__vozVisita = null; const bb = $("vmic"); if (bb) { bb.classList.remove("on"); bb.textContent = "🎙 Descrever detalhes"; } toast(e === "not-allowed" ? "Libere o microfone para este site." : "Ditado indisponível: use o microfone do teclado."); } });
   };
   const mudar = async (d) => { if (window.__vozVisita) window.__vozVisita.parar(); const fa = $("vfala"); if (fa && fa.value !== (amb()?.fala || "")) await salvarFala(fa.value);
     const L = itens(); if (extraId) { extraId = null; desenhar(); return; } if (d > 0 && idx >= L.length - 1) return concluir(); idx = Math.max(0, Math.min(L.length - 1, idx + d)); route.idx = idx; st(""); desenhar(); };

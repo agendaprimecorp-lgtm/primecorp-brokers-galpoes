@@ -59,7 +59,7 @@ ok(!!(await p.$('#guardar')), 'botão para guardar as fotos aparece após a auto
 await p.click('#guardar'); ok(await esperar(async () => /4 foto\(s\) guardada/.test(await txt()), 25000), '4 fotos guardadas no sistema'); await sh('06_fotos_guardadas');
 
 // 5) captação com roteiro guiado + pacote
-await p.click('[data-tab="captar"]'); await W(500); await p.click('#nc'); await W(900);
+await p.click('[data-tab="captar"]'); await W(500); await p.click('#nc'); await W(500); await p.click('[data-ti="Casa"]'); await W(200); await p.selectOption('#iop', 'Venda'); await p.click('#iniManual'); await W(900);
 await p.selectOption('[data-c="tipo"]', 'Casa'); await W(600);
 ok(/Roteiro da visita/.test(await txt()) && /0\/\d+ obrigatórias/.test(await txt('#rtc')), 'roteiro de fotos da casa'); await sh('07_roteiro_casa');
 await p.click('[data-rf="fachada"]').catch(() => {}); await p.setInputFiles('#camR', [FOT + 'f1.jpg']);

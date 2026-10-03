@@ -7,7 +7,7 @@ const int = (v) => { const n = Math.round(Number(String(v ?? "").replace(/\./g, 
 const TIPO_VRSYNC = {
   "Apartamento": "Residential / Apartment", "Casa": "Residential / Home", "Casa em condomínio": "Residential / Condo", "Sobrado": "Residential / Sobrado",
   "Cobertura": "Residential / Penthouse", "Kitnet / studio": "Residential / Kitnet", "Sala comercial": "Commercial / Office", "Loja": "Commercial / Business",
-  "Prédio comercial": "Commercial / Building", "Galpão": "Commercial / Industrial", "Galpão em condomínio": "Commercial / Industrial",
+  "Prédio comercial": "Commercial / Building", "Galpão": "Commercial / Industrial", "Galpão em condomínio": "Commercial / Industrial", "Barracão": "Commercial / Industrial",
   "Terreno": "Residential / Land Lot", "Área / terreno": "Commercial / Land Lot", "Fazenda": "Residential / Farm Ranch", "Sítio": "Residential / Farm Ranch", "Chácara": "Residential / Farm Ranch",
 };
 export const tipoVRSync = (t) => TIPO_VRSYNC[t] || (grupo(t) === "residencial" ? "Residential / Home" : "Commercial / Building");
