@@ -1814,6 +1814,7 @@ VIEWS.zoe = () => {
     <label>Perguntas frequentes<textarea data-z="faq" rows="7">${esc(z.faq)}</textarea></label>
     <label>Orientações extras da equipe (ex.: campanha do mês, imóvel em destaque, regiões que não atendemos)<textarea data-z="regras_extra" rows="3">${esc(z.regras_extra || "")}</textarea></label>
     <label>Local das reuniões<input data-z="local_reuniao" value="${esc(z.local_reuniao)}"></label>
+    <label>Zoe retoma a conversa após (horas) sem nova resposta sua pelo celular · 0 = só quando você devolver<input data-z="retomar_h" inputmode="numeric" value="${esc(cfg.retomar_h ?? 12)}"></label>
     <h3>Agenda</h3><div class="grid"><label>Início<input data-h="inicio" type="time" value="${esc(H.inicio)}"></label><label>Fim<input data-h="fim" type="time" value="${esc(H.fim)}"></label>
     <label>Duração (min)<input data-h="duracao" inputmode="numeric" value="${esc(H.duracao)}"></label><label>Antecedência mínima (h)<input data-h="antecedencia_h" inputmode="numeric" value="${esc(H.antecedencia_h)}"></label>
     <label>Sábado até (vazio = não atende)<input data-h="sabado_ate" type="time" value="${esc(H.sabado_ate || "")}"></label>
@@ -1822,7 +1823,7 @@ VIEWS.zoe = () => {
     ${so ? '<p class="note">Somente o administrador altera o conhecimento da Zoe.</p>' : '<button class="p" id="zsv">Salvar</button>'}<div class="status" id="zst"></div></div>`;
     editing = !so;
     const sv = $("zsv"); if (sv) sv.onclick = async () => { const o = { ...cfg, id: "zoe" }; document.querySelectorAll("[data-z]").forEach((el) => { o[el.dataset.z] = el.type === "checkbox" ? el.checked : el.value.trim(); });
-      o.bloqueios = String(o.bloqueios || "").split(/[,;\s]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)); o.horario = { ...H, dias: [1, 2, 3, 4, 5] }; document.querySelectorAll("[data-h]").forEach((el) => { o.horario[el.dataset.h] = ["duracao", "antecedencia_h"].includes(el.dataset.h) ? Number(el.value) || 0 : el.value; });
+      o.retomar_h = Math.max(0, Number(o.retomar_h) || 0); o.bloqueios = String(o.bloqueios || "").split(/[,;\s]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)); o.horario = { ...H, dias: [1, 2, 3, 4, 5] }; document.querySelectorAll("[data-h]").forEach((el) => { o.horario[el.dataset.h] = ["duracao", "antecedencia_h"].includes(el.dataset.h) ? Number(el.value) || 0 : el.value; });
       editing = false; try { await store.save("config", o); toast("Zoe atualizada."); } catch { editing = true; } };
   }
 };
