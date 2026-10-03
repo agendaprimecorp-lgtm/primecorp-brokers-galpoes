@@ -3,9 +3,9 @@ import { handleAuthCallback, getUser, login, logout, signup, requestPasswordReco
 import { zipSync, strToU8 } from "fflate";
 import { tratarFoto, blobB64 } from "../../src/foto.js";
 import { vozDisponivel, ditar } from "../../src/voz.js";
-import { TIPOS, grupo, roteiroFotos, roteiroDados, progresso } from "../shared/roteiro.mjs";
+import { TIPOS, grupo, roteiroFotos, roteiroDados, progresso } from "../../shared/roteiro.mjs";
 import { PLANOS, UFS, TIPOS_CONTA } from "../shared/planos.mjs";
-import { xmlVRSync, csvImovel, textoImovel, nomeFoto } from "../shared/exporta.mjs";
+import { xmlVRSync, csvImovel, textoImovel, nomeFoto } from "../../shared/exporta.mjs";
 import { gerarPDF } from "./pdf.js";
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +38,7 @@ const ICON = {
   admin: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>',
 };
 function abas() {
+  const en = document.getElementById("endosso"); if (en) en.hidden = false;
   const t = $("tabs"); const L = [["inicio", "Início"], ["captar", "Captar"], ["planos", "Planos"], ["conta", "Conta"], ...(EU?.admin ? [["admin", "Admin"]] : [])];
   t.hidden = false; t.innerHTML = L.map(([k, l]) => `<button data-tab="${k}" class="${rota.v === k || (k === "captar" && rota.v === "cap") ? "on" : ""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${ICON[k]}</svg>${l}</button>`).join("");
   t.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => ir({ v: b.dataset.tab })));
@@ -50,7 +51,7 @@ async function carregarEu() { EU = await api("eu"); $("quem").textContent = EU.c
 function telaEntrar(msg, modo = "entrar") {
   $("tabs").hidden = true; $("quem").textContent = "";
   $("main").innerHTML = `<div class="entrar card">
-  <h1>${modo === "criar" ? "Crie sua conta" : "Entrar no Propto"}</h1>
+  <h1>${modo === "criar" ? "Crie sua conta" : "Entrar na PrimeCorp"}</h1>
   <p class="hint">Visita terminou, anúncio pronto. Fotos guiadas, voz e IA no seu celular.</p>
   <div class="seg"><button data-m="entrar" class="${modo === "entrar" ? "on" : ""}">Entrar</button><button data-m="criar" class="${modo === "criar" ? "on" : ""}">Criar conta</button></div>
   <label>E-mail<input id="em" type="email" autocomplete="email" inputmode="email"></label>
@@ -83,7 +84,7 @@ function telaCadastro() {
   $("tabs").hidden = true; let tipo = EU.convite ? "membro" : "";
   const desenhar = () => {
     const creci = tipo === "corretor" || tipo === "imobiliaria" || tipo === "membro";
-    $("main").innerHTML = `<div class="card"><span class="k">Cadastro</span><h1>${EU.convite ? `Você foi convidado(a) por ${esc(EU.convite.org)}` : "Como você vai usar o Propto?"}</h1>
+    $("main").innerHTML = `<div class="card"><span class="k">Cadastro</span><h1>${EU.convite ? `Você foi convidado(a) por ${esc(EU.convite.org)}` : "Como você vai usar o app?"}</h1>
     ${EU.convite ? '<p class="hint">Sua conta usa o plano da imobiliária. Complete seus dados.</p>' : `<div class="contas">${Object.entries(TIPOS_CONTA).map(([k, t]) => `<button data-t="${k}" class="${tipo === k ? "on" : ""}"><b>${esc(t.nome)}</b><span>${k === "corretor" ? "Tenho CRECI (pessoa física). Planos mensais ou avulso." : k === "imobiliaria" ? "Tenho CRECI de pessoa jurídica. Planos para a equipe." : "Quero anunciar meu imóvel. Pago por anúncio e posso contar com um corretor parceiro."}</span></button>`).join("")}</div>`}</div>
     ${tipo ? `<div class="card"><div class="grid">
       <label class="full">${tipo === "imobiliaria" ? "Nome do responsável" : "Nome completo"}<input id="nm" autocomplete="name"></label>
@@ -102,7 +103,7 @@ function telaCadastro() {
       const v = (id) => ($(id) ? $(id).value.trim() : "");
       const body = { tipo: tipo === "membro" ? undefined : tipo, nome: v("nm"), razao: v("rz"), documento: v("doc"), telefone: v("tel"), aceite_termos: $("ac").checked, creci: v("cn") ? { numero: v("cn"), uf: v("cu") } : undefined };
       sv.disabled = true; $("st").className = "status"; $("st").textContent = "Salvando…";
-      try { await POST("cadastro", body); await iniciar(); toast("Bem-vindo(a) ao Propto!"); } catch (e) { $("st").className = "status err"; $("st").textContent = e.message; sv.disabled = false; }
+      try { await POST("cadastro", body); await iniciar(); toast("Bem-vindo(a) à PrimeCorp Brokers!"); } catch (e) { $("st").className = "status err"; $("st").textContent = e.message; sv.disabled = false; }
     };
   };
   desenhar();
@@ -128,7 +129,7 @@ VIEWS.inicio = async () => {
   const { captacoes } = await api("captacoes");
   const plano = PLANOS[EU.org.plano];
   $("main").innerHTML = `${avisosHTML()}
-  <button class="cta" id="nova" ${ac.pode ? "" : 'data-bloq="1"'}><img src="/marca/propto-symbol-negative.svg" alt=""><span><b>Nova captação</b><small>${ac.pode ? (ac.restante != null && plano?.ciclo === "mensal" && ac.motivo !== "credito" ? `${ac.restante} captação(ões) disponíveis no mês` : ac.motivo === "credito" ? `${EU.org.creditos} anúncio(s) avulso(s) disponível(is)` : "Roteiro guiado de fotos, voz e anúncio") : "Escolha um plano ou o avulso para captar"}</small></span></button>
+  <button class="cta" id="nova" ${ac.pode ? "" : 'data-bloq="1"'}><img src="/favicon.png" alt=""><span><b>Nova captação</b><small>${ac.pode ? (ac.restante != null && plano?.ciclo === "mensal" && ac.motivo !== "credito" ? `${ac.restante} captação(ões) disponíveis no mês` : ac.motivo === "credito" ? `${EU.org.creditos} anúncio(s) avulso(s) disponível(is)` : "Roteiro guiado de fotos, voz e anúncio") : "Escolha um plano ou o avulso para captar"}</small></span></button>
   <div class="card"><div class="row"><h2 class="grow">Seus imóveis</h2><span class="tag">${captacoes.length}</span></div>
   <div class="list">${captacoes.map((c) => `<button class="item" data-c="${c.id}"><span class="t"><b>${esc(c.titulo || `${c.tipo || "Imóvel"}${c.cidade ? " em " + c.cidade : ""}`)}</b><span>${esc([c.codigo, c.operacao, c.anuncio?.ativo ? `no ar · ${c.anuncio.visitas} visita(s)` : c.status === "rascunho" ? "em captação" : c.status, !c.minha ? "equipe" : ""].filter(Boolean).join(" · "))}</span></span><span class="pct">${c.pct}%</span></button>`).join("") || '<p class="hint">Nenhum imóvel ainda. Toque em <b>Nova captação</b> e siga o roteiro: o app diz quais fotos tirar e quais dados pedir.</p>'}</div></div>
   <div class="card"><h3>Instale no celular</h3><p class="hint">No Android: menu do navegador → <b>Instalar app</b>. No iPhone: Compartilhar → <b>Adicionar à Tela de Início</b>.</p></div>`;
@@ -318,7 +319,7 @@ VIEWS.conta = async () => {
   ${c.tipo !== "proprietario" ? `<div class="card"><h3>CRECI</h3>${c.creci ? `<p><b>${esc(c.creci.formatado)}</b> <span class="tag ${c.creci.situacao === "ativo" ? "ok" : c.creci.situacao === "em_verificacao" ? "" : "err"}">${esc({ em_verificacao: "em verificação", ativo: "ativo", inativo: "inativo", suspenso: "suspenso", cancelado: "cancelado", nao_encontrado: "não localizado" }[c.creci.situacao])}</span></p>` : '<p class="hint">Nenhum CRECI informado.</p>'}
   <div class="grid"><label>Número<input id="cn" value="${esc(c.creci?.numero || "")}"></label><label>UF<select id="cu">${UFS.map((u) => `<option ${u === (c.creci?.uf || "SP") ? "selected" : ""}>${u}</option>`).join("")}</select></label></div>
   <label>Carteira ou certidão (foto ou PDF)<input type="file" id="cd" accept="image/jpeg,application/pdf"></label><button id="svc">Enviar para conferência</button><p class="status" id="stc"></p></div>` : ""}
-  ${c.tipo === "imobiliaria" && c.papel === "dono" ? `<div class="card"><h3>Equipe</h3><p class="hint">Convide corretores e captadores pelo e-mail. Eles criam a conta no Propto com esse e-mail e entram direto na sua equipe.</p><div id="eq" class="list"></div><div class="row"><input id="ce" type="email" class="grow" placeholder="email@corretor.com"><button id="cv">Convidar</button></div><p class="status" id="ste"></p></div>` : ""}
+  ${c.tipo === "imobiliaria" && c.papel === "dono" ? `<div class="card"><h3>Equipe</h3><p class="hint">Convide corretores e captadores pelo e-mail. Eles criam a conta no app com esse e-mail e entram direto na sua equipe.</p><div id="eq" class="list"></div><div class="row"><input id="ce" type="email" class="grow" placeholder="email@corretor.com"><button id="cv">Convidar</button></div><p class="status" id="ste"></p></div>` : ""}
   <div class="card"><button id="sair">Sair</button></div>`;
   ligarAvisos();
   $("svp").onclick = async () => { try { await PUT("perfil", { nome: $("nm").value, whatsapp: $("wh").value, cor: $("cor").value }); $("stp").className = "status ok"; $("stp").textContent = "Salvo."; await carregarEu(); } catch (e) { $("stp").className = "status err"; $("stp").textContent = e.message; } };

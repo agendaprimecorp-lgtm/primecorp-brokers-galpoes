@@ -1,15 +1,15 @@
-/* Propto · app (tokens da marca: vermelho #CC1B1B só sobre claro, #E8443F só sobre escuro) */
-:root{--red:#CC1B1B;--red-d:#E8443F;--ink:#0F1720;--deep:#141C25;--deeper:#0B1118;--paper:#F7F8F9;--card:#fff;--line:#E3E6E9;--g700:#626C79;--g300:#C2C9D2;--ok:#1E7B4F;--okbg:#E7F4EC;--warn:#8A5A00;--warnbg:#FFF4DB;--errbg:#FDECEC;--r:14px}
+/* PrimeCorp Brokers · módulo de captação para usuários (Tecnologia Propto). Paleta PrimeCorp: grafite #1E2227, vermelho #C8102E, painel #F4F5F7 */
+:root{--red:#C8102E;--red-d:#E23A52;--ink:#1E2227;--deep:#1E2227;--deeper:#16191D;--paper:#F4F5F7;--card:#fff;--line:#E3E6E9;--g700:#626C79;--g300:#C2C9D2;--ok:#1E7B4F;--okbg:#E7F4EC;--warn:#8A5A00;--warnbg:#FFF4DB;--errbg:#FDECEC;--r:14px}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+html,body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 Barlow,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 [hidden]{display:none!important}
-h1,h2,h3{font-family:Sora,"Segoe UI",system-ui,sans-serif;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h1,h2,h3{font-family:"Barlow Condensed",Barlow,system-ui,sans-serif;letter-spacing:0;margin:0;text-wrap:balance}
 h1{font-size:26px}h2{font-size:20px}h3{font-size:16px}
 p{margin:0}
 a{color:var(--red)}
-#top{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg,var(--deep),var(--deeper));color:var(--paper);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px}
+#top{position:sticky;top:0;z-index:5;border-top:4px solid var(--red);display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg,var(--deep),var(--deeper));color:var(--paper);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px}
 #logo{height:26px;width:auto}#quem{font-size:13px;color:var(--g300);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-main{max-width:760px;margin:0 auto;padding:16px 16px calc(96px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+main{max-width:760px;margin:0 auto;padding:16px 16px 8px;display:flex;flex-direction:column;gap:14px}
 .carregando{color:var(--g700);text-align:center;padding:40px 0}
 .card{background:var(--card);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px rgba(15,23,32,.06)}
 .k{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--red)}
@@ -33,13 +33,13 @@ button:disabled{opacity:.5;cursor:default}
 .aviso{border-radius:12px;padding:12px 14px;font-size:15px;display:flex;flex-direction:column;gap:8px}
 .aviso.warn{background:var(--warnbg);color:var(--warn)}.aviso.err{background:var(--errbg);color:#8C1D18}.aviso.ok{background:var(--okbg);color:var(--ok)}.aviso.info{background:#EEF1F4;color:var(--ink)}
 .cta{display:flex;align-items:center;gap:14px;text-align:left;background:linear-gradient(135deg,var(--deep),var(--deeper));color:var(--paper);border:0;border-radius:var(--r);padding:18px;width:100%}
-.cta img{width:40px;height:auto;flex:none}.cta b{display:block;font:700 19px Sora,sans-serif}.cta small{display:block;color:var(--g300);font-weight:500;font-size:14px}
+.cta img{width:40px;height:auto;flex:none}.cta b{display:block;font:700 21px "Barlow Condensed",sans-serif}.cta small{display:block;color:var(--g300);font-weight:500;font-size:14px}
 .cta:disabled{opacity:.6}
 .tipos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
 .tipos button{min-height:56px;font-size:15px}.tipos button.on{border-color:var(--red);color:var(--red);background:#FFF5F5}
 .contas{display:flex;flex-direction:column;gap:10px}
 .contas button{text-align:left;display:flex;flex-direction:column;gap:2px;padding:14px 16px}
-.contas button b{font:700 17px Sora,sans-serif}.contas button span{font-weight:400;color:var(--g700);font-size:14px}
+.contas button b{font:700 19px "Barlow Condensed",sans-serif}.contas button span{font-weight:400;color:var(--g700);font-size:14px}
 .contas button.on{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
 .list{display:flex;flex-direction:column}
 .item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);background:none;border-radius:0;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
@@ -62,8 +62,8 @@ button:disabled{opacity:.5;cursor:default}
 .linkbox{font:14px ui-monospace,monospace;background:var(--paper);border-radius:10px;padding:10px;word-break:break-all}
 .planos{display:grid;gap:10px}.plano{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
 .plano.atual{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
-.plano .preco{font:700 24px Sora,sans-serif;font-variant-numeric:tabular-nums}.plano .preco small{font:500 14px Inter;color:var(--g700)}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.kpi{background:var(--paper);border-radius:10px;padding:10px 12px}.kpi b{display:block;font:700 20px Sora,sans-serif;font-variant-numeric:tabular-nums}.kpi span{font-size:13px;color:var(--g700)}
+.plano .preco{font:700 28px "Barlow Condensed",sans-serif;font-variant-numeric:tabular-nums}.plano .preco small{font:500 14px Inter;color:var(--g700)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.kpi{background:var(--paper);border-radius:10px;padding:10px 12px}.kpi b{display:block;font:700 22px "Barlow Condensed",sans-serif;font-variant-numeric:tabular-nums}.kpi span{font-size:13px;color:var(--g700)}
 .tag{display:inline-block;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:#EEF1F4;color:var(--ink)}
 .tag.ok{background:var(--okbg);color:var(--ok)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.err{background:var(--errbg);color:#8C1D18}
 .tabela{overflow-x:auto}.tabela table{border-collapse:collapse;width:100%;font-size:14px}.tabela td,.tabela th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
@@ -73,3 +73,5 @@ button:disabled{opacity:.5;cursor:default}
 #toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 16px;border-radius:12px;font-size:15px;z-index:9;max-width:calc(100% - 32px)}
 .entrar{max-width:440px;margin:0 auto;width:100%}
 .seg{display:flex;background:#EEF1F4;border-radius:12px;padding:4px}.seg button{flex:1;border:0;background:none;min-height:42px;border-radius:9px}.seg button.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+.endosso{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--g700);margin:0;padding:8px 16px calc(84px + env(safe-area-inset-bottom,0px))}.endosso img{height:16px;width:auto}

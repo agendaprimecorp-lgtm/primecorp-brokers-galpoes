@@ -3,6 +3,9 @@ import { jsPDF } from "jspdf";
 import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, requestPasswordRecovery } from "@netlify/identity";
 import { tratarFoto, blobB64 } from "./foto.js";
 import { ditar, vozDisponivel } from "./voz.js";
+import { zipSync, strToU8 } from "fflate";
+import { roteiroFotos } from "../shared/roteiro.mjs";
+import { xmlVRSync, csvImovel, textoImovel, nomeFoto } from "../shared/exporta.mjs";
 import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO, VISITA_PADRAO, RECIBO_PADRAO, CLAUSULA_SPLIT, MANDATO_PADRAO, VERSAO_DOCS, PRAZOS, CORRETOR_PADRAO, varsPrazos, pendencias, extenso, reaisExtenso } from "./termo.js";
 
 /* ================= Utilidades ================= */
@@ -209,6 +212,7 @@ VIEWS.painel = () => {
   <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
   <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>Tecnologia Propto</em></span><span>›</span></button>
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
+  ${(() => { const sv = sinaisVerdes(); return sv.length ? `<div class="card verde"><h3>🟢 Sinal verde: ${sv.length} oferta(s) com cliente interessado</h3><p class="hint">Ainda sem autorização nem pedido ao anunciante. Um toque gera o pedido com o termo e a comissão padrão.</p><div class="list">${sv.map((o) => `<div class="item" style="cursor:default"><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + tituloO(o))}</b><span>${esc([o.anunciante, o.anunciante_contato].filter(Boolean).join(" · ") || "Anunciante a identificar")}</span></span><button class="sm p" data-sv="${o.id}">Pedir</button></div>`).join("")}</div></div>` : ""; })()}
   ${novas.length ? `<button class="card" id="gonovas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot amarelo"></span><span style="flex:1"><b>${novas.length} oferta${novas.length > 1 ? "s" : ""} a revisar</b><br><span class="hint">Confira os dados antes de cruzar com os briefings.</span></span><span>›</span></button>` : ""}
   ${pedNovos.length ? `<button class="card" id="gopeds" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot verde"></span><span style="flex:1"><b>${pedNovos.length} resposta(s) de anunciante</b><br><span class="hint">Dados completados ou autorizações de indicação recebidas.</span></span><span>›</span></button>` : ""}
   ${comAbertas.length ? `<div class="card"><h3>Honorários previstos</h3><p><b>${esc(PC.brl(totPC) || "R$ 0")}</b> participação PrimeCorp <span class="hint">· ${esc(PC.brl(totCom) || "R$ 0")} em honorários totais · ${comAbertas.length} negócio(s) com divisão definida</span></p></div>` : ""}
@@ -222,6 +226,7 @@ VIEWS.painel = () => {
   const gn = $("gonovas"); if (gn) gn.onclick = () => go({ v: "ofertas", f: "nova" }, false);
   const gs = $("gosalas"); if (gs) gs.onclick = () => go({ v: "salas" });
   const gp = $("gopeds"); if (gp) gp.onclick = () => go({ v: "pedidos" });
+  document.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = async () => { b.disabled = true; try { const ped = await sinalVerde(O(b.dataset.sv)); if (ped) { toast("Pedido criado. Envie ao anunciante."); go({ v: "pedido", id: ped.id }); } } catch (e) { toast("Falhou: " + e.message); b.disabled = false; } }));
   $("csv").onclick = exportCSV;
   document.querySelectorAll("[data-bv]").forEach((b) => (b.onclick = () => go(b.dataset.bv === "editb" ? { v: "editb", id: null } : { v: b.dataset.bv }, b.dataset.bv !== "captar")));
   const bx = $("bvx"); if (bx) bx.onclick = () => { try { localStorage.setItem(chaveBV, "1"); } catch {} render(); };
@@ -638,7 +643,15 @@ VIEWS.oferta = () => {
   <h3>Anunciante</h3><p>${esc(o.anunciante || "Não informado")}${o.anunciante_tipo ? " · " + esc(o.anunciante_tipo) : ""}${o.anunciante_creci ? " · CRECI " + esc(o.anunciante_creci) : ""}</p>
   ${au ? `<p class="tag ok" style="align-self:flex-start">Autorização aceita em ${esc(fdt(au.em))} por ${esc(au.responsavel)} (${esc(au.razao)})${au.creci ? " · CRECI " + esc(au.creci) : ""}</p>` : '<p class="hint">Sem autorização de indicação registrada.</p>'}
   ${peds.length ? `<div class="list">${peds.map((p) => `<button class="item" data-p="${p.id}"><span class="dot ${p.aceite ? "verde" : p.respondido_em ? "amarelo" : ""}"></span><span class="t"><b>Pedido de ${esc(fdt(p.criado))}</b><span>${esc(STATUS_P[p.status] || p.status)}</span></span></button>`).join("")}</div>` : ""}
-  <button class="${au ? "" : "p"}" id="solic">${au ? "Novo pedido ao anunciante" : "Solicitar dados e autorização ao anunciante"}</button></div>
+  ${o.anunciante_contato || o.anunciante_email ? `<p class="hint">Contato do anúncio: ${esc([o.anunciante_contato, o.anunciante_email].filter(Boolean).join(" · "))}</p>` : ""}
+  ${!au && o.origem !== "Captação própria" ? `<button class="p" id="verde">🟢 Sinal verde: pedir dados e autorização</button><p class="hint">Gera o link para o anunciante com as perguntas que faltam, o termo de parceria e a comissão padrão, e abre o WhatsApp do anunciante com a mensagem pronta.</p>` : ""}
+  <button class="${au || o.origem !== "Captação própria" ? "" : "p"}" id="solic">${au ? "Novo pedido ao anunciante" : "Pedido personalizado ao anunciante"}</button></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h2>Para despertar interesse</h2><button class="sm" id="tz">Copiar teaser</button></div>
+  <p class="hint">Texto curto para cliente ou parceiro: faixas de área e valor, sem endereço e sem o nome do anunciante.</p><pre class="teaserbox" id="tzt"></pre></div>
+  ${(o.imagens_ref || []).length || (o.fotos_aut || []).length || o.link ? `<div class="card"><div class="row" style="justify-content:space-between"><h2>Fotos do anúncio</h2>${o.link ? '<button class="sm" id="reler">Reler anúncio</button>' : ""}</div>
+  ${(o.fotos_aut || []).length ? `<p class="tag ok" style="align-self:flex-start">${o.fotos_aut.length} foto(s) guardada(s) com autorização</p><div class="thumbs">${o.fotos_aut.map((f) => `<div class="th"><img loading="lazy" src="${fotoURL(f.k)}" alt=""></div>`).join("")}</div>` : ""}
+  ${(o.imagens_ref || []).length ? `<p class="hint">${o.imagens_ref.length} foto(s) encontrada(s) no anúncio. <b>Uso interno</b>: as fotos são do anunciante; envie ao cliente só depois da autorização.</p><div class="thumbs">${o.imagens_ref.slice(0, 12).map((u) => `<div class="th"><img loading="lazy" referrerpolicy="no-referrer" src="/api/img-ref?u=${encodeURIComponent(u)}${o.link ? "&de=" + encodeURIComponent(o.link) : ""}" alt="" onerror="this.parentNode.remove()"></div>`).join("")}</div>
+    ${au || o.autorizacao_manual ? `<button id="guardar">Guardar fotos autorizadas no sistema</button>` : ""}` : '<p class="hint">Nenhuma foto lida neste anúncio.</p>'}<div class="status" id="stf"></div></div>` : ""}
   <div class="card" id="fo">${OFORM}</div>
   <div class="card"><h2>Checagem</h2><div class="sem" id="sem"><i></i><div><span id="semT"></span><small id="semS"></small></div></div><div class="priv" id="priv" hidden></div><ul class="alerts" id="al"></ul><p class="hint">O semáforo fica só aqui. Na ficha, os alertas viram “itens a confirmar”.</p></div>
   <div class="card"><div class="row"><button class="p grow" id="sv">Salvar</button><button class="grow" id="pdf">Ficha PDF</button></div><div id="pdfnote"></div>
@@ -646,6 +659,14 @@ VIEWS.oferta = () => {
   const root = $("fo"); fillForm(root, o); editing = true;
   fontes.forEach((k) => { const el = root.querySelector(`[data-f="${k}"]`); if (el) { el.classList.add("doanunciante"); el.title = "Informado pelo anunciante"; } });
   document.querySelectorAll("[data-p]").forEach((x) => (x.onclick = () => go({ v: "pedido", id: x.dataset.p })));
+  $("tzt").textContent = PC.teaser({ ...o, ...readForm(root) }, chkOf(o), o.codigo || "", corretorDaOferta(o));
+  $("tz").onclick = () => copiar(PC.teaser({ ...o, ...readForm(root) }, chkOf({ ...o, ...readForm(root) }), o.codigo || "", corretorDaOferta(o)));
+  const vb = $("verde"); if (vb) vb.onclick = async () => { vb.disabled = true; const cur = { ...o, ...readForm(root) }; editing = false; try { await store.save("ofertas", { ...cur, atualizado: now() }); const ped = await sinalVerde(O(o.id)); if (ped) { toast("Pedido criado. Envie ao anunciante."); go({ v: "pedido", id: ped.id }); } } catch (e) { toast("Falhou: " + e.message); vb.disabled = false; editing = true; } };
+  const rl = $("reler"); if (rl) rl.onclick = async () => { rl.disabled = true; rl.textContent = "Lendo…"; try { const x = await api("extrair", { method: "POST", body: JSON.stringify({ modo: "um", texto: "", url: o.link }) }); const at = O(o.id) || o; const p = { imagens_ref: x.imagens_ref || at.imagens_ref || [], lido_em: now() }; if (!at.anunciante_contato && x.contatos_ref?.telefones?.[0]) p.anunciante_contato = x.contatos_ref.telefones[0]; if (!at.anunciante_email && x.contatos_ref?.emails?.[0]) p.anunciante_email = x.contatos_ref.emails[0]; editing = false; await store.save("ofertas", { ...at, ...p, atualizado: now() }); toast(`${(p.imagens_ref || []).length} foto(s) no anúncio.`); render(); } catch (e) { toast(e.message); rl.disabled = false; rl.textContent = "Reler anúncio"; } };
+  const gd = $("guardar"); if (gd) gd.onclick = async () => { gd.disabled = true; const st = $("stf"); const urls = (o.imagens_ref || []).slice(0, 30); const ja = new Set((o.fotos_aut || []).map((f) => f.origem)); const novas = [];
+    for (const [i, u] of urls.entries()) { if (ja.has(u)) continue; st.textContent = `Guardando ${i + 1} de ${urls.length}…`;
+      try { const r = await fetch("/api/img-ref?u=" + encodeURIComponent(u) + (o.link ? "&de=" + encodeURIComponent(o.link) : ""), { credentials: "same-origin" }); if (!r.ok) continue; const b = await r.blob(); const t = await tratarFoto(new File([b], "f", { type: b.type }), { lado: 1920, tratar: false }); const up = await api("fotos", { method: "POST", body: JSON.stringify({ oferta: o.id, jpeg_base64: await blobB64(t.blob) }) }); novas.push({ k: up.k, origem: u, em: now() }); } catch {} }
+    const at = O(o.id) || o; editing = false; await store.save("ofertas", { ...at, fotos_aut: [...(at.fotos_aut || []), ...novas], atualizado: now() }); toast(`${novas.length} foto(s) guardada(s).`); render(); };
   $("solic").onclick = async () => { const cur = { ...o, ...readForm(root) }; editing = false; try { await store.save("ofertas", { ...cur, atualizado: now() }); } catch { editing = true; return; } go({ v: "novopedido", o: o.id }); };
   const upd = () => { if (!$("sem")) return; const cur = { ...o, ...readForm(root) }; const c = chkOf(cur);
     $("sem").className = "sem " + c.sem; $("semT").textContent = SEM[c.sem][0]; $("semS").textContent = SEM[c.sem][1];
@@ -703,7 +724,7 @@ VIEWS.nova = () => {
       const b = $("bx"); b.disabled = true; b.textContent = "Lendo…"; st.className = "status"; st.textContent = txt.length < 40 ? "Abrindo o link e lendo o anúncio (10 a 40 s)…" : "Lendo o anúncio (10 a 40 s)…";
       try { const x = await api("extrair", { method: "POST", body: JSON.stringify({ modo: "um", texto: txt, url }) });
         const link = $("url").value.trim(); const dup = link && S.ofertas.find((y) => y.link === link);
-        const o = { id: uid("o"), link, origem: $("org").value, status: "nova", responsavel: EU.usuario, anunciante: x.anunciante || "", alertas_ia: Array.isArray(x.alertas_ia) ? x.alertas_ia : [], criado: now(), atualizado: now(), ...fromAI(x) };
+        const o = { id: uid("o"), link, origem: $("org").value, status: "nova", responsavel: EU.usuario, anunciante: x.anunciante || "", alertas_ia: Array.isArray(x.alertas_ia) ? x.alertas_ia : [], imagens_ref: Array.isArray(x.imagens_ref) ? x.imagens_ref.slice(0, 30) : [], anunciante_contato: x.contatos_ref?.telefones?.[0] || "", anunciante_email: x.contatos_ref?.emails?.[0] || "", lido_em: link ? now() : null, criado: now(), atualizado: now(), ...fromAI(x) };
         editing = false; await store.save("ofertas", o); stack.length = 0; go({ v: "oferta", id: o.id }, false); toast(dup ? "Atenção: esse link já existe na base (" + (dup.codigo || tituloO(dup)) + ")." : "Confira os dados e salve."); }
       catch (e) { fail(e); if (e.status === 422) $("src").focus(); } finally { b.disabled = false; b.textContent = "Ler anúncio"; } };
   } else {
@@ -730,7 +751,7 @@ VIEWS.mais = () => {
   $("m8").onclick = () => go({ v: "anuncios" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
 };
-const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
+const TIPOS_E = { pacote_exportado: "Pacote exportado", teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
   header("Relatórios emitidos"); $("main").innerHTML = `<div class="card"><p class="hint">Carregando…</p></div>`;
   let em = []; try { em = (await api("emissoes?limite=500")).emissoes; } catch (e) { $("main").innerHTML = `<div class="card"><p class="status err">${esc(e.message)}</p></div>`; return; }
@@ -833,6 +854,46 @@ function textoComissaoPedido(c) {
   if (c.base === "ambos") return `${PC.nf(PC.parseBR(c.pct) || 0)}% sobre o valor da venda ou ${PC.nf(PC.parseBR(c.alugueis) || 0)} aluguel(éis) mensal(is) na locação`;
   return PC.textoComissao(c);
 }
+/** Termos e comissão revisados? Sem isso não se gera pedido ao anunciante. */
+function pedidoBloqueado() { const cfg = CFG(); return !cfg.aut_revisado || [cfg.aut_parceria || AUT_PARCERIA, cfg.aut_proprietario || AUT_PROPRIETARIO].some((t) => faltasDoc(preencherDoc(t, {}, null)).length) || !cfg.com_revisada; }
+const tipoTermoDe = (o) => (o.anunciante_tipo === "Proprietário" || o.origem === "Captação própria" ? "proprietario" : "parceria");
+/** Comissão padrão do pedido: percentuais e modelo de divisão das Configurações. */
+function comissaoPadraoPedido(o, tipo, anunciante) {
+  const mods = modelosCfg(); const m = mods.find((x) => x.id === (tipo === "proprietario" ? "prop_pc" : "imob_pc")) || mods[0];
+  const cp = comPadrao(); const base = baseDe(o);
+  const partes = m.partes.map((p) => ({ ...p, nome: /imobili|anunciante/i.test(p.papel) ? anunciante || "" : p.nome || "", creci: /imobili|anunciante/i.test(p.papel) ? o.anunciante_creci || "" : p.creci || "", pct: PC.parseBR(p.pct) || 0 }));
+  const com = { base, pct: base !== "locacao" ? cp.pct : "", alugueis: base !== "venda" ? cp.alugueis : "", partes }; com.texto = textoComissaoPedido(com); return com;
+}
+/** Cria o pedido ao anunciante (link + termo preenchido). Usado no formulário e no "sinal verde" automático. */
+async function montarPedido(o, { tipo, anunciante, contatoId = null, com, validadeDias = 30, citarDemanda = true, origem = "manual" }) {
+  const cfg = CFG(); const comp = PC.completude(o); const dem = demandaPara(o);
+  const codigo = await garantirCodigo(o); const atual = O(o.id) || o; const d = PC.num(atual);
+  const vars = { CODIGO: codigo, TITULO: PC.autoTitle(d), OPERACAO: (atual.operacao || "locação").toLowerCase(), COMISSAO: com.texto, QUADRO: PC.quadroComissao(com), VALOR: [d.venda && PC.brl(d.venda) + " (venda)", d.aluguel && PC.brl(d.aluguel) + "/mês (locação)"].filter(Boolean).join(" ou ") || "a definir" };
+  const termo = preencherDoc(tipo === "proprietario" ? cfg.aut_proprietario || AUT_PROPRIETARIO : cfg.aut_parceria || AUT_PARCERIA, vars, corretorDaOferta(atual));
+  const token = tokenAleatorio(32);
+  const ped = { id: token, oferta: atual.id, codigo, titulo: tituloO(atual), operacao: atual.operacao || "", tipo_termo: tipo, anunciante: anunciante || "", contato: contatoId,
+    demanda: citarDemanda ? dem.length : 0, conhecidos: PC.conhecidos(atual), faltam: comp.faltam, comissao: com, termo_texto: termo, termo_versao: cfg.aut_versao || AUT_VERSAO,
+    grupo: PC.grupo(atual.tipo), modo: comp.ok ? "autorizacao" : "complementacao", expira: new Date(Date.now() + validadeDias * 864e5).toISOString(), status: "aberto", criado: now(), respostas: [],
+    corretor: corretorDaOferta(atual), origem };
+  await store.save("pedidos", ped);
+  if (!atual.anunciante && ped.anunciante) await store.save("ofertas", { ...atual, anunciante: ped.anunciante, atualizado: now() });
+  return ped;
+}
+/** Sinal verde: cliente (Sala ou negócio) com interesse numa oferta de terceiro sem autorização nem pedido em aberto. */
+function sinaisVerdes() {
+  const comInteresse = new Set();
+  S.salas.forEach((s) => (s.interesses || []).forEach((i) => { const op = (s.opcoes || []).find((x) => x.codigo === i.codigo); if (op?.oferta) comInteresse.add(op.oferta); }));
+  S.negocios.forEach((n) => { if (n.oferta && PC.etapaIdx(n.etapa) >= PC.etapaIdx("interesse") && n.etapa !== "perdido") comInteresse.add(n.oferta); });
+  (S.ofertas || []).forEach((o) => { if (o.sinal_verde) comInteresse.add(o.id); });
+  return [...comInteresse].map(O).filter((o) => o && o.status !== "descartada" && !o.autorizacao && !o.autorizacao_manual && !S.pedidos.some((p) => p.oferta === o.id && p.status !== "encerrado" && !(p.expira && new Date(p.expira) < new Date())));
+}
+async function sinalVerde(o) {
+  if (pedidoBloqueado()) { toast("Antes do primeiro pedido: revise termos e comissão em Configurações."); go({ v: "config" }); return null; }
+  const tipo = tipoTermoDe(o); const anunciante = o.anunciante || (tipo === "proprietario" ? o.proprietario_nome || "" : "");
+  const ped = await montarPedido(o, { tipo, anunciante, com: comissaoPadraoPedido(o, tipo, anunciante), origem: "sinal_verde" });
+  await store.save("ofertas", { ...(O(o.id) || o), sinal_verde: now(), atualizado: now() });
+  return ped;
+}
 function demandaPara(o) { return S.briefings.filter((b) => (b.status || "ativo") === "ativo").map((b) => ({ b, r: PC.score(o, b, chkOf(o)) })).filter((x) => !x.r.fora); }
 const creciTxt = (c) => (c ? (/creci/i.test(c) ? c : "CRECI " + c) : "");
 function partesHTML(partes, comNomes) {
@@ -854,7 +915,7 @@ function ligarPartes(root, onChange, comNomes) {
 VIEWS.novopedido = () => {
   const o = O(route.o); if (!o) return back(); header("Pedido ao anunciante");
   const cfg = CFG();
-  const pend = !cfg.aut_revisado || [cfg.aut_parceria || AUT_PARCERIA, cfg.aut_proprietario || AUT_PROPRIETARIO].some((t) => faltasDoc(preencherDoc(t, {}, null)).length) || !cfg.com_revisada;
+  const pend = pedidoBloqueado();
   if (pend) {
     $("main").innerHTML = `<div class="card"><h2>Revise os termos e a comissão antes</h2><p class="hint">O anunciante vai aceitar um termo com a divisão de honorários. Em Configurações: preencha os prazos, confira os percentuais padrão de comissão e os modelos de divisão, e marque as revisões dos termos.</p><button class="p" id="cf">Abrir configurações</button></div>`;
     $("cf").onclick = () => go({ v: "config" }); return;
@@ -893,19 +954,10 @@ VIEWS.novopedido = () => {
     com.texto = textoComissaoPedido(com);
     $("cr").disabled = true; st.className = "status"; st.textContent = "Gerando…";
     try {
-      const codigo = await garantirCodigo(o); const atual = O(o.id) || o;
-      const tipo = $("tt").value; const d = PC.num(atual);
-      const vars = { CODIGO: codigo, TITULO: PC.autoTitle(d), OPERACAO: (atual.operacao || "locação").toLowerCase(), COMISSAO: com.texto, QUADRO: PC.quadroComissao(com), VALOR: [d.venda && PC.brl(d.venda) + " (venda)", d.aluguel && PC.brl(d.aluguel) + "/mês (locação)"].filter(Boolean).join(" ou ") || "a definir" };
-      const termo = preencherDoc(tipo === "proprietario" ? cfg.aut_proprietario || AUT_PROPRIETARIO : cfg.aut_parceria || AUT_PARCERIA, vars, corretorDaOferta(atual));
-      const token = tokenAleatorio(32); const ct = C($("ct").value);
-      const ped = { id: token, oferta: atual.id, codigo, titulo: tituloO(atual), operacao: atual.operacao || "", tipo_termo: tipo, anunciante: $("an").value.trim(), contato: ct ? ct.id : null,
-        demanda: $("dm") && $("dm").checked ? dem.length : 0, conhecidos: PC.conhecidos(atual), faltam: comp.faltam, comissao: com, termo_texto: termo, termo_versao: cfg.aut_versao || AUT_VERSAO,
-        grupo: PC.grupo(atual.tipo), modo: comp.ok ? "autorizacao" : "complementacao", expira: new Date(Date.now() + Number($("vd").value) * 864e5).toISOString(), status: "aberto", criado: now(), respostas: [],
-        corretor: corretorDaOferta(atual) };
-      editing = false; await store.save("pedidos", ped);
-      if (!atual.anunciante && ped.anunciante) await store.save("ofertas", { ...atual, anunciante: ped.anunciante, atualizado: now() });
+      editing = false; const ct = C($("ct").value);
+      const ped = await montarPedido(o, { tipo: $("tt").value, anunciante: $("an").value.trim(), contatoId: ct ? ct.id : null, com, validadeDias: Number($("vd").value), citarDemanda: !!($("dm") && $("dm").checked) });
       await pdfAnunciante(ped, true);
-      stack.pop(); route = { v: "pedido", id: token }; render(); toast("Pedido criado.");
+      stack.pop(); route = { v: "pedido", id: ped.id }; render(); toast("Pedido criado.");
     } catch (e) { st.className = "status err"; st.textContent = "Falhou: " + e.message; $("cr").disabled = false; editing = true; }
   };
 };
@@ -933,7 +985,8 @@ VIEWS.pedido = () => {
   $("main").innerHTML = `<div class="card"><span class="k">${esc(STATUS_P[p.status] || p.status)}</span><h2>${esc(p.titulo)}</h2>
   <p class="hint">${esc(p.anunciante || "")} · ${p.tipo_termo === "proprietario" ? "Autorização do proprietário" : "Parceria"} · ${p.status === "encerrado" ? "encerrado" : expirado ? "link expirado" : "válido até " + esc(fdt(p.expira))}</p>
   <div class="linkbox" id="lk">${esc(link)}</div>
-  <div class="row"><button class="grow" id="cp">Copiar link</button><a class="btn grow" target="_blank" rel="noopener" href="${esc(waLink(tel, msg))}">Enviar no WhatsApp</a></div>
+  <div class="row"><button class="grow" id="cp">Copiar link</button><a class="btn grow p" target="_blank" rel="noopener" href="${esc(waLink(tel, msg))}">WhatsApp${tel ? " " + esc(tel) : ""}</a>${o?.anunciante_email ? `<a class="btn grow" href="mailto:${esc(o.anunciante_email)}?subject=${encodeURIComponent(`Imóvel ${p.codigo}: dados e autorização de indicação`)}&body=${encodeURIComponent(msg)}">E-mail</a>` : ""}</div>
+  ${p.origem === "sinal_verde" ? '<p class="hint">Pedido gerado no sinal verde, com a comissão padrão das Configurações.</p>' : ""}
   <div class="row"><button class="sm" id="pdf">PDF editável</button><button class="sm" id="pr">Prorrogar 30 dias</button>${p.status !== "encerrado" ? '<button class="sm" id="enc">Encerrar</button>' : ""}${o ? '<button class="sm" id="vo">Ver oferta</button>' : ""}</div></div>
   <div class="card"><h2>Honorários</h2><p>${esc(p.comissao?.texto || "")}</p><ul class="log">${(p.comissao?.partes || []).map((x) => `<li><time>${esc(PC.nf(x.pct))}%</time><span>${esc(x.papel)}${x.nome && !PC.ehPC(x) ? " · " + esc(x.nome) : ""}</span></li>`).join("")}</ul></div>
   <div class="card"><h2>Autorização</h2>${p.aceite ? `<p><b>${esc(p.aceite.razao)}</b> · ${esc(p.aceite.documento)}${p.aceite.creci ? " · CRECI " + esc(p.aceite.creci) : ""}<br>${esc(p.aceite.responsavel)}${p.aceite.cargo ? " (" + esc(p.aceite.cargo) + ")" : ""} · ${esc(p.aceite.email)} · ${esc(p.aceite.telefone)}</p><p class="hint">Aceito em ${esc(fdt(p.aceite.em))} · IP ${esc(p.aceite.ip || "—")} · termo ${esc(p.aceite.termo_versao || "")}<br>SHA-256 ${esc((p.aceite.termo_sha256 || "").slice(0, 24))}…</p>${!ct ? '<button class="sm" id="crm">Salvar anunciante no CRM</button>' : ""}` : '<p class="empty">Ainda não autorizado.</p>'}</div>
@@ -1111,6 +1164,31 @@ const camposCap = (tipo) => (PC.grupo(tipo) === "residencial" ? CAMPOS_RES : PC.
 const NUM_IA = ["area_ha", "dormitorios", "suites", "banheiros", "vagas", "construida", "terreno", "fabril", "pe_direito", "docas", "aluguel", "venda", "condominio", "iptu"];
 function mesclarDados(o, dados) { const p = {}; Object.entries(dados || {}).forEach(([k, v]) => { if (v === null || v === undefined || v === "") return; if (NUM_IA.includes(k) && !PC.parseBR(o[k])) p[k] = fmtIn(k, Number(v)); else if (!NUM_IA.includes(k) && !String(o[k] || "").trim()) p[k] = String(v); }); return p; }
 
+/** Pacote para sistemas de imobiliária: XML VRSync, CSV, texto e fotos nomeadas por ambiente. */
+async function exportarPacote(o) {
+  const codigo = await garantirCodigo(o); const at = O(o.id) || o; const an = anuncioDe(at); const cor = corretorDaOferta(at);
+  const ambs = at.captacao?.ambientes || []; const fotos = [...ambs.flatMap((a) => (a.fotos || []).map((f) => ({ k: f.k, ambiente: a.nome }))), ...(at.fotos_aut || []).map((f) => ({ k: f.k, ambiente: "Foto do anúncio" }))];
+  const c = { id: at.id, dados: { tipo: at.tipo, operacao: at.operacao, cidade: at.cidade, uf: at.uf || "SP", bairro: at.regiao, venda: at.venda, aluguel: at.aluguel, condominio: at.condominio, iptu: at.iptu, iptu_periodo: at.iptu_periodo, construida: at.construida, terreno: at.terreno, area_ha: at.area_ha, dormitorios: at.dormitorios, suites: at.suites, banheiros: at.banheiros, vagas: at.vagas, pe_direito: at.pe_direito, docas: at.docas, energia_kva: at.energia_kva, documentacao: at.documentacao, disponibilidade: at.disponibilidade },
+    anuncio: { titulo: at.titulo || PC.autoTitle(PC.num(at)), subtitulo: at.subtitulo || "", descricao: at.descricao || "", destaques: PC.lines(at.diferenciais) } };
+  const z = {}; const ref = []; const cnt = {};
+  for (const [i, f] of fotos.entries()) { toast(`Preparando fotos ${i + 1}/${fotos.length}…`); const r = await fetch(fotoURL(f.k), { credentials: "same-origin" }); if (!r.ok) continue; cnt[f.ambiente] = (cnt[f.ambiente] || 0) + 1; const n = nomeFoto(i + 1, f.ambiente, cnt[f.ambiente]); z["fotos/" + n] = [new Uint8Array(await r.arrayBuffer()), { level: 0 }]; ref.push({ url: an && an.status === "ativo" ? `${baseAnuncios()}/i/${an.id}/f/${i}.jpg` : "fotos/" + n, legenda: f.ambiente }); }
+  const contato = { nome: cor.nome, email: cor.email, telefone: cor.whatsapp };
+  z["imovel.xml"] = strToU8(xmlVRSync(c, { fotos: ref, contato, codigo })); z["imovel.csv"] = strToU8(csvImovel(c, { codigo, fotos: ref })); z["anuncio.txt"] = strToU8(textoImovel(c, { codigo }));
+  const nome = `${codigo}_pacote.zip`; await compartilharOuBaixar(new Blob([zipSync(z)], { type: "application/zip" }), nome);
+  await emitir({ tipo: "pacote_exportado", oferta_id: at.id, destinatario: "Sistema de imobiliária", conteudo: `${nome} · ${ref.length} foto(s) · XML VRSync, CSV e texto` }).catch(() => {});
+}
+/** Roteiro guiado: casa cada item obrigatório com um ambiente fotografado (pelo vínculo ou pelo nome). */
+const KW_ROT = { fachada: /fachada|frente|portaria/, condominio: /condom|piscina|lazer|academia|sal[ãa]o de festa|playground/, sala: /sala/, cozinha: /cozinha/, dorm: /dormit|quarto|su[ií]te/, banho: /banheiro|lavabo|wc/, servico: /servi[cç]o|lavanderia/, externa: /quintal|externa|jardim|churrasq|piscina/, vaga: /garagem|vaga/, vista: /vista|varanda|sacada/, interna: /operacional|interna|galp[ãa]o/, pe_direito: /p[ée].?direito/, docas: /doca/, piso: /piso/, energia: /cabine|energia|transformador|quadro/, escritorios: /escrit|mezanino|administ/, apoio: /vesti|refeit|copa/, patio: /p[áa]tio|manobra/, acesso: /acesso|entorno|rua/, salao: /sal[ãa]o|loja|vitrine/, banhoC: /banheiro/, copa: /copa|dep[óo]sito/, entorno: /entorno|vizinh/, geral: /geral|drone|panor|vista/, frente: /frente|testada/, topografia: /topogra|declive|aclive|plano/, vizinhanca: /vizinh/, infra: /poste|infra|rede/, porteira: /porteira|entrada|acesso/, sede: /sede|casa principal/, sede_int: /sede.*(sala|cozinha|interior)/, producao: /pasto|pastagem|lavoura|planta[çc]/, agua: /represa|rio|nascente|po[çc]o|lago|a[çc]ude|[áa]gua/, benfeitorias: /curral|barrac|benfeit|caseiro|m[áa]quinas/, estradas: /estrada/ };
+function casarRoteiro(o) {
+  const itens = roteiroFotos(o.tipo, { dormitorios: PC.parseBR(o.dormitorios), banheiros: PC.parseBR(o.banheiros), vagas: PC.parseBR(o.vagas), docas: o.docas === undefined || o.docas === "" ? undefined : PC.parseBR(o.docas) });
+  const ambs = (o.captacao?.ambientes || []).filter((a) => (a.fotos || []).length); const usados = new Set();
+  const res = itens.map((it) => {
+    let a = ambs.find((x) => x.roteiro === it.id && !usados.has(x.id));
+    if (!a) { const chave = it.id.replace(/\d+$/, ""); const re = KW_ROT[chave] || KW_ROT[it.id]; if (re) a = ambs.find((x) => !usados.has(x.id) && !x.roteiro && re.test(PC.norm(x.nome || ""))); }
+    if (a) usados.add(a.id); return { ...it, amb: a || null };
+  });
+  return { itens: res, faltam: res.filter((x) => x.obrigatorio && !x.amb) };
+}
 VIEWS.captacao = () => {
   const o0 = O(route.id); if (!o0) return back();
   header(o0.codigo ? "Captação " + o0.codigo : "Captação");
@@ -1127,6 +1205,7 @@ VIEWS.captacao = () => {
   <label class="full">Endereço completo (privado, não sai no anúncio)<input data-c="endereco" value="${esc(o.endereco || "")}"></label>
   <label>Proprietário<input data-c="proprietario_nome" value="${esc(o.proprietario_nome || "")}"></label><label>Telefone do proprietário<input data-c="proprietario_tel" type="tel" value="${esc(o.proprietario_tel || "")}"></label>
   <label class="full">Captado por<select data-c="captador" ${ehAdmin() ? "" : "disabled"}>${(usuarios.length ? usuarios : EQUIPE_INICIAL).map((u) => `<option value="${esc(u.email)}" ${String(u.email).toLowerCase() === String(o.captador || "").toLowerCase() ? "selected" : ""}>${esc(u.nome)} · ${esc(creciFmt(u.creci))}</option>`).join("")}</select></label></div></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h2>Roteiro da visita</h2><span class="chip" id="rtc"></span></div><p class="hint">Fotos obrigatórias para este tipo de imóvel. Toque em 📷 no item: a foto entra já com o nome certo.</p><div class="roteiro" id="rot"></div><input type="file" id="camR" accept="image/*" capture="environment" multiple hidden></div>
   <div class="card"><div class="row" style="justify-content:space-between"><h2>Ambientes</h2><span class="chip" id="nf"></span></div>
   <p class="hint">Para cada ambiente: fotografe (celular na horizontal), toque em <b>Falar</b> e descreva o que vê. A IA nomeia o ambiente, organiza a descrição e confere as fotos.</p>
   <div id="ambs"></div>
@@ -1151,7 +1230,7 @@ VIEWS.captacao = () => {
   if (!podeEditar) $("main").insertAdjacentHTML("afterbegin", `<p class="note">Captação de ${esc(perfilPorEmail(o.captador).nome)}: você pode ver, mas só quem captou ou o administrador altera.</p>`);
 
   const desenharNums = () => { const at = cur(); $("nums").innerHTML = camposCap(at.tipo).map(([k, l, u]) => u ? `<label class="u">${esc(l)}<input data-c="${k}" inputmode="decimal" value="${esc(fmtIn(k, PC.parseBR(at[k])))}"><span>${esc(u)}</span></label>` : `<label class="full">${esc(l)}<input data-c="${k}" value="${esc(at[k] || "")}"></label>`).join(""); };
-  const medidor = () => { const at = cur(); const cp = PC.completude(at); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : ""; $("ctxt").textContent = cp.ok ? "Ficha completa." : `Ficha ${cp.pct}% · falta: ${cp.faltam.filter((f) => !f.extra).map((f) => f.rotulo).join(", ")}`; $("nf").textContent = fotosDe(at) + " foto(s)"; };
+  const medidor = () => { const at = cur(); const cp = PC.completude(at); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : ""; $("ctxt").textContent = cp.ok ? "Ficha completa." : `Ficha ${cp.pct}% · falta: ${cp.faltam.filter((f) => !f.extra).map((f) => f.rotulo).join(", ")}`; $("nf").textContent = fotosDe(at) + " foto(s)"; if (typeof desenharRoteiro === "function" && $("rot")) desenharRoteiro(); };
   desenharNums();
   // salvar campos (debounce)
   let tSalvar = null; const lerCampos = () => { const p = {}; document.querySelectorAll("[data-c]").forEach((el) => (p[el.dataset.c] = el.value.trim())); p.anunciante = p.proprietario_nome; p.anunciante_contato = p.proprietario_tel; return p; };
@@ -1176,12 +1255,17 @@ VIEWS.captacao = () => {
     if (micOn && micOn !== "fg") { const b = document.querySelector(`[data-mic="${micOn}"]`); if (b) b.classList.add("on"); }
     ligarAmbs(); medidor();
   };
+  let itemFoto = null;
+  var desenharRoteiro = () => { const r = casarRoteiro(cur()); const obrig = r.itens.filter((x) => x.obrigatorio).length;
+    $("rtc").textContent = `${obrig - r.faltam.length}/${obrig} obrigatórias`;
+    $("rot").innerHTML = r.itens.map((it) => `<div class="ri ${it.amb ? "ok" : ""}"><span class="ic">${it.amb ? "✓" : ""}</span><b>${esc(it.nome)}${it.obrigatorio ? "" : ' <small>(opcional)</small>'}<br><small>${esc(it.amb ? (it.amb.fotos || []).length + " foto(s) · " + (it.amb.nome || "") : it.dica)}</small></b>${it.amb ? "" : `<button class="sm ${it.obrigatorio ? "p" : ""}" data-rf="${esc(it.id)}">📷</button>`}</div>`).join("");
+    document.querySelectorAll("[data-rf]").forEach((b) => (b.onclick = () => { itemFoto = r.itens.find((x) => x.id === b.dataset.rf); $("camR").value = ""; $("camR").click(); })); };
   const salvarFala = (id, v) => setAmbs((ambs) => { const a = ambs.find((y) => y.id === id); if (a) a.fala = v; });
   const setAmbs = async (fn) => { const at = cur(); const ambs = JSON.parse(JSON.stringify(at.captacao?.ambientes || [])); fn(ambs); return await salvar({ captacao: { ambientes: ambs } }); };
-  const enviarFotos = async (files, ambId) => {
+  const enviarFotos = async (files, ambId, item) => {
     if (!files || !files.length) return; parar();
     const prog = document.createElement("p"); prog.className = "status"; $("ambs").appendChild(prog);
-    let alvo = ambId; if (!alvo) { alvo = uid("a"); await setAmbs((ambs) => ambs.push({ id: alvo, nome: "Ambiente " + (ambs.length + 1), fotos: [], fala: "", criado: now() })); desenharAmbs(); }
+    let alvo = ambId; if (!alvo) { alvo = uid("a"); await setAmbs((ambs) => ambs.push({ id: alvo, nome: item ? item.nome : "Ambiente " + (ambs.length + 1), ...(item ? { roteiro: item.id, nome_manual: true } : {}), fotos: [], fala: "", criado: now() })); desenharAmbs(); }
     const novas = [];
     for (let i = 0; i < files.length; i++) {
       prog.textContent = `Tratando e enviando foto ${i + 1} de ${files.length}…`;
@@ -1225,6 +1309,7 @@ VIEWS.captacao = () => {
     document.querySelectorAll("[data-fala]").forEach((x) => x.addEventListener("input", () => { clearTimeout(x._t); x._t = setTimeout(() => salvarFala(x.dataset.fala, x.value), 700); }));
     document.querySelectorAll("[data-mic]").forEach((b) => (b.onclick = () => microfone(b, () => (b.dataset.mic === "fg" ? $("fg") : document.querySelector(`[data-fala="${b.dataset.mic}"]`)))));
   }
+  $("camR").onchange = () => { if (itemFoto) enviarFotos([...$("camR").files], null, itemFoto); };
   $("camN").onchange = () => enviarFotos([...$("camN").files]); $("galN").onchange = () => enviarFotos([...$("galN").files]);
   desenharAmbs();
 
@@ -1249,20 +1334,20 @@ VIEWS.captacao = () => {
     const at = cur(); const an = anuncioDe(at); const pedAb = S.pedidos.filter((p) => p.oferta === at.id).sort((a, b) => (b.criado || "").localeCompare(a.criado || ""))[0];
     const aut = at.autorizacao || at.autorizacao_manual; const nf = fotosDe(at);
     const falta = [!at.titulo && "título", !at.descricao && "descrição", nf < 3 && "pelo menos 3 fotos", !(PC.parseBR(at.venda) || PC.parseBR(at.aluguel)) && "valor"].filter(Boolean);
-    const link = an ? `${baseAnuncios()}/i/${an.id}` : "";
+    const link = an ? `${baseAnuncios()}/i/${an.id}` : ""; const rot = casarRoteiro(at);
     $("fx").innerHTML = `<h2>Próximos passos</h2>
     <div class="passo ${aut ? "ok" : ""}"><b>1 · Autorização de comercialização</b>
       ${at.autorizacao ? `<p class="tag ok">Autorizado por ${esc(at.autorizacao.responsavel || at.autorizacao.razao)} em ${esc(fdt(at.autorizacao.em))}</p>` : at.autorizacao_manual ? `<p class="tag ok">Autorização por escrito fora do sistema, registrada por ${esc(at.autorizacao_manual.por)} em ${esc(fdt(at.autorizacao_manual.em))}</p>` : pedAb ? `<p class="hint">Enviada em ${esc(fdt(pedAb.criado))}: ${esc(STATUS_P[pedAb.status] || pedAb.status)}.</p><button class="sm" id="vped">Ver pedido</button>` : `<p class="hint">O proprietário recebe a ficha do imóvel e aceita a autorização pelo celular (link) ou no PDF.</p>`}
       ${!aut ? `<button class="${pedAb ? "sm" : "p"}" id="paut">${pedAb ? "Novo pedido de autorização" : "Pedir autorização ao proprietário"}</button><label class="check"><input type="checkbox" id="amanual"> O proprietário já assinou autorização por escrito (fica registrado em meu nome)</label>` : ""}</div>
     <div class="passo ${an && an.status === "ativo" ? "ok" : ""}"><b>2 · Anúncio (página para WhatsApp)</b>
-      ${falta.length ? `<p class="hint">Falta: ${esc(falta.join(", "))}.</p>` : ""}
+      ${falta.length ? `<p class="hint">Falta: ${esc(falta.join(", "))}.</p>` : ""}${rot.faltam.length ? `<p class="hint">Roteiro: falta foto de ${esc(rot.faltam.map((x) => x.nome).join(", "))}.</p>` : ""}
       ${an && an.status === "ativo" ? `<p class="linkbox">${esc(link)}</p><p class="hint">${an.visitas || 0} visita(s) · publicado em ${esc(fdt(an.publicado_em))}${an.atualizado_em ? " · atualizado " + esc(fdt(an.atualizado_em)) : ""}</p>
         <div class="row"><a class="btn sm p" target="_blank" rel="noopener" href="${esc(waLink("", `${at.titulo}\n${link}`))}">Enviar no WhatsApp</a><button class="sm" id="cpl">Copiar link</button><a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">Ver página</a></div>
         <div class="row"><button class="sm" id="pub">Atualizar página</button><button class="sm g" id="enc">Encerrar anúncio</button></div>`
       : `<button class="p" id="pub" ${falta.length || !aut ? "disabled" : ""}>Publicar anúncio</button>${!aut ? '<p class="hint">Publica depois da autorização do proprietário.</p>' : ""}`}</div>
     <div class="passo ${at.status !== "captacao" ? "ok" : ""}"><b>3 · Banco de ofertas</b>
       ${at.status === "captacao" ? `<p class="hint">Entra no cruzamento com os briefings e no ranking.</p><button id="conc">Concluir captação e enviar ao banco</button>` : `<p class="tag ok">No banco de ofertas${at.codigo ? " como " + esc(at.codigo) : ""}.</p>`}
-      <div class="row"><button class="sm" id="pdfc">Ficha PDF</button><button class="sm" id="vof">Abrir como oferta</button></div></div>`;
+      <div class="row"><button class="sm" id="pdfc">Ficha PDF</button><button class="sm" id="zipc">Pacote p/ sistema (XML, planilha, fotos)</button><button class="sm" id="vof">Abrir como oferta</button></div></div>`;
     const paut = $("paut"); if (paut) paut.onclick = async () => { parar(); clearTimeout(tSalvar); await salvar({ ...lerCampos(), anunciante_tipo: "Proprietário" }); editing = false; go({ v: "novopedido", o: at.id }); };
     const am = $("amanual"); if (am) am.onchange = async () => { if (!am.checked) return; await salvar({ autorizacao_manual: { em: now(), por: EU.usuario || usuarioAtual?.email } }, "Autorização registrada."); passos(); };
     const vp = $("vped"); if (vp) vp.onclick = () => { editing = false; go({ v: "pedido", id: pedAb.id }); };
@@ -1272,6 +1357,7 @@ VIEWS.captacao = () => {
     const cc = $("conc"); if (cc) cc.onclick = async () => { const cod = await garantirCodigo(cur()); await salvar({ status: "revisada", codigo: cod, captacao: { concluida: now() } }, "Captação no banco de ofertas como " + cod + "."); header("Captação " + cod); passos(); };
     $("pdfc").onclick = async () => { clearTimeout(tSalvar); await salvar(lerCampos()); await gerarPDF(cur(), { semTermo: true }); };
     $("vof").onclick = () => { parar(); editing = false; go({ v: "oferta", id: at.id }); };
+    $("zipc").onclick = async () => { clearTimeout(tSalvar); await salvar(lerCampos()); const b = $("zipc"); b.disabled = true; try { await exportarPacote(cur()); } catch (e) { toast("Falhou: " + e.message); } b.disabled = false; };
   };
   const publicar = async () => {
     clearTimeout(tSalvar); await salvar(lerCampos());

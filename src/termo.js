@@ -43,7 +43,7 @@ Pelo presente termo, a pessoa física ou jurídica identificada no cadastro dest
 10. FORO. Fica eleito o foro da comarca de {{FORO}} para dirimir questões decorrentes deste termo.`;
 
 /* ===== Termos ao anunciante ===== */
-export const AUT_VERSAO = VERSAO_DOCS;
+export const AUT_VERSAO = "v2.1 · out/2026"; // v2.1: item 1.1 (uso privado das fotos do anúncio)
 
 // Anunciante é imobiliária ou corretor: parceria com divisão de honorários
 export const AUT_PARCERIA = `TERMO DE PARCERIA E AUTORIZAÇÃO DE INDICAÇÃO
@@ -51,6 +51,8 @@ export const AUT_PARCERIA = `TERMO DE PARCERIA E AUTORIZAÇÃO DE INDICAÇÃO
 Pelo presente termo, a imobiliária ou o corretor identificado abaixo ("ANUNCIANTE") e {{CORRETOR}}, que atua sob a marca PrimeCorp Brokers ("CORRETOR INDICADOR"), ajustam o seguinte:
 
 1. OBJETO. O ANUNCIANTE autoriza o CORRETOR INDICADOR a apresentar o imóvel identificado pela referência {{CODIGO}} ({{TITULO}}), para {{OPERACAO}}, a clientes interessados, sem exclusividade e sem anúncio público, nos termos do art. 20, III, da Lei nº 6.530/1978.
+
+1.1. MATERIAL DO IMÓVEL. O ANUNCIANTE autoriza o CORRETOR INDICADOR a usar as fotos e a descrição do anúncio exclusivamente na apresentação privada do imóvel aos clientes identificados na forma do item 3, vedada a publicação em portais, redes sociais ou páginas públicas.
 
 2. INFORMAÇÕES E PODERES. O ANUNCIANTE declara que as informações do imóvel prestadas neste documento correspondem às de que dispõe e que está autorizado por escrito pelo proprietário a intermediar o negócio.
 

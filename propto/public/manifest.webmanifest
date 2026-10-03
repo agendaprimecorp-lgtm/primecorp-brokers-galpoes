@@ -1,6 +1,6 @@
 {
-  "name": "Propto · Captação inteligente",
-  "short_name": "Propto",
+  "name": "PrimeCorp Brokers · Captação",
+  "short_name": "PrimeCorp",
   "description": "Visita terminou, anúncio pronto: fotos guiadas, voz e IA no celular.",
   "id": "/app",
   "start_url": "/app",
@@ -8,11 +8,11 @@
   "display": "standalone",
   "orientation": "portrait",
   "lang": "pt-BR",
-  "theme_color": "#0F1720",
-  "background_color": "#0F1720",
+  "theme_color": "#1E2227",
+  "background_color": "#1E2227",
   "icons": [
-    { "src": "/icons/appicon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/appicon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons/appicon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

@@ -1,6 +1,8 @@
-# Propto · captação inteligente (SaaS)
+# Módulo de usuários · PrimeCorp Brokers (Tecnologia Propto)
 
-Site próprio, separado do app PrimeCorp: banco, arquivos e usuários do Propto nunca se misturam com os da PrimeCorp.
+**Situação: pré-estruturado e desligado.** Rodrigo e Joselia usam o app principal; este módulo entra no ar na expansão. Interface PrimeCorp, com endosso Tecnologia Propto.
+
+Site próprio, separado do app interno: banco, arquivos e usuários do Propto nunca se misturam com os da PrimeCorp.
 
 ## Publicar (uma vez)
 1. Netlify → **Add new project → Import from Git** → este mesmo repositório, com **Base directory = `propto`**. O `netlify.toml` desta pasta já define build, publicação e funções.

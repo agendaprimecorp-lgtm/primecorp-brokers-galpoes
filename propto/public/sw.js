@@ -1,5 +1,5 @@
 // Service worker mínimo: deixa o app instalável e abre a tela inicial mesmo sem sinal.
-const C = "propto-v1"; const BASE = ["/app", "/app.css", "/app.js", "/manifest.webmanifest", "/icons/appicon-192.png", "/marca/propto-horizontal.svg"];
+const C = "primecorp-cap-v1"; const BASE = ["/app", "/app.css", "/app.js", "/manifest.webmanifest", "/icon-192.png", "/logo-claro.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(C).then((c) => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== C).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", (e) => {

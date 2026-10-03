@@ -6,7 +6,7 @@ process.env.ADMIN_EMAILS = "contato@primecorpconsultoria.com.br,comercial@primec
 process.env.ASAAS_API_KEY = "teste_asaas"; process.env.ASAAS_WEBHOOK_TOKEN = "tok_webhook_123";
 const asaasSt = instalarAsaas();
 const api = (await import("./out/api.mjs")).default; const wh = (await import("./out/asaas.mjs")).default; const pub = (await import("./out/publico.mjs")).default;
-const P = await import("../shared/planos.mjs"); const RT = await import("../shared/roteiro.mjs"); const EX = await import("../shared/exporta.mjs");
+const P = await import("../shared/planos.mjs"); const RT = await import("../../shared/roteiro.mjs"); const EX = await import("../../shared/exporta.mjs");
 const ctx = { params: {}, ip: "200.1.2.3" };
 const como = (email) => (globalThis.__user = email ? { email } : null);
 const R = (m, p, body) => new Request("https://propto.test" + p, { method: m, headers: { "content-type": "application/json", origin: "https://propto.test" }, body: body ? JSON.stringify(body) : undefined });

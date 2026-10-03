@@ -1,8 +1,8 @@
 // Apresentação em PDF (A4 retrato): capa com foto, ficha, descrição e fotos por ambiente.
 import { jsPDF } from "jspdf";
-import { grupo } from "../shared/roteiro.mjs";
+import { grupo } from "../../shared/roteiro.mjs";
 
-const hex = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); const n = parseInt(m ? m[1] : "CC1B1B", 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const hex = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); const n = parseInt(m ? m[1] : "C8102E", 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const nf = (v, d = 0) => { const n = Number(String(v ?? "").replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) && n > 0 ? n.toLocaleString("pt-BR", { maximumFractionDigits: d }) : ""; };
 const brl = (v) => (nf(v) ? "R$ " + nf(v) : "");
 
@@ -21,14 +21,14 @@ async function recortar(blob, prop, larg = 1400) {
 /** cap = captação; fotos = [{ blob, ambiente }]; contato = { nome, creci, titulo, whatsapp, email, cor } */
 export async function gerarPDF(cap, fotos, contato) {
   const doc = new jsPDF({ unit: "mm", format: "a4" }); const W = 210, H = 297, M = 14;
-  const acc = hex(contato.cor); const ink = [15, 23, 32], g7 = [98, 108, 121], painel = [244, 245, 247];
+  const acc = hex(contato.cor); const ink = [30, 34, 39], g7 = [98, 108, 121], painel = [244, 245, 247];
   const d = cap.dados || {}, an = cap.anuncio || {}; const g = grupo(d.tipo);
   const rodape = () => {
     doc.setDrawColor(227, 230, 233); doc.line(M, H - 16, W - M, H - 16);
     doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...g7);
     const q = [contato.nome, contato.titulo, contato.creci, contato.whatsapp, contato.email].filter(Boolean).join(" · ");
     doc.text(doc.splitTextToSize(q, W - 2 * M - 16)[0] || "", M, H - 10);
-    doc.text("Feito com Propto", M, H - 5.5);
+    doc.text("PrimeCorp Brokers · Tecnologia Propto", M, H - 5.5);
   };
   const faixa = () => { doc.setFillColor(...acc); doc.rect(0, 0, W, 3, "F"); };
   // ---- capa

@@ -20,7 +20,7 @@ const pagar = async (filtro) => { const st = await (await fetch(B + '/__asaas'))
 await p.goto(B + '/'); await W(500); ok(/anúncio pronto/.test(await txt('h1')) && /R\$ 99,99/.test(await txt('body')), 'página de vendas com planos'); await sh('00_vendas');
 await p.evaluate(() => document.querySelector('#planos').scrollIntoView()); await sh('00b_vendas_planos');
 // 1) entrar / criar conta
-await p.goto(B + '/app'); await W(700); ok(/Entrar no Propto/.test(await txt()), 'tela de entrada'); await sh('01_entrar');
+await p.goto(B + '/app'); await W(700); ok(/Entrar na PrimeCorp/.test(await txt()), 'tela de entrada'); await sh('01_entrar');
 await p.click('[data-m="criar"]'); await p.fill('#em', 'pedro@exemplo.com'); await p.fill('#se', '123'); await p.click('#ok'); ok(/8 caracteres/.test(await txt('#st')), 'senha curta recusada');
 await p.fill('#se', 'senhaforte1'); await p.click('#ok'); await W(300); ok(/confirmação/.test(await txt('#st')), 'conta criada pede confirmação por e-mail');
 // 2) proprietário: cadastro → planos → avulso

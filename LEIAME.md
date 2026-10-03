@@ -60,7 +60,11 @@ Depois de criar ou mudar variáveis, faça um novo deploy.
 O AI Gateway da Netlify já entrega a IA da Anthropic às functions **sem chave**, cobrando em créditos Netlify. Ele é ativado no primeiro deploy de produção.
 Se preferir pagar direto na Anthropic, cadastre `ANTHROPIC_API_KEY`: a sua chave tem prioridade.
 
-**Leitura pelo link (todos os segmentos).** Em *Nova oferta*, basta colar o link: o servidor abre a página (até 12 s, 2,5 MB), extrai título, descrição, dados estruturados e texto, e a IA reconhece o tipo (casa, apartamento, galpão, terreno, fazenda, sítio…) e preenche os campos do segmento. Proteções: só http/https, sem usuário/senha no link, sem rede interna (localhost, IPs privados, metadados de nuvem), cada redirecionamento é revalidado. Portais grandes às vezes bloqueiam robôs (captcha/403): o app avisa e pede para colar o texto do anúncio, que funciona sempre.
+**Sinal verde.** Quando um cliente marca interesse na Sala do Cliente (ou o negócio chega à etapa de interesse) numa oferta de terceiro sem autorização, o Painel mostra o sinal verde. Um toque gera o pedido ao anunciante (perguntas que faltam, termo de parceria v2.1 e comissão padrão) e abre o WhatsApp ou e-mail do anunciante lido no anúncio. Depois da autorização, as fotos do anúncio podem ser guardadas no sistema (uso privado, item 1.1 do termo).
+
+**Captação: roteiro guiado e pacote.** A captação mostra as fotos obrigatórias para o tipo de imóvel e exporta um .zip para sistemas de imobiliária (XML VRSync dos portais ZAP/OLX, planilha CSV, texto e fotos nomeadas).
+
+**Leitura pelo link (todos os segmentos).** Em *Nova oferta*, basta colar o link: o servidor abre a página (até 12 s, 2,5 MB), extrai título, descrição, dados estruturados, texto, **fotos** (sem logos e miniaturas) e **contato do anunciante** (WhatsApp, telefone, e-mail), e a IA reconhece o tipo (casa, apartamento, galpão, terreno, fazenda, sítio…) e preenche os campos do segmento. Proteções: só http/https, sem usuário/senha no link, sem rede interna (localhost, IPs privados, metadados de nuvem), cada redirecionamento é revalidado. Portais grandes às vezes bloqueiam robôs (captcha/403): o app avisa e pede para colar o texto do anúncio, que funciona sempre.
 
 ### 5. Coleta automática de alertas
 1. Crie um Gmail só para isso (ex.: `alertas.primecorp@gmail.com`).
@@ -109,4 +113,7 @@ Abra o endereço do site no Safari → Compartilhar → **Adicionar à Tela de I
 - O site não é indexado por buscadores.
 
 ## Testes (para desenvolvedor)
-`npm install` e depois `npm test` (38 testes de API, permissões, segmentos, documentos e leitura por link, com Postgres local). Telas: `node test/server.mjs` e, em outro terminal, `node test/e2e.mjs`, `e2e2`, `e2e3` (captação) e `e2e4` (Joselia, residencial, rural e leitura por link). Reinicie o servidor entre um e2e e outro.
+`npm install` e depois `npm test` (39 testes de API, permissões, segmentos, documentos e leitura por link, com Postgres local). Telas: `node test/server.mjs` e, em outro terminal, `node test/e2e.mjs`, `e2e2`, `e2e3` (captação) e `e2e4` (Joselia, residencial, rural e leitura por link) e `e2e5` (fotos do link, sinal verde, autorização, roteiro e pacote). Reinicie o servidor entre um e2e e outro.
+
+## Módulo de usuários (pré-estruturado, desligado)
+A pasta `propto/` guarda o módulo para corretores, imobiliárias e proprietários externos (cadastro por tipo, planos com cobrança Asaas, roteiro guiado, landing, PDF e exportação), com interface PrimeCorp e Tecnologia Propto. Não é publicado agora: quando for a hora, siga `propto/LEIAME.md` (site próprio no Netlify, base directory `propto`, banco separado). O código de roteiro e exportação é compartilhado em `shared/`.

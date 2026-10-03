@@ -8,7 +8,7 @@ import {
   chamarIA, chamarIAImagem, PROMPT_AMBIENTE, PROMPT_ANUNCIO, CORRETORES_PRIMECORP,
 } from "../../shared/srv.mjs";
 import { PLANOS, PLANOS_MENSAIS, TIPOS_CONTA, validarCreci, MENSAGEM_ACESSO } from "../../shared/planos.mjs";
-import { progresso, grupo } from "../../shared/roteiro.mjs";
+import { progresso, grupo } from "../../../shared/roteiro.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const MAX_FOTO = 3_000_000;

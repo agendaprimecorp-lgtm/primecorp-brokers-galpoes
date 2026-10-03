@@ -275,5 +275,29 @@ await t("ler pelo link: bloqueia rede interna e lê página pública", async () 
   } finally { globalThis.fetch = orig; }
   const tx = await J(await api(R("POST", "/api/extrair", { modo: "um", texto: "x".repeat(60), url: "http://localhost/" }), ctx())); assert.equal(tx.s, 200, "com texto colado o link não é lido");
 });
+
+await t("link: fotos, contatos e proxy de imagem protegido", async () => {
+  const S = await import("../shared/servidor.mjs");
+  const html = `<html><head><meta property="og:image" content="https://cdn.portal.com/fotos/casa-1_800x600.jpg"><meta property="og:image" content="//cdn.portal.com/fotos/casa-1_1200x900.jpg">
+  <script type="application/ld+json">{"@type":"House","image":["https://cdn.portal.com/fotos/casa-2.jpg",{"url":"https://cdn.portal.com/fotos/casa-3.webp"}],"seller":{"telephone":"+55 19 3222-4455","email":"vendas@imobexemplo.com.br"}}</script></head>
+  <body><img src="/img/logo.png"><img src="data:image/gif;base64,xx"><img data-src="https://cdn.portal.com/fotos/casa-4.jpg?w=400" width="400"><img src="https://cdn.portal.com/fotos/thumb.jpg" width="80">
+  <a href="https://wa.me/5519991112233?text=oi">WhatsApp</a><a href="tel:+551932224455">ligar</a><a href="mailto:noreply@portal.com">x</a></body></html>`;
+  const im = S.extrairImagens(html, "https://www.portal.com/imovel/123");
+  assert.ok(im.includes("https://cdn.portal.com/fotos/casa-2.jpg") && im.includes("https://cdn.portal.com/fotos/casa-3.webp") && im.includes("https://cdn.portal.com/fotos/casa-4.jpg?w=400"), JSON.stringify(im));
+  assert.equal(im.filter((u) => /casa-1/.test(u)).length, 1, "variações de tamanho da mesma foto contam uma vez");
+  assert.ok(!im.some((u) => /logo|thumb|data:/.test(u)), "sem logo, miniatura e data:");
+  const ct = S.extrairContatos(html); assert.deepEqual(ct.telefones.slice(0, 2), ["(19) 99111-2233", "(19) 3222-4455"]); assert.deepEqual(ct.emails, ["vendas@imobexemplo.com.br"]);
+  const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(500, 1)]);
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (u) => { const s = String(u); if (s.endsWith(".jpg")) return new Response(JPG, { headers: { "content-type": "image/jpeg" } }); if (s.endsWith(".html")) return new Response("<html>x</html>", { headers: { "content-type": "text/html" } }); return new Response(html + "<p>" + "Casa com 3 dormitórios e quintal. ".repeat(12) + "</p>", { headers: { "content-type": "text/html" } }); };
+  try {
+    const r = await J(await api(R("POST", "/api/extrair", { modo: "um", url: "https://93.184.215.14/anuncio/9" }), ctx()));
+    assert.equal(r.s, 200); assert.ok(r.j.imagens_ref.length >= 4); assert.equal(r.j.contatos_ref.telefones[0], "(19) 99111-2233");
+    const ok1 = await api(R("GET", "/api/img-ref?u=" + encodeURIComponent("https://93.184.215.14/f/1.jpg")), ctx()); assert.equal(ok1.status, 200); assert.equal(ok1.headers.get("content-type"), "image/jpeg");
+    assert.equal((await api(R("GET", "/api/img-ref?u=" + encodeURIComponent("https://93.184.215.14/p.html")), ctx())).status, 422, "só imagem");
+    assert.equal((await api(R("GET", "/api/img-ref?u=" + encodeURIComponent("http://169.254.169.254/x.jpg")), ctx())).status, 422, "sem rede interna");
+    globalThis.__user = null; assert.equal((await api(R("GET", "/api/img-ref?u=" + encodeURIComponent("https://93.184.215.14/f/1.jpg")), ctx())).status, 401, "precisa de login"); globalThis.__user = { email: "contato@primecorpconsultoria.com.br" };
+  } finally { globalThis.fetch = orig; }
+});
 console.log(`\n${ok} testes OK`);
 await db.stop(); process.exit(0);

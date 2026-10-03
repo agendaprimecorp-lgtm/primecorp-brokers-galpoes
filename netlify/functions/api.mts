@@ -4,7 +4,7 @@ import { verifyRequestOrigin } from "@netlify/identity";
 import {
   COLECOES, db, json, erro, usuario, papelDe, perfilDe, env,
   listarTudo, salvarRegistro, obterRegistro, registrarEmissao, proximoCodigoPC,
-  chamarIA, chamarIAImagem, lerPagina, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
+  chamarIA, chamarIAImagem, lerAnuncio, buscarSeguro, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
 } from "../../shared/servidor.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -111,13 +111,23 @@ export default async (req: Request, context: Context) => {
       const body = await req.json().catch(() => null);
       let texto = String(body?.texto || "").trim();
       const modo = body?.modo === "varios" ? "varios" : "um";
-      let lido = false;
+      let lido: any = null;
       if (modo === "um" && texto.length < 40 && body?.url) {
-        try { texto = await lerPagina(String(body.url)); lido = true; } catch (e) { return erro("Não consegui ler pelo link: " + (e instanceof Error ? e.message : String(e)) + ". Abra o anúncio, copie o texto e cole aqui.", 422); }
+        try { lido = await lerAnuncio(String(body.url)); texto = lido.texto; lido.doTexto = true; } catch (e) { return erro("Não consegui ler pelo link: " + (e instanceof Error ? e.message : String(e)) + ". Abra o anúncio, copie o texto e cole aqui.", 422); }
       }
       if (texto.length < 40) return erro("Texto curto demais.");
+      else if (modo === "um" && body?.url && !lido) { try { lido = await lerAnuncio(String(body.url)); } catch {} } // texto colado: ainda tenta pegar fotos e contatos
       const r = await chamarIA(modo === "varios" ? PROMPT_VARIOS : PROMPT_UM, texto.slice(0, modo === "varios" ? 30000 : 16000), modo === "varios" ? 6000 : 3000);
-      return json(lido ? { ...r, _lido_pelo_link: true } : r);
+      return json(lido ? { ...r, ...(lido.doTexto ? { _lido_pelo_link: true } : {}), imagens_ref: lido.imagens, contatos_ref: lido.contatos } : r);
+    }
+
+    /* ---------- fotos do anúncio de terceiros: visualização interna (proxy protegido) ---------- */
+    if (rota === "img-ref" && req.method === "GET") {
+      const alvo = String(url.searchParams.get("u") || "");
+      try {
+        const r = await buscarSeguro(alvo, { aceita: /^image\/(jpeg|jpg|png|webp)/i, max: 6_000_000, tempo: 10000, accept: "image/avif,image/webp,image/*;q=0.8", referer: url.searchParams.get("de") || undefined });
+        return new Response(r.buf, { headers: { "content-type": r.tipo, "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff" } });
+      } catch (e) { return erro("Imagem indisponível: " + (e instanceof Error ? e.message : ""), 422); }
     }
 
     /* ---------- fotos da captação ---------- */

@@ -205,27 +205,67 @@ async function validarURL(endereco) {
   if (ips.some(ipPrivado)) throw new Error("link não permitido");
   return u;
 }
-export async function lerPagina(endereco) {
+const UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+/** Busca com proteção: só internet pública, redirecionamentos revalidados, tamanho e tempo limitados. */
+export async function buscarSeguro(endereco, { aceita = /html|text/i, max = 2_500_000, tempo = 12000, accept = "text/html,application/xhtml+xml", referer } = {}) {
   let u = await validarURL(endereco);
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), tempo);
   try {
     let r;
     for (let salto = 0; ; salto++) {
-      r = await fetch(u, { redirect: "manual", signal: ctl.signal, headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", "accept-language": "pt-BR,pt;q=0.9", accept: "text/html,application/xhtml+xml" } });
+      r = await fetch(u, { redirect: "manual", signal: ctl.signal, headers: { "user-agent": UA, "accept-language": "pt-BR,pt;q=0.9", accept, ...(referer ? { referer } : {}) } });
       const loc = r.status >= 300 && r.status < 400 && r.headers.get("location");
       if (!loc) break;
       if (salto >= 4) throw new Error("redirecionamentos demais");
       u = await validarURL(new URL(loc, u).toString()); // cada salto é revalidado (sem rede interna)
     }
     if (!r.ok) throw new Error(`o portal recusou a leitura (${r.status})`);
-    if (!/html|text/i.test(r.headers.get("content-type") || "")) throw new Error("o link não é uma página de anúncio");
+    const tipo = r.headers.get("content-type") || "";
+    if (!aceita.test(tipo)) throw new Error("conteúdo não aceito");
     const reader = r.body.getReader(); const partes = []; let tam = 0;
-    while (true) { const { done, value } = await reader.read(); if (done) break; tam += value.length; partes.push(value); if (tam > 2_500_000) { ctl.abort(); break; } }
-    const texto = htmlParaTexto(Buffer.concat(partes.map((x) => Buffer.from(x))).toString("utf8"));
-    if (texto.length < 200 || /captcha|access denied|attention required|verifique que você é humano/i.test(texto.slice(0, 2000))) throw new Error("o portal bloqueou a leitura automática");
-    return texto.slice(0, 16000);
+    while (true) { const { done, value } = await reader.read(); if (done) break; tam += value.length; if (tam > max) { ctl.abort(); throw new Error("arquivo grande demais"); } partes.push(value); }
+    return { buf: Buffer.concat(partes.map((x) => Buffer.from(x))), tipo, url: u.toString() };
   } finally { clearTimeout(t); }
 }
+
+const IMG_RUIM = /logo|icon|ico[-_.]|sprite|avatar|placeholder|blank|pixel|spacer|banner|selo|badge|flag|bandeira|marker|pin[-_.]|mapa|map[-_.]|staticmap|qrcode|whatsapp|facebook|instagram|youtube|loading|lazy[-_.]?load|\.svg|\.gif/i;
+/** Fotos do anúncio: og:image, dados estruturados (JSON-LD) e galeria. Só URLs públicas, sem duplicatas. */
+export function extrairImagens(html, base) {
+  const h = String(html || ""); const achadas = [];
+  const add = (v) => { if (!v || typeof v !== "string") return; let s = v.trim().replace(/&amp;/g, "&"); if (!s || s.startsWith("data:")) return; try { s = new URL(s, base).toString(); } catch { return; } if (!/^https?:/.test(s) || IMG_RUIM.test(s)) return; if (!/\.(jpe?g|webp|png)(\?|$)/i.test(s) && !/(foto|image|img|photo|media|cdn|resize|crop)/i.test(s)) return; achadas.push(s); };
+  for (const m of h.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]*content=["']([^"']+)/gi)) add(m[1]);
+  for (const m of h.matchAll(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']/gi)) add(m[1]);
+  const anda = (x, d = 0) => { if (!x || d > 8) return; if (Array.isArray(x)) return x.forEach((y) => anda(y, d + 1)); if (typeof x !== "object") return; for (const [k, v] of Object.entries(x)) { if (/^(image|photo|images|photos|thumbnailUrl|contentUrl)$/i.test(k)) { if (typeof v === "string") add(v); else if (Array.isArray(v)) v.forEach((y) => (typeof y === "string" ? add(y) : add(y?.url || y?.contentUrl))); else if (v && typeof v === "object") add(v.url || v.contentUrl); } if (v && typeof v === "object") anda(v, d + 1); } };
+  for (const m of h.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) { try { anda(JSON.parse(m[1].trim())); } catch {} }
+  for (const m of h.matchAll(/<(?:img|source)\b[^>]*>/gi)) {
+    const tag = m[0]; const at = (n) => (tag.match(new RegExp(`\\b${n}=["']([^"']+)["']`, "i")) || [])[1];
+    const w = Number(at("width") || 0); if (w && w < 200) continue;
+    const srcset = at("data-srcset") || at("srcset"); if (srcset) { const ult = srcset.split(",").map((x) => x.trim().split(/\s+/)[0]).filter(Boolean).pop(); add(ult); }
+    add(at("data-src") || at("data-lazy") || at("data-original") || at("data-zoom-image") || at("src"));
+  }
+  const vistos = new Set(); const fora = [];
+  for (const s of achadas) { const chave = s.replace(/\?.*$/, "").replace(/[-_/](\d{2,4})x(\d{2,4})(?=[-_./])/g, "").replace(/\/(fit-in|crop|resize|[0-9]{2,4}x[0-9]{2,4})\//g, "/").toLowerCase(); if (vistos.has(chave)) continue; vistos.add(chave); fora.push(s); }
+  return fora.slice(0, 30);
+}
+/** Contatos públicos do anunciante na página (WhatsApp, telefone, e-mail). */
+export function extrairContatos(html) {
+  const h = String(html || ""); const tel = new Set(); const mail = new Set();
+  for (const m of h.matchAll(/(?:wa\.me\/|api\.whatsapp\.com\/send\/?\?phone=|whatsapp\.com\/send\?phone=)\+?(\d{10,13})/gi)) tel.add(m[1]);
+  for (const m of h.matchAll(/href=["']tel:([+\d\s().-]{10,20})["']/gi)) tel.add(m[1].replace(/\D/g, ""));
+  for (const m of h.matchAll(/"telephone"\s*:\s*"([^"]{8,25})"/gi)) tel.add(m[1].replace(/\D/g, ""));
+  for (const m of h.matchAll(/(?:mailto:|"email"\s*:\s*")([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/gi)) if (!/noreply|no-reply|sentry|example|wixpress/i.test(m[1])) mail.add(m[1].toLowerCase());
+  const fmt = (d) => { const x = d.replace(/^55(?=\d{10,11}$)/, ""); return x.length === 11 ? `(${x.slice(0, 2)}) ${x.slice(2, 7)}-${x.slice(7)}` : x.length === 10 ? `(${x.slice(0, 2)}) ${x.slice(2, 6)}-${x.slice(6)}` : null; };
+  return { telefones: [...tel].map(fmt).filter(Boolean).slice(0, 3), emails: [...mail].slice(0, 3) };
+}
+/** Lê o anúncio: texto para a IA, fotos e contatos do anunciante. */
+export async function lerAnuncio(endereco) {
+  const { buf, url } = await buscarSeguro(endereco);
+  const html = buf.toString("utf8");
+  const texto = htmlParaTexto(html);
+  if (texto.length < 200 || /captcha|access denied|attention required|verifique que você é humano/i.test(texto.slice(0, 2000))) throw new Error("o portal bloqueou a leitura automática");
+  return { texto: texto.slice(0, 16000), imagens: extrairImagens(html, url), contatos: extrairContatos(html), url };
+}
+export async function lerPagina(endereco) { return (await lerAnuncio(endereco)).texto; }
 
 /* ---------------- Documentos (CNPJ/CPF) ---------------- */
 export const soDig = (s) => s.replace(/\D/g, "");
