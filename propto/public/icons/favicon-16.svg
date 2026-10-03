@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16.00 16.00"
+     role="img" aria-label="Propto">
+  <title>Propto</title>
+  <path d="M2 7.5 8 2.5l6 5" fill="none" stroke="#CC1B1B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="3" y="11" width="2" height="3" fill="#CC1B1B"/>
+<rect x="7" y="9" width="2" height="5" fill="#CC1B1B"/>
+<rect x="11" y="10" width="2" height="4" fill="#CC1B1B"/>
+</svg>

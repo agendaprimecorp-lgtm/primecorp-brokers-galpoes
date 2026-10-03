@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Propto · Visita terminou, anúncio pronto</title>
+<meta name="description" content="Captação inteligente de imóveis no celular: roteiro guiado de fotos, voz e IA. Saia da visita com landing page, PDF e pacote para o sistema da imobiliária.">
+<meta property="og:title" content="Propto · Visita terminou, anúncio pronto">
+<meta property="og:description" content="Roteiro guiado de fotos, voz e IA para corretores, imobiliárias e proprietários.">
+<meta property="og:image" content="/icons/appicon-512.png">
+<meta name="theme-color" content="#0F1720">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<script>/* links de confirmação, convite e nova senha chegam aqui: leva para o app */ if (/(confirmation|invite|recovery|email_change)_token=|access_token=/.test(location.hash)) location.replace("/app" + location.hash);</script>
+<style>
+:root{--red:#CC1B1B;--red-d:#E8443F;--ink:#0F1720;--deep:#141C25;--deeper:#0B1118;--paper:#F7F8F9;--g300:#C2C9D2;--g700:#626C79;--line:#E3E6E9}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;line-height:1.5}
+.in{max-width:1040px;margin:0 auto;padding-inline:20px}
+h1,h2,h3{font-family:Sora,"Segoe UI",system-ui,sans-serif;letter-spacing:-.03em;text-wrap:balance}
+header{background:linear-gradient(180deg,var(--deep),var(--deeper));color:var(--paper);padding-block:22px 72px}
+.nav{display:flex;justify-content:space-between;align-items:center;gap:12px}.nav img{height:30px}
+.nav a{color:var(--paper);text-decoration:none;font-weight:600;border:1px solid rgba(255,255,255,.25);padding:9px 14px;border-radius:10px;font-size:15px}
+h1{font-size:clamp(34px,6.4vw,62px);line-height:1.05;margin:56px 0 18px;max-width:15ch}h1 em{font-style:normal;color:var(--red-d)}
+.hero p{color:var(--g300);font-size:clamp(17px,2.2vw,20px);max-width:52ch}
+.btns{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+.btn{display:inline-block;text-decoration:none;font-weight:600;padding:15px 22px;border-radius:12px;font-size:17px}
+.btn.p{background:var(--red-d);color:var(--deeper)}.btn.s{color:var(--paper);border:1px solid rgba(255,255,255,.3)}
+section{padding-block:64px}section h2{font-size:clamp(26px,4vw,38px);margin-bottom:10px}.lead{color:var(--g700);font-size:18px;max-width:60ch;margin-bottom:28px}
+.k{font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--red);margin-bottom:8px;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.c{background:#fff;border-radius:16px;padding:22px;border-top:3px solid var(--red);display:flex;flex-direction:column;gap:8px}
+.c b{font-family:Sora,sans-serif;font-size:13px;letter-spacing:.12em;color:var(--red)}.c h3{font-size:20px}.c p{color:var(--g700)}
+.dark{background:var(--deeper);color:var(--paper)}.dark .lead{color:var(--g300)}.dark .k{color:var(--red-d)}
+.lista{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.lista li{background:var(--deep);border-radius:12px;padding:16px;color:var(--g300)}.lista li b{display:block;color:var(--paper);margin-bottom:4px}
+.planos{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.pl{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:10px}
+.pl.dest{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
+.pl .p{font-family:Sora,sans-serif;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}.pl .p small{font:500 15px Inter;color:var(--g700)}
+.pl p{color:var(--g700);font-size:15px}.pl a{margin-top:auto;text-align:center}
+.pl a.btn{background:var(--red);color:#fff}
+.faq{display:flex;flex-direction:column;gap:10px;max-width:760px}.faq details{background:#fff;border-radius:12px;padding:16px 18px}.faq summary{font-weight:600;cursor:pointer}.faq p{color:var(--g700);margin-top:8px}
+footer{border-top:1px solid var(--line);padding-block:28px 40px}footer .in{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center}footer p{color:var(--g700);font-size:14px;max-width:62ch}footer a{color:var(--g700)}
+</style>
+</head>
+<body>
+<header><div class="in hero">
+  <div class="nav"><img src="/marca/propto-horizontal-negative.svg" alt="Propto"><a href="/app">Entrar</a></div>
+  <h1>Visita terminou, <em>anúncio pronto.</em></h1>
+  <p>O Propto conduz a visita: diz quais fotos tirar, corrige luz e cor na hora, ouve o que você fala e escreve o anúncio. Você sai do imóvel com página para o WhatsApp, apresentação em PDF e o pacote para o sistema da imobiliária.</p>
+  <div class="btns"><a class="btn p" href="/app">Começar agora</a><a class="btn s" href="#planos">Ver planos</a></div>
+</div></header>
+
+<section><div class="in">
+  <span class="k">Como funciona</span><h2>Nenhuma foto esquecida. Nenhum dado faltando.</h2>
+  <p class="lead">O roteiro muda conforme o imóvel: apartamento, casa, galpão, terreno ou fazenda.</p>
+  <div class="cards">
+    <div class="c"><b>01 · ROTEIRO</b><h3>O app guia a visita</h3><p>Lista das fotos obrigatórias para cada tipo de imóvel, com dica de enquadramento. Só finaliza quando estiver tudo lá.</p></div>
+    <div class="c"><b>02 · FOTO E VOZ</b><h3>Qualidade conferida na hora</h3><p>Luz e cor corrigidas no celular. Aviso de foto escura ou tremida. Você fala e a IA descreve o ambiente e preenche os números.</p></div>
+    <div class="c"><b>03 · ENTREGA</b><h3>Anúncio em todos os formatos</h3><p>Página do imóvel para WhatsApp e redes, apresentação em PDF com a sua marca, e-mail e pacote para importar no sistema que você já usa.</p></div>
+  </div>
+</div></section>
+
+<section class="dark"><div class="in">
+  <span class="k">Integração</span><h2>Leva para o sistema da imobiliária</h2>
+  <p class="lead">Exporte em um toque, sem redigitar nada.</p>
+  <ul class="lista">
+    <li><b>XML padrão VRSync</b>O mesmo formato dos portais ZAP e OLX, aceito por muitos sistemas de imobiliária.</li>
+    <li><b>Planilha CSV</b>Para importar em sistemas que leem planilha ou em qualquer CRM.</li>
+    <li><b>Fotos nomeadas por ambiente</b>01-fachada, 02-sala… prontas para subir em qualquer site.</li>
+    <li><b>Texto do anúncio</b>Título, descrição e destaques para copiar e colar.</li>
+  </ul>
+</div></section>
+
+<section id="planos"><div class="in">
+  <span class="k">Planos</span><h2>Para cada jeito de trabalhar</h2>
+  <p class="lead">Pagamento por Pix, boleto ou cartão. Cancele quando quiser.</p>
+  <div class="planos">
+    <div class="pl"><b>Avulso</b><div class="p">R$ 49,90 <small>por anúncio</small></div><p>Para quem tem um imóvel para vender ou alugar. Anúncio completo; os arquivos ficam com você.</p><a class="btn" href="/app">Fazer meu anúncio</a></div>
+    <div class="pl dest"><b>Corretor autônomo</b><div class="p">R$ 99,99 <small>/mês</small></div><p>Com CRECI. Até 30 captações por mês, landing, PDF e exportação.</p><a class="btn" href="/app">Assinar</a></div>
+    <div class="pl"><b>Imobiliária até 5</b><div class="p">R$ 199,99 <small>/mês</small></div><p>Com CRECI PJ. Até 5 usuários entre corretores e captadores, 150 captações por mês.</p><a class="btn" href="/app">Assinar</a></div>
+    <div class="pl"><b>Imobiliária 6 a 10</b><div class="p">R$ 299,99 <small>/mês</small></div><p>Com CRECI PJ. De 6 a 10 usuários, 300 captações por mês.</p><a class="btn" href="/app">Assinar</a></div>
+  </div>
+</div></section>
+
+<section class="dark"><div class="in">
+  <span class="k">Proprietário</span><h2>Vai vender sozinho? Conte com um corretor parceiro.</h2>
+  <p class="lead">Faça o anúncio pelo Propto e, se quiser, a PrimeCorp Brokers confere a documentação, atende os interessados e acompanha até a escritura. Honorários só se fechar negócio: 6% do valor da venda ou 1 aluguel na locação, com contrato assinado por você.</p>
+  <div class="btns"><a class="btn p" href="/app">Anunciar meu imóvel</a></div>
+</div></section>
+
+<section><div class="in">
+  <span class="k">Perguntas</span><h2>Antes de começar</h2>
+  <div class="faq">
+    <details><summary>Preciso baixar na loja de aplicativos?</summary><p>Não. Abra propto.com.br/app no celular e escolha "Instalar app" (Android) ou "Adicionar à Tela de Início" (iPhone). O ícone fica na tela como qualquer aplicativo, com câmera e microfone.</p></details>
+    <details><summary>Quem pode assinar os planos mensais?</summary><p>Corretores e imobiliárias com inscrição no CRECI. Conferimos a inscrição e avisamos no app se houver pendência. Quem não tem CRECI usa o avulso para anunciar o próprio imóvel.</p></details>
+    <details><summary>O endereço aparece no anúncio?</summary><p>Não. A página mostra bairro e cidade; o endereço fica só com você e é informado no agendamento da visita.</p></details>
+    <details><summary>E se eu atrasar o pagamento?</summary><p>Você recebe lembretes e tem 5 dias de carência. Depois disso as novas captações ficam bloqueadas até a regularização, mas seus anúncios e arquivos continuam disponíveis.</p></details>
+    <details><summary>Funciona com o sistema da minha imobiliária?</summary><p>O pacote exportado usa o XML VRSync, o formato dos portais ZAP e OLX, além de planilha e fotos nomeadas. Integrações diretas com sistemas específicos estão no nosso planejamento.</p></details>
+  </div>
+</div></section>
+
+<footer><div class="in">
+  <p>Propto é desenvolvido e operado pela PrimeCorp Brokers. Intermediação imobiliária por corretores inscritos no CRECI-SP. <a href="/termos.html">Termos de Uso e Privacidade</a> · WhatsApp (19) 99805-1985</p>
+  <img src="/marca/propto-horizontal.svg" alt="Propto" style="height:28px">
+</div></footer>
+</body>
+</html>

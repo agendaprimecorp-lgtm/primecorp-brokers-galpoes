@@ -1,0 +1,5 @@
+export default class Anthropic { get messages() { return { create: async (req) => { globalThis.__iaReq = req; const c = req.messages[0].content; const t = typeof c === 'string' ? c : c.map((x) => x.text || '').join('\n'); const nImg = typeof c === 'string' ? 0 : c.filter((x) => x.type === 'image').length;
+  let out;
+  if (t.includes('Item do roteiro')) { const item = (t.match(/Item do roteiro: ([^.]+)\./) || [])[1] || 'Ambiente'; out = JSON.stringify({ ambiente: item, descricao: `Ambiente bem iluminado (${nImg} foto(s)).`, caracteristicas: ['Piso porcelanato', 'Boa iluminação'], dados: { dormitorios: /3 dormit/i.test(t) ? 3 : null, vagas: /2 vagas/i.test(t) ? 2 : null }, foto: { ok: true, problemas: [] } }); }
+  else out = JSON.stringify({ titulo: 'Casa com 3 dormitórios no Jardim Exemplo, Sumaré', subtitulo: 'Pronta para morar, 2 vagas', descricao: 'Casa térrea com 3 dormitórios, sala ampla e cozinha integrada.\n\nQuintal e 2 vagas de garagem. Documentação regular.', destaques: ['3 dormitórios', '2 vagas', 'Quintal'], pendencias: [] });
+  return { content: [{ type: 'text', text: out }] }; } }; } }
