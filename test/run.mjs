@@ -299,5 +299,20 @@ await t("link: fotos, contatos e proxy de imagem protegido", async () => {
     globalThis.__user = null; assert.equal((await api(R("GET", "/api/img-ref?u=" + encodeURIComponent("https://93.184.215.14/f/1.jpg")), ctx())).status, 401, "precisa de login"); globalThis.__user = { email: "contato@primecorpconsultoria.com.br" };
   } finally { globalThis.fetch = orig; }
 });
+
+await t("IA: modelo de reserva, resposta fora do padrão e item do roteiro", async () => {
+  globalThis.__modelosFora = ["claude-sonnet-4-5-20250929"]; globalThis.__modelos = [];
+  const a = await J(await api(R("POST", "/api/ia/ambiente", { fala: "fachada com portão", imagens: ["x".repeat(200)], tipo: "Casa", item: "Fachada" }), ctx()));
+  assert.equal(a.s, 200); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"], "cai no modelo de reserva");
+  assert.match(globalThis.__iaReq.messages[0].content.at(-1).text, /Item do roteiro: Fachada/);
+  globalThis.__modelosFora = [];
+  globalThis.__iaLixo = { ambiente: 42, descricao: "  Sala ampla.  ", caracteristicas: "piso", dados: { dormitorios: "3", vagas: "dois", venda: "850.000" }, foto: { ok: false, problemas: ["escura", 7] } };
+  const b = await J(await api(R("POST", "/api/ia/ambiente", { fala: "sala" }), ctx()));
+  assert.equal(b.j.ambiente, ""); assert.equal(b.j.descricao, "Sala ampla."); assert.deepEqual(b.j.caracteristicas, []); assert.equal(b.j.dados.dormitorios, 3); assert.equal(b.j.dados.vagas, null); assert.equal(b.j.dados.venda, 850000); assert.deepEqual(b.j.foto, { ok: false, problemas: ["escura"] });
+  globalThis.__iaLixo = { nada: true };
+  assert.equal((await api(R("POST", "/api/ia/anuncio", { ficha: { tipo: "Casa" } }), ctx())).status, 502, "anúncio vazio vira erro claro");
+  globalThis.__iaLixo = null;
+  const c = await J(await api(R("POST", "/api/ia/anuncio", { ficha: { tipo: "Casa" }, ambientes: [{ nome: "Sala", fala: "sala ampla" }] }), ctx())); assert.equal(c.s, 200); assert.ok(c.j.titulo && Array.isArray(c.j.destaques));
+});
 console.log(`\n${ok} testes OK`);
 await db.stop(); process.exit(0);

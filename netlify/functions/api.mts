@@ -4,7 +4,7 @@ import { verifyRequestOrigin } from "@netlify/identity";
 import {
   COLECOES, db, json, erro, usuario, papelDe, perfilDe, env,
   listarTudo, salvarRegistro, obterRegistro, registrarEmissao, proximoCodigoPC,
-  chamarIA, chamarIAImagem, lerAnuncio, buscarSeguro, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
+  chamarIA, chamarIAImagem, limparAmbiente, limparAnuncio, lerAnuncio, buscarSeguro, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
 } from "../../shared/servidor.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -162,13 +162,14 @@ export default async (req: Request, context: Context) => {
       const imgs = (Array.isArray(body?.imagens) ? body.imagens : []).map(String).filter((x: string) => x.length > 100 && x.length < 1_500_000).slice(0, 3);
       const fala = String(body?.fala || "").slice(0, 4000);
       if (!imgs.length && fala.length < 3) return erro("Envie ao menos uma foto ou a fala do ambiente.");
-      const r = await chamarIAImagem(PROMPT_AMBIENTE + `\nTipo de imóvel: ${String(body?.tipo || "não informado").slice(0, 60)}.`, fala, imgs, 1200);
+      const r = limparAmbiente(await chamarIAImagem(PROMPT_AMBIENTE + `\nTipo de imóvel: ${String(body?.tipo || "não informado").slice(0, 60)}.` + (body?.item ? ` Item do roteiro: ${String(body.item).slice(0, 60)} (se a foto mostrar outro ambiente, diga em foto.problemas).` : ""), fala, imgs, 1200));
       return json(r);
     }
     if (rota === "ia" && a === "anuncio" && req.method === "POST") {
       const body = await req.json().catch(() => null);
       const txt = JSON.stringify({ ficha: body?.ficha || {}, ambientes: body?.ambientes || [], fala_geral: body?.fala_geral || "" }).slice(0, 24000);
-      const r = await chamarIA(PROMPT_ANUNCIO, txt, 2500);
+      const r = limparAnuncio(await chamarIA(PROMPT_ANUNCIO, txt, 2500));
+      if (!r.titulo && !r.descricao) return erro("A IA não devolveu o anúncio. Tente de novo.", 502);
       return json(r);
     }
 

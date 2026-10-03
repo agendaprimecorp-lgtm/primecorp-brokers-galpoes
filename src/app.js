@@ -142,7 +142,7 @@ const TABS = [
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
 ];
-const PAI = { captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
+const PAI = { visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = "tabs-in c6";
@@ -159,8 +159,9 @@ function header(title) {
 const VIEWS = {};
 function render() {
   if (!usuarioAtual) return;
+  if (route.v !== "visita") pararCamera();
   renderTabs();
-  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe"].includes(route.v)) return;
+  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe", "visita"].includes(route.v)) return;
   try { (VIEWS[route.v] || VIEWS.painel)(); }
   catch (e) { console.error(e); $("main").innerHTML = `<div class="card"><p class="status err">Erro ao exibir esta tela: ${esc(e.message)}</p></div>`; }
 }
@@ -745,11 +746,13 @@ VIEWS.mais = () => {
   $("main").innerHTML = `<div class="card"><div class="menu">
   <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button>' : ""}
   <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
+  <div class="card"><h3>SAC · dúvidas, sugestões e reclamações</h3><p class="hint">Este e-mail aparece para clientes, anunciantes e proprietários nas páginas públicas (anúncio, Sala do Cliente e Sala do Anunciante).</p><div class="row"><b class="grow">${esc(PC.SAC)}</b><button class="sm" id="sacc">Copiar</button></div></div>
   <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
   if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
   $("m8").onclick = () => go({ v: "anuncios" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
+  $("sacc").onclick = () => copiar(PC.SAC);
 };
 const TIPOS_E = { pacote_exportado: "Pacote exportado", teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
@@ -1205,7 +1208,9 @@ VIEWS.captacao = () => {
   <label class="full">Endereço completo (privado, não sai no anúncio)<input data-c="endereco" value="${esc(o.endereco || "")}"></label>
   <label>Proprietário<input data-c="proprietario_nome" value="${esc(o.proprietario_nome || "")}"></label><label>Telefone do proprietário<input data-c="proprietario_tel" type="tel" value="${esc(o.proprietario_tel || "")}"></label>
   <label class="full">Captado por<select data-c="captador" ${ehAdmin() ? "" : "disabled"}>${(usuarios.length ? usuarios : EQUIPE_INICIAL).map((u) => `<option value="${esc(u.email)}" ${String(u.email).toLowerCase() === String(o.captador || "").toLowerCase() ? "selected" : ""}>${esc(u.nome)} · ${esc(creciFmt(u.creci))}</option>`).join("")}</select></label></div></div>
-  <div class="card"><div class="row" style="justify-content:space-between"><h2>Roteiro da visita</h2><span class="chip" id="rtc"></span></div><p class="hint">Fotos obrigatórias para este tipo de imóvel. Toque em 📷 no item: a foto entra já com o nome certo.</p><div class="roteiro" id="rot"></div><input type="file" id="camR" accept="image/*" capture="environment" multiple hidden></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h2>Roteiro da visita</h2><span class="chip" id="rtc"></span></div>
+  <button class="p" id="vguiada">🎥 Visita guiada: câmera ambiente por ambiente</button>
+  <p class="hint">A câmera abre no primeiro ambiente que falta: você fotografa, fala sobre o ambiente, a IA descreve e o app passa para o próximo. Ou toque em 📷 em um item da lista.</p><div class="roteiro" id="rot"></div><input type="file" id="camR" accept="image/*" capture="environment" multiple hidden></div>
   <div class="card"><div class="row" style="justify-content:space-between"><h2>Ambientes</h2><span class="chip" id="nf"></span></div>
   <p class="hint">Para cada ambiente: fotografe (celular na horizontal), toque em <b>Falar</b> e descreva o que vê. A IA nomeia o ambiente, organiza a descrição e confere as fotos.</p>
   <div id="ambs"></div>
@@ -1309,6 +1314,8 @@ VIEWS.captacao = () => {
     document.querySelectorAll("[data-fala]").forEach((x) => x.addEventListener("input", () => { clearTimeout(x._t); x._t = setTimeout(() => salvarFala(x.dataset.fala, x.value), 700); }));
     document.querySelectorAll("[data-mic]").forEach((b) => (b.onclick = () => microfone(b, () => (b.dataset.mic === "fg" ? $("fg") : document.querySelector(`[data-fala="${b.dataset.mic}"]`)))));
   }
+  $("vguiada").onclick = async () => { parar(); clearTimeout(tSalvar); await salvar(lerCampos()); editing = false; go({ v: "visita", id: route.id }); };
+  if (route.gerar) { route.gerar = false; setTimeout(() => $("ga") && $("ga").click(), 300); }
   $("camR").onchange = () => { if (itemFoto) enviarFotos([...$("camR").files], null, itemFoto); };
   $("camN").onchange = () => enviarFotos([...$("camN").files]); $("galN").onchange = () => enviarFotos([...$("galN").files]);
   desenharAmbs();
@@ -1380,6 +1387,106 @@ VIEWS.captacao = () => {
     } catch {}
   };
   medidor(); passos();
+};
+
+/* ---------- Visita guiada: câmera ao vivo, ambiente por ambiente ---------- */
+let CAM = null; // stream da câmera aberta
+function pararCamera() { if (CAM) { try { CAM.getTracks().forEach((t) => t.stop()); } catch {} CAM = null; } if (window.__vozVisita) { try { window.__vozVisita.parar(); } catch {} window.__vozVisita = null; } }
+async function ambientesSalvar(id, fn) { const at = O(id); const ambs = JSON.parse(JSON.stringify(at.captacao?.ambientes || [])); const r = fn(ambs); await store.save("ofertas", { ...at, captacao: { ...(at.captacao || {}), ambientes: ambs }, atualizado: now() }); return r; }
+/** Descrição pela IA com as fotos (até 3) e a fala do ambiente; aplica números falados na ficha. */
+async function descreverAmbiente(oid, aid) {
+  const at = O(oid); const a = (at.captacao?.ambientes || []).find((x) => x.id === aid); if (!a) return null;
+  const imgs = (await Promise.all((a.fotos || []).slice(-3).map((f) => miniDe(f.k)))).filter(Boolean);
+  const r = await api("ia/ambiente", { method: "POST", body: JSON.stringify({ imagens: imgs, fala: a.fala || "", tipo: at.tipo, item: a.nome }) });
+  await ambientesSalvar(oid, (ambs) => { const x = ambs.find((y) => y.id === aid); if (!x) return; if (!x.nome_manual && r.ambiente) x.nome = r.ambiente; x.descricao = r.descricao || x.descricao; x.caracteristicas = r.caracteristicas || []; x.avisos = r.foto && r.foto.ok === false ? r.foto.problemas || [] : []; x.ia_em = now(); });
+  const p = mesclarDados(O(oid), r.dados); if (Object.keys(p).length) await store.save("ofertas", { ...O(oid), ...p, atualizado: now() });
+  return { r, aplicados: Object.keys(p) };
+}
+VIEWS.visita = () => {
+  const o0 = O(route.id); if (!o0) return back();
+  header("Visita guiada" + (o0.codigo ? " · " + o0.codigo : ""));
+  const itens = () => { const r = casarRoteiro(O(route.id)); return [...r.itens.filter((x) => x.obrigatorio), ...r.itens.filter((x) => !x.obrigatorio)]; };
+  let idx = Math.max(0, itens().findIndex((x) => x.obrigatorio && !x.amb)); if (route.idx != null) idx = route.idx;
+  let extraId = null; // ambiente extra em andamento
+  $("main").innerHTML = `<div class="visita">
+    <div class="vtop"><span id="vpos"></span><b id="vnome"></b><small id="vdica"></small></div>
+    <div class="visor"><video id="vid" playsinline muted autoplay></video><div class="vflash" id="vflash"></div><p class="vmsg" id="vmsg">Abrindo a câmera…</p>
+      <button class="obt" id="obt" aria-label="Tirar foto"></button><span class="vcont" id="vcont"></span></div>
+    <label class="btn sm" id="vfb" hidden><input type="file" id="vfile" accept="image/*" capture="environment" multiple hidden>📷 Usar a câmera do celular</label>
+    <div class="thumbs" id="vthumbs"></div>
+    <div class="card vcard"><div class="row"><button class="mic grow" id="vmic">🎙 Falar sobre este ambiente</button></div>
+      <textarea id="vfala" rows="2" placeholder="O que tem neste ambiente? Acabamento, tamanho, estado, diferenciais…"></textarea>
+      <p class="desc" id="vdesc" hidden></p><p class="note" id="vprob" hidden></p><p class="status" id="vst"></p></div>
+    <div class="row vnav"><button id="vant">‹ Anterior</button><button class="grow p" id="vprox">Próximo ambiente ›</button></div>
+    <div class="row"><button class="sm" id="vextra">+ Ambiente extra</button><button class="sm g" id="vfim">Concluir visita</button></div></div>`;
+  const amb = () => { const it = itens()[idx]; const at = O(route.id); if (extraId) return (at.captacao?.ambientes || []).find((a) => a.id === extraId) || null; return it && it.amb ? (at.captacao?.ambientes || []).find((a) => a.id === it.amb.id) : null; };
+  const desenhar = () => {
+    const L = itens(); const it = L[idx]; const a = amb(); const falt = L.filter((x) => x.obrigatorio && !x.amb).length;
+    $("vpos").textContent = extraId ? "Ambiente extra" : `${idx + 1} de ${L.length} · ${falt ? falt + " obrigatória(s) faltando" : "obrigatórias completas ✓"}`;
+    $("vnome").textContent = extraId ? (a?.nome || "Ambiente extra") : it ? it.nome + (it.obrigatorio ? "" : " (opcional)") : "Roteiro concluído";
+    $("vdica").textContent = extraId ? "Fotografe e fale: a IA dá o nome do ambiente." : it ? it.dica : "Toque em Concluir visita para gerar o anúncio.";
+    const fotos = a?.fotos || []; $("vcont").textContent = fotos.length ? fotos.length + " foto(s)" : "";
+    $("vthumbs").innerHTML = fotos.map((f) => `<div class="th"><img src="${fotoURL(f.k)}" alt=""></div>`).join("");
+    const fa = $("vfala"); if (document.activeElement !== fa) fa.value = a?.fala || "";
+    $("vdesc").hidden = !a?.descricao; $("vdesc").textContent = a?.descricao || "";
+    $("vprob").hidden = !(a?.avisos || []).length; $("vprob").textContent = (a?.avisos || []).length ? "⚠ " + a.avisos.join(" · ") : "";
+    $("vant").disabled = idx === 0 && !extraId; $("vprox").textContent = idx >= L.length - 1 && !extraId ? "Concluir visita ✓" : fotos.length || !it?.obrigatorio || extraId ? "Próximo ambiente ›" : "Pular por enquanto ›";
+  };
+  const garantirAmb = async () => {
+    const a = amb(); if (a) return a.id; const it = itens()[idx]; const id = uid("a");
+    if (extraId) return extraId;
+    await ambientesSalvar(route.id, (ambs) => ambs.push({ id, nome: it.nome, roteiro: it.id, nome_manual: true, fotos: [], fala: "", criado: now() }));
+    return id;
+  };
+  const st = (m, err) => { $("vst").className = "status" + (err ? " err" : ""); $("vst").textContent = m || ""; };
+  let descrevendo = false, deNovo = false;
+  const descrever = async () => { const a = amb(); if (!a) return; if (descrevendo) { deNovo = true; return; } descrevendo = true; st("IA descrevendo o ambiente…");
+    try { const r = await descreverAmbiente(route.id, a.id); st(r?.aplicados.length ? "Dados da fala aplicados: " + r.aplicados.map((k) => PC.CAMPOS[k]?.[0] || k).join(", ") : ""); } catch (e) { st("IA indisponível agora: " + e.message + ". Siga a visita; dá para descrever depois.", true); }
+    descrevendo = false; if ($("vdesc")) desenhar(); if (deNovo) { deNovo = false; descrever(); } };
+  const registrar = async (files) => {
+    const aid = await garantirAmb(); let n = 0;
+    for (const f of files) { st("Tratando e enviando a foto…");
+      try { const r = await tratarFoto(f); const up = await api("fotos", { method: "POST", body: JSON.stringify({ oferta: route.id, jpeg_base64: await blobB64(r.blob) }) }); MINI[up.k] = r.mini; await ambientesSalvar(route.id, (ambs) => { const x = ambs.find((y) => y.id === aid); if (x) x.fotos = [...(x.fotos || []), { k: up.k, w: r.w, h: r.h, avisos: r.avisos, em: now() }]; }); n++; if (r.avisos.length) toast(r.avisos.join(" ")); }
+      catch (e) { st("Foto não enviada: " + e.message, true); } }
+    desenhar(); if (n) descrever();
+  };
+  // câmera ao vivo (com alternativa da câmera nativa)
+  const abrir = async () => {
+    pararCamera();
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("sem suporte");
+      CAM = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      const v = $("vid"); if (!v) return pararCamera(); v.srcObject = CAM; await v.play().catch(() => {}); $("vmsg").hidden = true; $("obt").disabled = false;
+    } catch (e) { $("vmsg").textContent = e && e.name === "NotAllowedError" ? "Câmera bloqueada: libere nas configurações do navegador ou use a câmera do celular abaixo." : "Câmera ao vivo indisponível: use a câmera do celular abaixo."; $("vfb").hidden = false; $("obt").disabled = true; }
+  };
+  $("obt").onclick = async () => {
+    const v = $("vid"); if (!CAM || !v.videoWidth) return;
+    const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
+    $("vflash").classList.remove("on"); void $("vflash").offsetWidth; $("vflash").classList.add("on");
+    const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.92)); await registrar([new File([b], "foto.jpg", { type: "image/jpeg" })]);
+  };
+  $("vfile").onchange = () => registrar([...$("vfile").files]);
+  // fala
+  const salvarFala = async (txt) => { const aid = await garantirAmb(); await ambientesSalvar(route.id, (ambs) => { const x = ambs.find((y) => y.id === aid); if (x) x.fala = txt; }); };
+  $("vfala").addEventListener("input", () => { clearTimeout($("vfala")._t); $("vfala")._t = setTimeout(() => salvarFala($("vfala").value), 700); });
+  $("vfala").addEventListener("change", () => { salvarFala($("vfala").value).then(descrever); });
+  $("vmic").onclick = () => {
+    const b = $("vmic");
+    if (window.__vozVisita) { window.__vozVisita.parar(); return; }
+    if (!vozDisponivel()) { $("vfala").focus(); toast("Use o microfone do teclado para ditar."); return; }
+    b.classList.add("on"); b.textContent = "■ Parar e descrever";
+    window.__vozVisita = ditar({ aoTexto: (t) => { const fa = $("vfala"); if (!fa) return; fa.value = (fa.value ? fa.value.replace(/\s+$/, "") + " " : "") + t; },
+      aoFim: async () => { window.__vozVisita = null; const bb = $("vmic"); if (!bb) return; bb.classList.remove("on"); bb.textContent = "🎙 Falar sobre este ambiente"; await salvarFala($("vfala").value); descrever(); },
+      aoErro: (e) => { window.__vozVisita = null; const bb = $("vmic"); if (bb) { bb.classList.remove("on"); bb.textContent = "🎙 Falar sobre este ambiente"; } toast(e === "not-allowed" ? "Libere o microfone para este site." : "Ditado indisponível: use o microfone do teclado."); } });
+  };
+  const mudar = async (d) => { if (window.__vozVisita) window.__vozVisita.parar(); const fa = $("vfala"); if (fa && fa.value !== (amb()?.fala || "")) await salvarFala(fa.value);
+    const L = itens(); if (extraId) { extraId = null; desenhar(); return; } if (d > 0 && idx >= L.length - 1) return concluir(); idx = Math.max(0, Math.min(L.length - 1, idx + d)); route.idx = idx; st(""); desenhar(); };
+  $("vprox").onclick = () => mudar(1); $("vant").onclick = () => mudar(-1);
+  $("vextra").onclick = async () => { const id = uid("a"); await ambientesSalvar(route.id, (ambs) => ambs.push({ id, nome: "Ambiente extra", fotos: [], fala: "", criado: now() })); extraId = id; st(""); desenhar(); };
+  const concluir = () => { pararCamera(); const falt = itens().filter((x) => x.obrigatorio && !x.amb); if (falt.length) toast("Faltaram: " + falt.map((x) => x.nome).join(", ") + ". Você pode completar depois."); route.idx = null; const prev = stack[stack.length - 1]; const temFotos = (O(route.id)?.captacao?.ambientes || []).some((x) => (x.fotos || []).length); if (prev && prev.v === "captacao" && temFotos) prev.gerar = true; back(); };
+  $("vfim").onclick = concluir;
+  editing = true; // salvar não redesenha a tela (a câmera continua aberta)
+  desenhar(); abrir();
 };
 
 /* ---------- Anúncios publicados ---------- */

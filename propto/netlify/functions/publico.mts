@@ -59,7 +59,7 @@ ${fatos.length ? `<div class="fatos">${fatos.map((v) => `<div><b>${esc(v[0])}</b
 ${(a.destaques || []).length ? `<h2>Destaques</h2><ul class="dest">${a.destaques.map((d: string) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
 ${grupos.length ? `<h2>Ambientes</h2>${grupos.map((g) => `<div class="amb"><h3>${esc(g.nome)}</h3>${ambDesc[g.nome] ? `<p>${esc(ambDesc[g.nome])}</p>` : ""}<div class="gal">${g.itens.map((i) => `<img loading="lazy" src="${img(i)}" alt="${esc(g.nome)}" data-i="${i}">`).join("")}</div></div>`).join("")}` : ""}
 <div class="cor" id="contato">${quem}${c.whatsapp ? `<span>WhatsApp ${esc(c.whatsapp)}</span>` : ""}</div>
-<p class="nota">Informações sujeitas a confirmação na visita e na documentação do imóvel. Endereço informado no agendamento. Ref. ${esc(a.codigo)}.</p>
+<p class="nota">Informações sujeitas a confirmação na visita e na documentação do imóvel. Endereço informado no agendamento. Ref. ${esc(a.codigo)}.<br>Dúvidas, sugestões ou reclamações: <a href="mailto:sac@primecorpconsultoria.com.br">sac@primecorpconsultoria.com.br</a></p>
 <p class="feito"><img src="/logo-escuro.png" alt="PrimeCorp Brokers" style="width:120px"> · Tecnologia <img src="/marca/propto-horizontal.svg" alt="Propto"></p>
 </div>
 ${wa ? `<div class="cta"><a href="${wa}" target="_blank" rel="noopener">Falar pelo WhatsApp</a></div>` : ""}

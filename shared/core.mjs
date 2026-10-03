@@ -1,5 +1,6 @@
 /* ===== Núcleo: formatação, checagens e PDF (compartilhado entre o app e o teste em Node) ===== */
 const PC = {};
+PC.SAC = 'sac@primecorpconsultoria.com.br'; // dúvidas, sugestões e reclamações
 
 PC.parseBR = function (v) {
   if (v === null || v === undefined) return null;

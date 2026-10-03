@@ -45,7 +45,8 @@ function tela(p, msg) {
   <div class="card"><button class="p" id="env">${p.aceito ? "Enviar correções" : p.perguntas.length ? "Enviar informações e autorização" : "Aceitar e enviar"}</button>
   <p class="hint">Você pode enviar só as informações agora e autorizar depois.</p><div class="status" id="st"></div></div>
   <div class="card"><h3>Corretor</h3><p>${esc(p.corretor?.nome || "Rodrigo França Viana")} · ${esc(p.corretor?.creci || "CRECI-SP 297692")}</p><p class="hint">${esc([p.corretor?.whatsapp, p.corretor?.email].filter(Boolean).join(" · "))}</p>
-  <p class="hint">Seus dados são usados apenas para esta intermediação (LGPD). O cliente final não é identificado nesta página.</p></div>`;
+  <p class="hint">Seus dados são usados apenas para esta intermediação (LGPD). O cliente final não é identificado nesta página.</p>
+  <p class="hint">Dúvidas, sugestões ou reclamações: <a href="mailto:sac@primecorpconsultoria.com.br">sac@primecorpconsultoria.com.br</a></p></div>`;
   const doc = $("documento"); if (doc) doc.addEventListener("input", (e) => (e.target.value = mascaraDoc(e.target.value)));
   $("env").onclick = async () => {
     const st = $("st"); st.className = "status";

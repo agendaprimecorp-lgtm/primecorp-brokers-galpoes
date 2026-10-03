@@ -320,6 +320,7 @@ VIEWS.conta = async () => {
   <div class="grid"><label>Número<input id="cn" value="${esc(c.creci?.numero || "")}"></label><label>UF<select id="cu">${UFS.map((u) => `<option ${u === (c.creci?.uf || "SP") ? "selected" : ""}>${u}</option>`).join("")}</select></label></div>
   <label>Carteira ou certidão (foto ou PDF)<input type="file" id="cd" accept="image/jpeg,application/pdf"></label><button id="svc">Enviar para conferência</button><p class="status" id="stc"></p></div>` : ""}
   ${c.tipo === "imobiliaria" && c.papel === "dono" ? `<div class="card"><h3>Equipe</h3><p class="hint">Convide corretores e captadores pelo e-mail. Eles criam a conta no app com esse e-mail e entram direto na sua equipe.</p><div id="eq" class="list"></div><div class="row"><input id="ce" type="email" class="grow" placeholder="email@corretor.com"><button id="cv">Convidar</button></div><p class="status" id="ste"></p></div>` : ""}
+  <div class="card"><h3>SAC</h3><p class="hint">Dúvidas, sugestões e reclamações: <a href="mailto:sac@primecorpconsultoria.com.br">sac@primecorpconsultoria.com.br</a></p></div>
   <div class="card"><button id="sair">Sair</button></div>`;
   ligarAvisos();
   $("svp").onclick = async () => { try { await PUT("perfil", { nome: $("nm").value, whatsapp: $("wh").value, cor: $("cor").value }); $("stp").className = "status ok"; $("stp").textContent = "Salvo."; await carregarEu(); } catch (e) { $("stp").className = "status err"; $("stp").textContent = e.message; } };

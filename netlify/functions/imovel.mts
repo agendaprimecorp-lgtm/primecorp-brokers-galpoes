@@ -61,7 +61,7 @@ ${(a.fatos || []).length ? `<div class="fatos">${a.fatos.map((v: any) => `<div><
 ${(a.destaques || []).length ? `<h2>Destaques</h2><ul class="dest">${a.destaques.map((d: string) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
 ${grupos.length ? `<h2>Ambientes</h2>${grupos.map((g) => `<div class="amb"><h3>${esc(g.nome)}</h3>${ambDesc[g.nome] ? `<p>${esc(ambDesc[g.nome])}</p>` : ""}<div class="gal">${g.itens.map((x) => `<img loading="lazy" src="${img(x.i)}" alt="${esc(g.nome)}" data-i="${x.i}">`).join("")}</div></div>`).join("")}` : ""}
 <div class="cor" id="contato"><b>${esc(a.corretor?.nome || "PrimeCorp Brokers")}</b><span>Corretor(a) de imóveis${a.corretor?.creci ? " · " + esc(a.corretor.creci) : ""} · PrimeCorp Brokers</span>${a.corretor?.whatsapp ? `<span>WhatsApp ${esc(a.corretor.whatsapp)}</span>` : ""}</div>
-<p class="nota">Informações fornecidas pelo proprietário e sujeitas a confirmação em visita e na documentação do imóvel. Endereço informado no agendamento da visita. Ref. ${esc(a.codigo || "")}.</p>
+<p class="nota">Informações fornecidas pelo proprietário e sujeitas a confirmação em visita e na documentação do imóvel. Endereço informado no agendamento da visita. Ref. ${esc(a.codigo || "")}.<br>Dúvidas, sugestões ou reclamações: <a href="mailto:sac@primecorpconsultoria.com.br">sac@primecorpconsultoria.com.br</a></p>
 <p class="feito">Anúncio criado com <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img src="/marca/propto-horizontal.svg" alt="Propto"></a></p>
 </div>
 ${wa ? `<div class="cta"><a href="${wa}" target="_blank" rel="noopener">Agendar visita pelo WhatsApp</a></div>` : ""}

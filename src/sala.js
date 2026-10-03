@@ -15,7 +15,8 @@ function rodape(s) {
   const c = s && s.contato;
   return `<div class="card"><h3>Seu corretor</h3><p>${esc(c?.nome || "Rodrigo França Viana")} · ${esc(c?.creci || "CRECI-SP 297692")}</p>
   <p class="hint">${esc([c?.whatsapp, c?.email].filter(Boolean).join(" · "))}</p>
-  <p class="hint">As informações são preliminares e estão sujeitas a confirmação em vistoria e documentação. Seus dados são usados apenas para esta intermediação (LGPD).</p></div>`;
+  <p class="hint">As informações são preliminares e estão sujeitas a confirmação em vistoria e documentação. Seus dados são usados apenas para esta intermediação (LGPD).</p>
+  <p class="hint">Dúvidas, sugestões ou reclamações: <a href="mailto:sac@primecorpconsultoria.com.br">sac@primecorpconsultoria.com.br</a></p></div>`;
 }
 function telaErro(msg) { $("main").innerHTML = `<div class="card"><h2>Link indisponível</h2><p>${esc(msg)}</p></div>`; }
 

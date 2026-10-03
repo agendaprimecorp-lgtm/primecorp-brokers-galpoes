@@ -149,9 +149,34 @@ export async function chamarIAImagem(prompt, texto, imagens = [], maxTokens = 15
     ...imagens.slice(0, 4).map((b64) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } })),
     { type: "text", text: `${prompt}\n\nFALA DO CORRETOR:\n"""\n${texto || "(sem fala)"}\n"""` },
   ];
-  const r = await client.messages.create({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] });
+  const r = await criarComReserva(client, model, maxTokens, [{ role: "user", content }]);
   const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
   return extrairJSON(out);
+}
+/** Chama o modelo; se o modelo configurado não existir ou estiver sobrecarregado, tenta os de reserva. */
+export const MODELOS_RESERVA = ["claude-sonnet-4-5", "claude-haiku-4-5"];
+async function criarComReserva(client, model, maxTokens, messages) {
+  const fila = [model, ...MODELOS_RESERVA.filter((m) => m !== model)]; let ult;
+  for (const m of fila) {
+    try { return await client.messages.create({ model: m, max_tokens: maxTokens, messages }); }
+    catch (e) { ult = e; const st = e?.status || 0; const msg = String(e?.message || ""); if (!(st === 404 || st === 529 || st === 503 || (st === 400 && /model/i.test(msg)))) throw e; }
+  }
+  throw ult;
+}
+const txt = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+const lista = (v, n, m) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, m)).slice(0, n) : []);
+const numOuNull = (v) => { const x = typeof v === "number" ? v : Number(String(v ?? "").replace(/\./g, "").replace(",", ".")); return Number.isFinite(x) && x > 0 ? x : null; };
+/** Garante o formato da resposta da IA para um ambiente (evita tela quebrada com resposta fora do padrão). */
+export function limparAmbiente(r) {
+  const d = r && typeof r.dados === "object" && r.dados ? r.dados : {};
+  const dados = {}; for (const k of ["dormitorios", "suites", "banheiros", "vagas", "construida", "terreno", "pe_direito", "docas", "area_ha", "aluguel", "venda", "condominio", "iptu"]) dados[k] = numOuNull(d[k]);
+  const f = r && typeof r.foto === "object" && r.foto ? r.foto : {};
+  return { ambiente: txt(r?.ambiente, 60), descricao: txt(r?.descricao, 600), caracteristicas: lista(r?.caracteristicas, 8, 60), dados, foto: { ok: f.ok !== false, problemas: lista(f.problemas, 5, 80) } };
+}
+export function limparAnuncio(r) {
+  const d = r && typeof r.dados === "object" && r.dados ? r.dados : {}; const dados = {};
+  for (const [k, v] of Object.entries(d)) dados[k] = ["aptidao", "agua", "benfeitorias", "iptu_periodo", "disponibilidade", "documentacao"].includes(k) ? (typeof v === "string" ? v.slice(0, 200) : null) : numOuNull(v);
+  return { titulo: txt(r?.titulo, 90), subtitulo: txt(r?.subtitulo, 120), descricao: txt(r?.descricao, 2000), destaques: lista(r?.destaques, 10, 80), dados, pendencias: lista(r?.pendencias, 6, 120) };
 }
 
 export const PROMPT_AMBIENTE = `Você ajuda um corretor de imóveis brasileiro que está captando um imóvel no local. Recebe foto(s) de UM ambiente e o que o corretor falou sobre ele (transcrição de voz, pode ter erros).
@@ -167,11 +192,7 @@ REGRAS: NUNCA invente números, materiais ou itens de lazer. Não cite rua, núm
 export async function chamarIA(prompt, texto, maxTokens = 4000) {
   const client = new Anthropic(); // credenciais do AI Gateway da Netlify ou ANTHROPIC_API_KEY própria
   const model = env("MODELO_IA") || "claude-sonnet-4-5-20250929";
-  const r = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    messages: [{ role: "user", content: `${prompt}\n\nTEXTO:\n"""\n${texto}\n"""` }],
-  });
+  const r = await criarComReserva(client, model, maxTokens, [{ role: "user", content: `${prompt}\n\nTEXTO:\n"""\n${texto}\n"""` }]);
   const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
   return extrairJSON(out);
 }
