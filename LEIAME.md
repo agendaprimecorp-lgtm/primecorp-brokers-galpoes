@@ -171,3 +171,24 @@ A Zoe atende clientes, proprietários, corretores e prefeituras no WhatsApp da P
 
 Custos: mensagens dentro da janela de 24 h após o cliente escrever não são cobradas pela Meta; modelos (fora da janela) são cobrados por mensagem. A IA da Zoe usa os mesmos créditos do AI Gateway da Netlify.
 Testes: `npm test` (57 testes, incluindo 17 de verificação e Zoe) e `node test/e2e9.mjs` com o servidor de teste.
+
+
+### Usar o número atual do WhatsApp Business (+55 87 98131-5053) — coexistência
+O número continua no app WhatsApp Business do celular **e** passa a ser atendido pela Zoe ao mesmo tempo (recurso oficial da Meta, "coexistência"). Requisitos: app WhatsApp Business 2.24.17 ou mais novo, número em uso há mais de 7 dias, Página do Facebook e Meta Business da PrimeCorp com acesso de administrador.
+- A Meta só libera a coexistência por um **parceiro oficial** (Tech Provider/BSP). O sistema já fala com a **360dialog** (`WHATSAPP_PROVEDOR=360dialog`); com outro parceiro que entregue acesso direto à Cloud API da Meta, use o modo padrão (`meta`).
+- Conexão: no painel do parceiro escolha "conectar número do WhatsApp Business app", faça login no Facebook, escaneie o QR code pelo app do celular e aceite compartilhar o histórico (até 6 meses de conversas individuais; grupos não sincronizam). Mantenha o app aberto até terminar.
+- No app do celular ficam desligados: mensagens temporárias, visualização única, localização em tempo real e listas de transmissão. Abra o app pelo menos a cada 14 dias para não desconectar.
+- **Você responde pelo celular → a Zoe pausa naquela conversa** (o sistema recebe a cópia da sua mensagem). Sem nova resposta sua em 12 h (ajustável em Mais → Zoe → Conhecimento), ela retoma quando o cliente escrever de novo.
+- Mensagens que você manda pelo app continuam grátis; as da Zoe seguem a tabela da Cloud API (respostas dentro da janela de 24 h são gratuitas).
+
+Variáveis no modo 360dialog:
+
+| Variável | Valor |
+|---|---|
+| `WHATSAPP_PROVEDOR` | `360dialog` |
+| `WHATSAPP_TOKEN` | API key do número no painel da 360dialog |
+| `WHATSAPP_WEBHOOK_CHAVE` | Frase aleatória com 32+ caracteres |
+| `WHATSAPP_NUMERO` | `(87) 98131-5053` |
+| `ZOE_EQUIPE` | WhatsApp pessoais de Rodrigo e Joselia (não o número da empresa) |
+
+Webhook a cadastrar na 360dialog: `https://SEU-SITE/whatsapp/webhook?chave=<WHATSAPP_WEBHOOK_CHAVE>`.
