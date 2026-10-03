@@ -12,12 +12,24 @@ export function assinaturaValida(corpo, cabecalho, segredo) {
   return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido);
 }
 
+/** Alternativa para provedores que não assinam o webhook: chave longa na URL (?chave=…). */
+export function chaveValida(chave) {
+  const esp = env("WHATSAPP_WEBHOOK_CHAVE") || "";
+  if (esp.length < 24 || !chave || chave.length !== esp.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(esp), Buffer.from(chave));
+}
+
 /** Extrai as mensagens recebidas do payload do webhook. */
 export function lerEntradas(payload) {
   const out = [];
   for (const e of payload?.entry || []) for (const ch of e.changes || []) {
-    const v = ch.value || {}; if (ch.field && ch.field !== "messages") continue;
+    const v = ch.value || {}; if (ch.field && !["messages", "smb_message_echoes"].includes(ch.field)) continue;
     const nomes = Object.fromEntries((v.contacts || []).map((c) => [c.wa_id, c.profile?.name || ""]));
+    // Coexistência: mensagens que a equipe enviou pelo app WhatsApp Business do celular
+    for (const m of v.message_echoes || []) {
+      const texto = m.type === "text" ? m.text?.body || "" : m[m.type]?.caption || `[${m.type} enviado pelo celular]`;
+      out.push({ id: m.id, de: m.to, eco: true, t: new Date(Number(m.timestamp) * 1000 || Date.now()).toISOString(), texto: String(texto).slice(0, 4000), midia: m.type === "text" ? null : m.type, numero_empresa: v.metadata?.phone_number_id || "" });
+    }
     for (const m of v.messages || []) {
       let texto = "", midia = null;
       if (m.type === "text") texto = m.text?.body || "";
@@ -31,10 +43,14 @@ export function lerEntradas(payload) {
   return out;
 }
 
+/** Provedor: "meta" (Cloud API direta, padrão) ou "360dialog" (parceiro oficial; permite coexistência com o app do celular). */
+export const provedor = () => (env("WHATSAPP_PROVEDOR") || "meta").toLowerCase();
 async function post(corpo) {
-  const id = env("WHATSAPP_PHONE_ID"), tok = env("WHATSAPP_TOKEN");
-  if (!id || !tok) throw new Error("WhatsApp não configurado (WHATSAPP_PHONE_ID / WHATSAPP_TOKEN).");
-  const r = await (globalThis.__fetchWA || fetch)(`${GRAPH()}/${id}/messages`, { method: "POST", headers: { authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", ...corpo }) });
+  const tok = env("WHATSAPP_TOKEN"); const p360 = provedor() === "360dialog"; const id = env("WHATSAPP_PHONE_ID");
+  if (!tok || (!p360 && !id)) throw new Error("WhatsApp não configurado (WHATSAPP_TOKEN" + (p360 ? ")." : " / WHATSAPP_PHONE_ID)."));
+  const url = p360 ? (env("WHATSAPP_API_BASE") || "https://waba-v2.360dialog.io") + "/messages" : `${GRAPH()}/${id}/messages`;
+  const auth = p360 ? { "D360-API-KEY": tok } : { authorization: `Bearer ${tok}` };
+  const r = await (globalThis.__fetchWA || fetch)(url, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", ...(corpo.status ? {} : { recipient_type: "individual" }), ...corpo }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(j?.error?.message || `WhatsApp recusou (${r.status})`); e.codigo = j?.error?.code; throw e; }
   return j?.messages?.[0]?.id || null;

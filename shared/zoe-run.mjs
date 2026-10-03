@@ -41,12 +41,16 @@ export async function processarConversa(wa, { base, esperaMs = 2500 } = {}) {
   if (conv0.processando && Date.now() - Date.parse(conv0.processando) < 60e3) return { pulou: "em andamento" };
   const equipe = !!conv0.equipe;
   const ctx = await criarContexto({ base });
-  if (!equipe && (conv0.modo === "humano" || ctx.cfg.zoe.ativa === false)) return { pulou: "atendimento humano" };
+  const retomarH = Number(ctx.cfg.zoe.retomar_h ?? 12); // resposta pelo celular pausa a Zoe; sem nova resposta humana nesse prazo, ela retoma
+  const ultHumano = [...(conv0.msgs || [])].reverse().find((m) => m.de === "humano");
+  const humanoAtivo = conv0.modo === "humano" && !(conv0.modo_por === "celular" && retomarH > 0 && ultHumano && Date.now() - Date.parse(ultHumano.t) > retomarH * 3600e3);
+  if (!equipe && (humanoAtivo || ctx.cfg.zoe.ativa === false)) return { pulou: "atendimento humano" };
   const hoje = (conv0.msgs || []).filter((m) => m.de === "zoe" && Date.now() - Date.parse(m.t) < 864e5).length;
   if (!equipe && hoje >= 60) return { pulou: "limite diário" };
   await salvarRegistro("conversas", wa, { ...conv0, processando: new Date().toISOString() });
 
   const conv = { ...JSON.parse(JSON.stringify(conv0)), id: wa };
+  if (conv.modo === "humano" && !humanoAtivo && !equipe) { conv.modo = "zoe"; conv.modo_por = "retomada automática"; }
   let r;
   try { r = await responder(ctx, conv, { equipe }); }
   catch (e) { console.error("Zoe:", e); ctx.avisar(`Zoe com erro na conversa ${conv.nome || "+" + wa}: ${e?.message || e}`, conv, true); r = { texto: "Tive um problema técnico agora. Já avisei a equipe, que responde por aqui em breve.", botoes: [], acoes: ["erro"] }; conv.precisa_humano = { motivo: "erro técnico da Zoe", em: new Date().toISOString() }; }
@@ -57,7 +61,7 @@ export async function processarConversa(wa, { base, esperaMs = 2500 } = {}) {
   // relê para não perder mensagens que chegaram durante a resposta
   const atual = (await obterRegistro("conversas", wa)) || conv0;
   const novas = (atual.msgs || []).filter((m) => !(conv0.msgs || []).some((x) => x.id === m.id));
-  const fin = { ...atual, contato: conv.contato || atual.contato || null, nome: conv.nome || atual.nome, briefings: conv.briefings || atual.briefings, precisa_humano: conv.precisa_humano ?? atual.precisa_humano ?? null, modo: conv.modo || atual.modo || "zoe", optout: !!(conv.optout || atual.optout), processando: null, msgs: conv0.msgs || [] };
+  const fin = { ...atual, contato: conv.contato || atual.contato || null, nome: conv.nome || atual.nome, briefings: conv.briefings || atual.briefings, precisa_humano: conv.precisa_humano ?? atual.precisa_humano ?? null, modo: atual.modo === "humano" && atual.modo_em !== conv0.modo_em ? "humano" : conv.modo || "zoe", optout: !!(conv.optout || atual.optout), processando: null, msgs: conv0.msgs || [] };
   if (r.texto) anexarMsg(fin, { id: enviadoId || "z" + Date.now().toString(36), de: "zoe", t: new Date().toISOString(), texto: r.texto + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), acoes: r.acoes, ...(falha ? { falha } : {}) });
   for (const m of novas) anexarMsg(fin, m);
   await salvarRegistro("conversas", wa, fin);
