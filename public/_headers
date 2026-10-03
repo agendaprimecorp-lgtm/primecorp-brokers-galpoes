@@ -11,3 +11,5 @@
   Cache-Control: no-cache
 /app.css
   Cache-Control: no-cache
+/anunciante.js
+  Cache-Control: no-cache

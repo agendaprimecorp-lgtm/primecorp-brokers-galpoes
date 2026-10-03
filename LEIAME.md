@@ -14,6 +14,10 @@ Briefings, ofertas, cruzamento, CRM, Sala do Cliente, relatórios emitidos, back
 | Negócios | Etapas, histórico com data e hora; a ficha PDF só sai a partir de "Termo assinado" |
 | Relatórios emitidos | Tudo o que saiu: teaser, ficha PDF (arquivo guardado), sala, aceite, interesse e coleta |
 | Backup | Download completo, cópia automática diária (30 dias) e restauração |
+| Ficha mínima | Nota de completude por tipo de imóvel (galpão, área, comercial) e perguntas objetivas para o que falta |
+| Pedido ao anunciante | Link (Sala do Anunciante) e PDF editável: o anunciante completa os dados e aceita a autorização de indicação com a divisão de honorários |
+| Comissão | Honorários por negócio (% da venda ou nº de aluguéis), divisão em 2, 3 ou mais partes, quem recebe e repassa, soma travada em 100% |
+| Acordo de divisão | PDF padronizado para todas as partes assinarem (imobiliária, corretor parceiro, PrimeCorp); fica nos Relatórios emitidos |
 | Coleta de alertas | A cada 30 min, lê os e-mails de alerta dos portais e cria ofertas "a revisar" |
 
 ## Publicar (uma vez, cerca de 30 minutos)
@@ -63,6 +67,13 @@ Em **Mais → Configurações**:
 3. Marque "Revisei o termo" e salve.
 
 Enquanto houver `[__]` no texto, o sistema não cria salas.
+
+### 6b. Antes do primeiro pedido ao anunciante e do primeiro acordo
+Em **Mais → Configurações**:
+1. Confira a comissão padrão (venda em %, locação em nº de aluguéis) e os modelos de divisão. Já vêm: Imobiliária + PrimeCorp (2 partes, 50/50), Imobiliária + Corretor parceiro + PrimeCorp (3 partes, 50/25/25), Proprietário direto + PrimeCorp e Proprietário direto + Corretor parceiro + PrimeCorp. Ajuste os percentuais e marque "Conferi".
+2. Preencha os `[__]` dos dois termos de autorização (parceria com imobiliária/corretor e proprietário) e do acordo de divisão; revise com o advogado e marque as revisões.
+
+Sem isso, o sistema não cria pedido ao anunciante nem emite acordo de divisão.
 
 ### 7. No iPhone
 Abra o endereço do site no Safari → Compartilhar → **Adicionar à Tela de Início**. O app abre em tela cheia, com o ícone PrimeCorp.

@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true });
 const p = await ctx.newPage(); const errs = [];
-const watch = (pg) => { pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => m.type() === 'error' && !/fonts|ERR_/.test(m.text()) && errs.push(m.text())); };
+const watch = (pg) => { pg.on('pageerror', e => errs.push(e.message + ' @ ' + (e.stack||'').split('\n').slice(0,3).join(' | '))); pg.on('console', m => m.type() === 'error' && !/fonts|ERR_/.test(m.text()) && errs.push(m.text())); };
 watch(p); await ctx.route('**/fonts.googleapis.com/**', r => r.abort());
 const sh = (n, pg = p) => pg.screenshot({ path: `/tmp/claude-0/e_${n}.png` });
 const W = (ms = 400) => p.waitForTimeout(ms);
@@ -31,7 +31,7 @@ await c.click('[data-c]'); await c.waitForTimeout(800); await sh('10interesse', 
 // Admin
 await p.reload(); await W(1000); await sh('11painel');
 await p.click('.deal'); await W(); await sh('12negocio'); console.log('pdf desabilitado:', await p.$eval('#pdf', e => e.disabled));
-await p.click('[data-e="termo"]'); await W(); const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('#pdf')]); console.log('download', dl.suggestedFilename()); await W(800); await sh('13negocio2');
+await p.click('[data-e="termo"]'); await W(); await p.click('#pdf'); await W(300); console.log('ficha incompleta pede 2º toque:', await p.textContent('#pdf')); const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('#pdf')]); console.log('download', dl.suggestedFilename()); await W(800); await sh('13negocio2');
 await p.click('[data-tab="mais"]'); await p.click('#m3'); await W(800); await sh('14relatorios'); console.log('relatórios:', await p.$$eval('.tag', x => x.map(e => e.textContent)));
 await p.click('[data-tab="mais"]'); await p.click('#m4'); await W(800); await sh('15backup');
 await p.click('[data-tab="contatos"]'); await W(); await sh('16crm');

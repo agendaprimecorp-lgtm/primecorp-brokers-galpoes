@@ -1,7 +1,7 @@
 import PC from "../shared/core.mjs";
 import { jsPDF } from "jspdf";
 import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, requestPasswordRecovery } from "@netlify/identity";
-import { TERMO_PADRAO, TERMO_VERSAO } from "./termo.js";
+import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO } from "./termo.js";
 
 /* ================= Utilidades ================= */
 const $ = (id) => document.getElementById(id);
@@ -37,7 +37,7 @@ async function api(path, opts = {}) {
   if (!r.ok) throw new ErroAPI(j.erro || "Erro " + r.status, r.status);
   return j;
 }
-const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], config: [] };
+const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [] };
 const store = {
   async carregar() { const d = await api("dados"); Object.keys(S).forEach((k) => (S[k] = d[k] || [])); },
   async save(n, o) {
@@ -126,7 +126,7 @@ const TABS = [
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
 ];
-const PAI = { briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", negocio: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
+const PAI = { briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = "tabs-in c5";
@@ -144,7 +144,7 @@ const VIEWS = {};
 function render() {
   if (!usuarioAtual) return;
   renderTabs();
-  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config"].includes(route.v)) return;
+  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao"].includes(route.v)) return;
   try { (VIEWS[route.v] || VIEWS.painel)(); }
   catch (e) { console.error(e); $("main").innerHTML = `<div class="card"><p class="status err">Erro ao exibir esta tela: ${esc(e.message)}</p></div>`; }
 }
@@ -163,10 +163,10 @@ const etapaNome = (e) => (PC.ETAPAS.find((x) => x[0] === e) || [0, e === "perdid
 function fmtIn(f, v) {
   if (v === null || v === undefined || v === "") return "";
   if (Array.isArray(v)) return v.join("\n");
-  if (typeof v === "number") { const money = ["aluguel", "venda", "condominio", "iptu"].includes(f); return PC.nf(v, money ? (Number.isInteger(v) ? 0 : 2) : undefined); }
+  if (typeof v === "number") { const money = ["aluguel", "venda", "condominio", "iptu", "valor_base"].includes(f); return PC.nf(v, money ? (Number.isInteger(v) ? 0 : 2) : undefined); }
   return String(v);
 }
-const OF_FIELDS = ["tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "titulo", "descricao", "diferenciais", "itens"];
+const OF_FIELDS = ["tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "frente", "zoneamento", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "disponibilidade", "documentacao", "titulo", "descricao", "diferenciais", "itens"];
 function fromAI(o) { const r = {}; OF_FIELDS.forEach((f) => { if (o[f] !== undefined && o[f] !== null) r[f] = fmtIn(f, o[f]); }); return r; }
 function ranking(b) { return S.ofertas.filter((o) => o.status !== "descartada").map((o) => { const c = chkOf(o); return Object.assign({ o, c }, PC.score(o, b, c)); }).sort((x, y) => y.score - x.score); }
 function faixaArea(b) { const n = PC.numB(b); if (n.areaMin && n.areaMax) return PC.nf(n.areaMin) + " a " + PC.nf(n.areaMax) + " m²"; if (n.areaMin) return "a partir de " + PC.nf(n.areaMin) + " m²"; if (n.areaMax) return "até " + PC.nf(n.areaMax) + " m²"; return ""; }
@@ -179,6 +179,9 @@ VIEWS.painel = () => {
   const ativos = S.briefings.filter((b) => (b.status || "ativo") === "ativo");
   const novas = S.ofertas.filter((o) => o.status === "nova");
   const salasNovas = S.salas.filter((s) => s.aceite && !s.visto_aceite).length + S.salas.reduce((a, s) => a + (s.interesses || []).filter((i) => !(s.vistos || []).includes(i.codigo)).length, 0);
+  const pedNovos = S.pedidos.filter((p) => p.respondido_em && !p.visto);
+  const comAbertas = abertos.filter((n) => n.comissao).map((n) => PC.calcComissao(n.comissao));
+  const totCom = comAbertas.reduce((a, c) => a + c.total, 0), totPC = comAbertas.reduce((a, c) => a + c.partes.filter(PC.ehPC).reduce((x, p) => x + p.valor, 0), 0);
   const cols = PC.ETAPAS.filter(([k]) => S.negocios.some((n) => n.etapa === k)).map(([k, l]) => {
     const ns = S.negocios.filter((n) => n.etapa === k).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
     return `<div class="col"><h3><span>${l}</span><span class="muted">${ns.length}</span></h3>${ns.map((n) => { const o = O(n.oferta), b = B(n.briefing); return `<button class="deal" data-n="${n.id}"><b>${esc(o ? (o.codigo ? o.codigo + " · " : "") + tituloO(o) : "(oferta removida)")}</b><span>${esc(nomeB(b))}${n.parceiro ? " · " + esc(n.parceiro) : ""}</span></button>`; }).join("")}</div>`;
@@ -186,6 +189,8 @@ VIEWS.painel = () => {
   $("main").innerHTML = `
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
   ${novas.length ? `<button class="card" id="gonovas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot amarelo"></span><span style="flex:1"><b>${novas.length} oferta${novas.length > 1 ? "s" : ""} a revisar</b><br><span class="hint">Confira os dados antes de cruzar com os briefings.</span></span><span>›</span></button>` : ""}
+  ${pedNovos.length ? `<button class="card" id="gopeds" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot verde"></span><span style="flex:1"><b>${pedNovos.length} resposta(s) de anunciante</b><br><span class="hint">Dados completados ou autorizações de indicação recebidas.</span></span><span>›</span></button>` : ""}
+  ${comAbertas.length ? `<div class="card"><h3>Honorários previstos</h3><p><b>${esc(PC.brl(totPC) || "R$ 0")}</b> participação PrimeCorp <span class="hint">· ${esc(PC.brl(totCom) || "R$ 0")} em honorários totais · ${comAbertas.length} negócio(s) com divisão definida</span></p></div>` : ""}
   ${salasNovas ? `<button class="card" id="gosalas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot verde"></span><span style="flex:1"><b>${salasNovas} novidade(s) nas Salas do Cliente</b><br><span class="hint">Aceites de termo e interesses registrados.</span></span><span>›</span></button>` : ""}
   <div class="card"><div class="row" style="justify-content:space-between"><h2>Negócios</h2><button class="sm" id="csv">Exportar CSV</button></div>
   ${cols ? `<div class="kanban">${cols}</div>` : '<p class="empty">Nenhum negócio aberto. Abra um briefing, escolha uma oferta do ranking e envie o teaser ou crie uma Sala do Cliente.</p>'}
@@ -195,15 +200,17 @@ VIEWS.painel = () => {
   document.querySelectorAll("[data-n]").forEach((b) => (b.onclick = () => go({ v: "negocio", id: b.dataset.n })));
   const gn = $("gonovas"); if (gn) gn.onclick = () => go({ v: "ofertas", f: "nova" }, false);
   const gs = $("gosalas"); if (gs) gs.onclick = () => go({ v: "salas" });
+  const gp = $("gopeds"); if (gp) gp.onclick = () => go({ v: "pedidos" });
   $("csv").onclick = exportCSV;
   $("qnova").onclick = () => go({ v: "nova" });
   $("qbrief").onclick = () => go({ v: "editb", id: null });
 };
 async function exportCSV() {
   const q = (s) => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
-  const L = [["Negócio", "Etapa", "Briefing", "Código", "Oferta", "Cidade", "Parceiro/Cliente", "Telefone", "Data", "Evento"].map(q).join(";")];
-  S.negocios.forEach((n) => { const o = O(n.oferta), b = B(n.briefing);
-    (n.log && n.log.length ? n.log : [{ t: n.criado, ev: "" }]).forEach((e) => L.push([n.id, etapaNome(n.etapa), nomeB(b), o ? o.codigo || "" : "", o ? tituloO(o) : "", o ? o.cidade : "", n.parceiro, n.tel, fdt(e.t), e.ev].map(q).join(";"))); });
+  const L = [["Negócio", "Etapa", "Briefing", "Código", "Oferta", "Cidade", "Parceiro/Cliente", "Telefone", "Honorários totais", "Participação PrimeCorp", "Divisão", "Data", "Evento"].map(q).join(";")];
+  S.negocios.forEach((n) => { const o = O(n.oferta), b = B(n.briefing); const cm = n.comissao ? PC.calcComissao(n.comissao) : null;
+    const cmv = cm ? [PC.nf(cm.total, 2), PC.nf(cm.partes.filter(PC.ehPC).reduce((a, p) => a + p.valor, 0), 2), PC.quadroComissao(n.comissao)] : ["", "", ""];
+    (n.log && n.log.length ? n.log : [{ t: n.criado, ev: "" }]).forEach((e) => L.push([n.id, etapaNome(n.etapa), nomeB(b), o ? o.codigo || "" : "", o ? tituloO(o) : "", o ? o.cidade : "", n.parceiro, n.tel, ...cmv, fdt(e.t), e.ev].map(q).join(";"))); });
   await compartilharOuBaixar(new Blob(["﻿" + L.join("\n")], { type: "text/csv" }), "PrimeCorp_Negocios_" + new Date().toISOString().slice(0, 10) + ".csv");
 }
 
@@ -226,7 +233,7 @@ VIEWS.contatos = () => {
   $("ft").onchange = () => { route = { v: "contatos", f: $("ft").value }; render(); };
   $("novo").onclick = () => go({ v: "editc", id: null });
 };
-const CF = [["nome", "Nome", "text", "full"], ["empresa", "Empresa", "text", ""], ["tipo", "Tipo", "sel:" + TIPOS_C.join("|"), ""], ["documento", "CNPJ / CPF / CRECI", "text", ""], ["cargo", "Cargo", "text", ""], ["telefone", "WhatsApp", "tel", ""], ["email", "E-mail", "text", ""], ["cidade", "Cidade", "text", ""], ["origem", "Como chegou", "text", ""], ["obs", "Observações", "area", "full"]];
+const CF = [["nome", "Nome", "text", "full"], ["empresa", "Empresa", "text", ""], ["tipo", "Tipo", "sel:" + TIPOS_C.join("|"), ""], ["documento", "CNPJ / CPF", "text", ""], ["creci", "CRECI (corretor ou imobiliária)", "text", ""], ["cargo", "Cargo", "text", ""], ["telefone", "WhatsApp", "tel", ""], ["email", "E-mail", "text", ""], ["cidade", "Cidade", "text", ""], ["origem", "Como chegou", "text", ""], ["obs", "Observações", "area", "full"]];
 function fieldHTML([k, l, t, cls], val) {
   const v = esc(val == null ? "" : val);
   if (t.startsWith("sel:")) return `<label class="${cls}">${l}<select data-k="${k}">${t.slice(4).split("|").map((o) => `<option ${o === val ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
@@ -429,14 +436,51 @@ VIEWS.negocio = () => {
   <div class="row">${n.tel ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(waLink(n.tel, ""))}">WhatsApp</a>` : ""}<button class="sm" id="lost">${perdido ? "Reabrir" : "Marcar como perdido"}</button></div></div>
   <div class="card"><h2>Histórico</h2><div class="row"><input id="nt" placeholder="Anotação (ligação, retorno, pendência…)" style="flex:1"><button class="sm d" id="add">Registrar</button></div>
   <ul class="log">${[...(n.log || [])].reverse().map((e) => `<li><time>${esc(fdt(e.t))}</time><span>${esc(e.ev)}</span></li>`).join("")}</ul></div>
+  ${cardComissao(n, o)}
   ${n.teaser ? `<div class="card"><h3>Teaser enviado</h3><pre class="wa">${esc(n.teaser)}</pre></div>` : ""}`;
   const save = async (patch, ev) => { const atual = N(n.id) || n; try { await store.save("negocios", { ...atual, ...patch, atualizado: now(), log: [...(atual.log || []), { t: now(), ev }] }); } catch {} };
-  document.querySelectorAll("[data-e]").forEach((x) => (x.onclick = () => { if (x.dataset.e === n.etapa) return; save({ etapa: x.dataset.e }, "Etapa: " + etapaNome(x.dataset.e)); }));
+  let armFech = false;
+  document.querySelectorAll("[data-e]").forEach((x) => (x.onclick = () => { if (x.dataset.e === n.etapa) return;
+    if (x.dataset.e === "fechado" && !(n.comissao && n.comissao.acordado) && !armFech) { armFech = true; toast("A divisão de honorários ainda não está acordada. Defina a comissão antes de fechar, ou toque de novo para fechar assim (fica registrado)."); return; }
+    save({ etapa: x.dataset.e }, "Etapa: " + etapaNome(x.dataset.e) + (x.dataset.e === "fechado" && !(n.comissao && n.comissao.acordado) ? " · sem divisão acordada" : "")); }));
   $("add").onclick = () => { const t = $("nt").value.trim(); if (t) save({}, t); };
   $("lost").onclick = () => (perdido ? save({ etapa: n.etapa_ant || "teaser" }, "Negócio reaberto") : save({ etapa: "perdido", etapa_ant: n.etapa }, "Marcado como perdido"));
   const vo = $("vo"); if (vo) vo.onclick = () => go({ v: "oferta", id: o.id });
-  $("pdf").onclick = async () => { const r = await gerarPDF(o, { negocio: n, briefing: b, destinatario: n.parceiro }); if (r) save({}, `Ficha PDF emitida (${r})`); };
+  const comp = o ? PC.completude(o) : { ok: true };
+  let armado = false;
+  $("pdf").onclick = async () => {
+    if (!comp.ok && !armado) { armado = true; $("pdf").textContent = "Gerar mesmo assim"; toast(`Ficha mínima em ${comp.pct}%: peça os dados ao anunciante. Toque de novo para gerar assim mesmo (fica registrado).`); return; }
+    const r = await gerarPDF(o, { negocio: n, briefing: b, destinatario: n.parceiro, incompleta: !comp.ok }); if (r) save({}, `Ficha PDF emitida (${r})${comp.ok ? "" : " · incompleta"}`); };
+  const ec = $("edcom"); if (ec) ec.onclick = () => go({ v: "comissao", id: n.id });
+  const ap = $("acpdf"); if (ap) ap.onclick = () => gerarAcordo(n, o, b);
 };
+async function gerarAcordo(n, o, b) {
+  const cfg = CFG(); const texto0 = cfg.acordo || ACORDO_PADRAO;
+  if (!cfg.acordo_revisado || texto0.includes("[__")) { toast("Antes: preencha os campos [__] do acordo em Mais → Configurações, revise com seu advogado e marque a revisão."); return go({ v: "config" }); }
+  try {
+    const d = o ? PC.num(o) : {}; const cli = b ? C(b.cliente) : null; const sl = n.sala ? S.salas.find((x) => x.id === n.sala) : null;
+    const base = { codigo: o?.codigo || "", titulo: o ? tituloO(o) : "", tipo: d.tipo, cliente: (cli && (cli.empresa || cli.nome)) || sl?.aceite?.razao || (b ? nomeB(b) : ""), comissao: n.comissao };
+    const texto = PC.preencher(texto0, PC.varsAcordo(base));
+    const doc = PC.pdfAcordo(jsPDF, { ...base, texto, versao: cfg.acordo_versao || ACORDO_VERSAO, corretor: { nome: cfg.corretor_nome, creci: cfg.corretor_creci }, logos: LOGOS.dark ? LOGOS : null });
+    const blob = doc.output("blob"); const nome = `Acordo_Divisao_Honorarios_${base.codigo || n.id}.pdf`;
+    const c = PC.calcComissao(n.comissao);
+    const em = await emitir({ tipo: "acordo_comissao", negocio_id: n.id, oferta_id: n.oferta, briefing_id: n.briefing, destinatario: c.partes.filter((p) => !PC.ehPC(p)).map((p) => p.nome || p.papel).join(", "), nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: `Honorários ${PC.brl2(c.total)} · ${PC.quadroComissao(n.comissao)}`, meta: { partes: c.partes.length } });
+    const atual = N(n.id) || n;
+    await store.save("negocios", { ...atual, acordo_emitido: now(), atualizado: now(), log: [...(atual.log || []), { t: now(), ev: `Acordo de divisão emitido${em ? " (" + em.codigo + ")" : ""}: ${c.partes.length} partes` }] });
+    await compartilharOuBaixar(blob, nome);
+  } catch (e) { toast("Não foi possível gerar o acordo: " + e.message); }
+}
+function cardComissao(n, o) {
+  if (!n.comissao) return `<div class="card"><div class="row" style="justify-content:space-between"><h2>Comissão</h2><button class="sm p" id="edcom">Definir divisão</button></div><p class="hint">Defina os honorários e a divisão entre imobiliária, corretor parceiro e PrimeCorp.${o && o.autorizacao ? " A autorização do anunciante já traz a divisão aceita." : ""}</p></div>`;
+  const c = PC.calcComissao(n.comissao);
+  return `<div class="card"><div class="row" style="justify-content:space-between"><h2>Comissão</h2><button class="sm" id="edcom">Editar</button></div>
+  <p><b>${esc(PC.brl2(c.total) || "R$ 0")}</b> <span class="hint">· ${esc(PC.textoComissao(n.comissao))} · base ${esc(PC.brl(c.valor) || "—")}</span></p>
+  <ul class="log">${c.partes.map((p) => `<li><time>${esc(PC.nf(p.pct))}%</time><span><b>${esc(p.papel)}</b>${p.nome && !PC.ehPC(p) ? " · " + esc(p.nome) : ""}${p.creci ? " · " + esc(creciTxt(p.creci)) : ""}<br>${esc(PC.brl2(p.valor) || "")}</span></li>`).join("")}</ul>
+  ${c.erros.length ? `<p class="status err">${esc(c.erros.join(" "))}</p>` : ""}${c.avisos.length ? `<p class="note">${esc(c.avisos.join(" "))}</p>` : ""}
+  <p class="hint">Recebe e repassa: <b>${esc(PC.nomeParte(PC.recebedor(n.comissao)))}</b></p>
+  ${c.ok ? `<button class="p" style="width:100%" id="acpdf">Acordo de divisão (PDF para assinatura)</button>` : ""}
+  <p class="hint">${n.comissao.acordado ? "Divisão acordada em " + esc(fdt(n.comissao.acordado_em)) : "Divisão ainda não marcada como acordada"}${n.acordo_emitido ? " · acordo emitido em " + esc(fdt(n.acordo_emitido)) : ""}</p></div>`;
+}
 
 /* ================= OFERTAS ================= */
 VIEWS.ofertas = () => {
@@ -458,7 +502,7 @@ const OFORM = `
 <label>Origem<select data-f="origem"><option>Portal</option><option>Alerta de portal</option><option>Imobiliária</option><option>Corretor parceiro</option><option>Leilão</option><option>Proprietário</option></select></label>
 <label>Status<select data-f="status"><option value="nova">A revisar</option><option value="revisada">Revisada</option><option value="descartada">Descartada</option></select></label>
 <label class="full">Link do anúncio<input data-f="link" type="url" inputmode="url"></label>
-<label>Anunciante<input data-f="anunciante"></label><label>Contato do anunciante<input data-f="anunciante_contato" type="tel"></label>
+<label>Anunciante é<select data-f="anunciante_tipo"><option>Imobiliária</option><option>Corretor</option><option>Proprietário</option></select></label><label>Anunciante<input data-f="anunciante"></label><label>Contato do anunciante<input data-f="anunciante_contato" type="tel"></label><label>CRECI do anunciante<input data-f="anunciante_creci"></label>
 </div></fieldset>
 <fieldset><legend>Identificação</legend><div class="grid">
 <label>Tipo<select data-f="tipo"><option>Galpão</option><option>Galpão em condomínio</option><option>Área / terreno</option><option>Prédio comercial</option><option>Imóvel comercial</option><option>Fazenda</option></select></label>
@@ -472,7 +516,8 @@ const OFORM = `
 <label class="u">Construída<input data-f="construida" inputmode="decimal"><span>m²</span></label>
 <label class="u">Terreno<input data-f="terreno" inputmode="decimal"><span>m²</span></label>
 <label class="u">Administrativo<input data-f="administrativo" inputmode="decimal"><span>m²</span></label>
-<label class="u">Apoio / outros<input data-f="apoio" inputmode="decimal"><span>m²</span></label></div></fieldset>
+<label class="u">Apoio / outros<input data-f="apoio" inputmode="decimal"><span>m²</span></label>
+<label class="u">Frente (terreno)<input data-f="frente" inputmode="decimal"><span>m</span></label><label>Zoneamento<input data-f="zoneamento"></label></div></fieldset>
 <fieldset><legend>Estrutura</legend><div class="grid3">
 <label class="u">Pé-direito<input data-f="pe_direito" inputmode="decimal"><span>m</span></label>
 <label class="u">Piso<input data-f="piso_carga" inputmode="decimal"><span>t/m²</span></label>
@@ -485,7 +530,8 @@ const OFORM = `
 <label class="u">Venda<input data-f="venda" inputmode="decimal"><span>R$</span></label>
 <label class="u">Condomínio<input data-f="condominio" inputmode="decimal"><span>R$</span></label>
 <label class="u">IPTU<input data-f="iptu" inputmode="decimal"><span>R$</span></label>
-<label class="full">IPTU é<select data-f="iptu_periodo"><option value="">Periodicidade não informada</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></label></div></fieldset>
+<label class="full">IPTU é<select data-f="iptu_periodo"><option value="">Periodicidade não informada</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></label>
+<label class="full">Disponibilidade<input data-f="disponibilidade" placeholder="Imediata / a partir de…"></label><label class="full">Documentação<input data-f="documentacao" placeholder="Matrícula regular, construção averbada…"></label></div></fieldset>
 <fieldset><legend>Texto da ficha</legend>
 <label>Título<input data-f="titulo" placeholder="(automático)"></label>
 <label>Descrição<textarea data-f="descricao" rows="4"></textarea></label>
@@ -496,23 +542,40 @@ function readForm(root) { const o = {}; root.querySelectorAll("[data-f]").forEac
 const SEM = { verde: ["VERDE", "Pode circular com parceiros."], amarelo: ["AMARELO", "Circular com os itens a confirmar."], vermelho: ["VERMELHO", "Ligar para o anunciante antes de circular."] };
 VIEWS.oferta = () => {
   const o = O(route.id); if (!o) return back(); header(o.codigo ? "Oferta " + o.codigo : "Oferta");
-  $("main").innerHTML = `<div class="card" id="fo">${OFORM}</div>
+  const peds = S.pedidos.filter((p) => p.oferta === o.id).sort((a, b) => (b.criado || "").localeCompare(a.criado || ""));
+  const au = o.autorizacao;
+  const fontes = Object.keys(o.fontes || {}).filter((k) => o.fontes[k] === "anunciante");
+  $("main").innerHTML = `<div class="card"><h2>Ficha mínima</h2><div class="meter"><i id="cbar"></i></div><p id="ctxt" class="hint"></p><ul class="alerts" id="cfal"></ul>
+  ${o.revisar_anunciante ? `<p class="note">O anunciante enviou ${fontes.length} informação(ões)${au ? " e autorizou a indicação" : ""}. Confira os campos marcados e salve.</p>` : ""}
+  <h3>Anunciante</h3><p>${esc(o.anunciante || "Não informado")}${o.anunciante_tipo ? " · " + esc(o.anunciante_tipo) : ""}${o.anunciante_creci ? " · CRECI " + esc(o.anunciante_creci) : ""}</p>
+  ${au ? `<p class="tag ok" style="align-self:flex-start">Autorização aceita em ${esc(fdt(au.em))} por ${esc(au.responsavel)} (${esc(au.razao)})${au.creci ? " · CRECI " + esc(au.creci) : ""}</p>` : '<p class="hint">Sem autorização de indicação registrada.</p>'}
+  ${peds.length ? `<div class="list">${peds.map((p) => `<button class="item" data-p="${p.id}"><span class="dot ${p.aceite ? "verde" : p.respondido_em ? "amarelo" : ""}"></span><span class="t"><b>Pedido de ${esc(fdt(p.criado))}</b><span>${esc(STATUS_P[p.status] || p.status)}</span></span></button>`).join("")}</div>` : ""}
+  <button class="${au ? "" : "p"}" id="solic">${au ? "Novo pedido ao anunciante" : "Solicitar dados e autorização ao anunciante"}</button></div>
+  <div class="card" id="fo">${OFORM}</div>
   <div class="card"><h2>Checagem</h2><div class="sem" id="sem"><i></i><div><span id="semT"></span><small id="semS"></small></div></div><div class="priv" id="priv" hidden></div><ul class="alerts" id="al"></ul><p class="hint">O semáforo fica só aqui. Na ficha, os alertas viram “itens a confirmar”.</p></div>
   <div class="card"><div class="row"><button class="p grow" id="sv">Salvar</button><button class="grow" id="pdf">Ficha PDF</button></div><div id="pdfnote"></div>
   ${o.link ? `<a class="btn sm" href="${esc(o.link)}" target="_blank" rel="noopener">Abrir anúncio original</a>` : ""}<button class="g" id="del">Excluir oferta</button></div>`;
   const root = $("fo"); fillForm(root, o); editing = true;
-  const upd = () => { const cur = { ...o, ...readForm(root) }; const c = chkOf(cur);
+  fontes.forEach((k) => { const el = root.querySelector(`[data-f="${k}"]`); if (el) { el.classList.add("doanunciante"); el.title = "Informado pelo anunciante"; } });
+  document.querySelectorAll("[data-p]").forEach((x) => (x.onclick = () => go({ v: "pedido", id: x.dataset.p })));
+  $("solic").onclick = async () => { const cur = { ...o, ...readForm(root) }; editing = false; try { await store.save("ofertas", { ...cur, atualizado: now() }); } catch { editing = true; return; } go({ v: "novopedido", o: o.id }); };
+  const upd = () => { if (!$("sem")) return; const cur = { ...o, ...readForm(root) }; const c = chkOf(cur);
     $("sem").className = "sem " + c.sem; $("semT").textContent = SEM[c.sem][0]; $("semS").textContent = SEM[c.sem][1];
     $("al").innerHTML = c.alerts.map((a) => `<li class="${a.lvl}">${esc(a.msg)}</li>`).join("") || '<li class="ok">Dados completos e coerentes.</li>';
-    $("priv").hidden = !c.privacy; $("priv").textContent = c.privacy || ""; root.querySelector('[data-f="titulo"]').placeholder = PC.autoTitle(PC.num(cur)); return cur; };
+    $("priv").hidden = !c.privacy; $("priv").textContent = c.privacy || ""; root.querySelector('[data-f="titulo"]').placeholder = PC.autoTitle(PC.num(cur));
+    const cp = PC.completude(cur); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : "";
+    $("ctxt").textContent = cp.ok ? "Completa: pode gerar a ficha e a autorização." : `${cp.pct}% preenchida · ${cp.faltam.filter((f) => !f.extra).length} informação(ões) básica(s) faltando.`;
+    $("cfal").innerHTML = cp.faltam.filter((f) => !f.extra).map((f) => `<li class="a">${esc(f.pergunta)}</li>`).join("");
+    return cur; };
   upd(); root.addEventListener("input", () => { clearTimeout(upd._t); upd._t = setTimeout(upd, 200); }); root.addEventListener("change", upd);
-  $("sv").onclick = async () => { const cur = upd(); const st = cur.status === "nova" ? "revisada" : cur.status; editing = false; try { await store.save("ofertas", { ...cur, status: st, atualizado: now() }); toast("Oferta salva" + (o.status === "nova" ? " e marcada como revisada." : ".")); back(); } catch { editing = true; } };
+  $("sv").onclick = async () => { const cur = upd(); const st = cur.status === "nova" ? "revisada" : cur.status; editing = false; try { await store.save("ofertas", { ...cur, status: st, revisar_anunciante: false, atualizado: now() }); toast("Oferta salva" + (o.status === "nova" ? " e marcada como revisada." : ".")); back(); } catch { editing = true; } };
   let armed = false;
   $("pdf").onclick = async () => {
     const neg = S.negocios.find((n) => n.oferta === o.id && PC.etapaIdx(n.etapa) >= PC.etapaIdx("termo"));
-    if (!neg && !armed) { armed = true; $("pdfnote").innerHTML = '<p class="note">Ficha é nível 2: envie só a quem assinou o termo. Toque de novo para gerar mesmo assim (fica registrado como emissão sem termo).</p>'; $("pdf").textContent = "Gerar mesmo assim"; return; }
+    const cp = PC.completude({ ...o, ...readForm(root) });
+    if ((!neg || !cp.ok) && !armed) { armed = true; $("pdfnote").innerHTML = `<p class="note">${!neg ? "Ficha é nível 2: envie só a quem assinou o termo. " : ""}${!cp.ok ? `Ficha mínima em ${cp.pct}%: o ideal é pedir os dados ao anunciante antes. ` : ""}Toque de novo para gerar mesmo assim (fica registrado).</p>`; $("pdf").textContent = "Gerar mesmo assim"; return; }
     const cur = upd(); editing = false; try { await store.save("ofertas", { ...cur, atualizado: now() }); } catch { editing = true; return; }
-    await gerarPDF(O(o.id), { negocio: neg || null, semTermo: !neg });
+    await gerarPDF(O(o.id), { negocio: neg || null, semTermo: !neg, incompleta: !cp.ok });
   };
   confirmar2($("del"), "Toque de novo para excluir", async () => { editing = false; await store.del("ofertas", o.id); back(); });
 };
@@ -522,7 +585,7 @@ async function gerarPDF(o, ctx = {}) {
     const d = { ...PC.num(atual), codigo }; const chk = PC.checks(PC.num(atual), hist(atual.id));
     const doc = PC.pdf(jsPDF, d, chk, LOGOS.dark ? LOGOS : null);
     const blob = doc.output("blob"); const nome = PC.filename(d).replace(/\.pdf$/, `_${codigo}.pdf`);
-    const em = await emitir({ tipo: "ficha_pdf", oferta_id: atual.id, negocio_id: ctx.negocio?.id || null, briefing_id: ctx.negocio?.briefing || null, contato_id: ctx.negocio?.contato || null, destinatario: ctx.destinatario || ctx.negocio?.parceiro || "", nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: tituloO(atual), meta: { codigo, sem_termo: !!ctx.semTermo } });
+    const em = await emitir({ tipo: "ficha_pdf", oferta_id: atual.id, negocio_id: ctx.negocio?.id || null, briefing_id: ctx.negocio?.briefing || null, contato_id: ctx.negocio?.contato || null, destinatario: ctx.destinatario || ctx.negocio?.parceiro || "", nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: tituloO(atual), meta: { codigo, sem_termo: !!ctx.semTermo, incompleta: !!ctx.incompleta } });
     await compartilharOuBaixar(blob, nome);
     return em ? em.codigo : codigo;
   } catch (e) { toast("Não foi possível gerar o PDF: " + e.message); return null; }
@@ -571,13 +634,13 @@ VIEWS.nova = () => {
 VIEWS.mais = () => {
   header("Mais");
   $("main").innerHTML = `<div class="card"><div class="menu">
-  <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button><button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button><button id="m6">Sair <span>›</span></button></div></div>
+  <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button><button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button><button id="m6">Sair <span>›</span></button></div></div>
   <p class="foot">Conectado como ${esc(usuarioAtual?.email || "")}</p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
-  $("m4").onclick = () => go({ v: "backup" }); $("m5").onclick = () => go({ v: "config" });
+  $("m4").onclick = () => go({ v: "backup" }); $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
 };
-const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", coleta: "Coleta de alertas", restauracao: "Restauração" };
+const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
   header("Relatórios emitidos"); $("main").innerHTML = `<div class="card"><p class="hint">Carregando…</p></div>`;
   let em = []; try { em = (await api("emissoes?limite=500")).emissoes; } catch (e) { $("main").innerHTML = `<div class="card"><p class="status err">${esc(e.message)}</p></div>`; return; }
@@ -585,7 +648,7 @@ VIEWS.relatorios = async () => {
   const f = route.f || "todos";
   const lista = em.filter((e) => f === "todos" || e.tipo === f);
   $("main").innerHTML = `<select id="ft"><option value="todos">Todos os tipos</option>${Object.entries(TIPOS_E).map(([k, l]) => `<option value="${k}" ${k === f ? "selected" : ""}>${l}</option>`).join("")}</select>
-  <div class="card"><div class="list">${lista.map((e, i) => { const o = O(e.oferta_id); return `<details class="item" style="display:block;cursor:pointer"><summary style="display:flex;gap:10px;align-items:center;list-style:none"><span class="tag ${e.tipo === "aceite" || e.tipo === "interesse" ? "ok" : e.tipo === "ficha_pdf" ? "r" : ""}">${esc(TIPOS_E[e.tipo] || e.tipo)}</span><span class="t"><b>${esc(e.codigo)}${o ? " · " + esc((o.codigo ? o.codigo + " " : "") + tituloO(o)) : ""}</b><span>${esc(fdt(e.criado_em))}${e.destinatario ? " · " + esc(e.destinatario) : ""}${e.meta && e.meta.sem_termo ? " · SEM TERMO" : ""}</span></span></summary>
+  <div class="card"><div class="list">${lista.map((e, i) => { const o = O(e.oferta_id); return `<details class="item" style="display:block;cursor:pointer"><summary style="display:flex;gap:10px;align-items:center;list-style:none"><span class="tag ${["aceite", "interesse", "autorizacao", "anunciante_dados"].includes(e.tipo) ? "ok" : ["ficha_pdf", "pedido_anunciante"].includes(e.tipo) ? "r" : ""}">${esc(TIPOS_E[e.tipo] || e.tipo)}</span><span class="t"><b>${esc(e.codigo)}${o ? " · " + esc((o.codigo ? o.codigo + " " : "") + tituloO(o)) : ""}</b><span>${esc(fdt(e.criado_em))}${e.destinatario ? " · " + esc(e.destinatario) : ""}${e.meta && e.meta.sem_termo ? " · SEM TERMO" : ""}${e.meta && e.meta.incompleta ? " · FICHA INCOMPLETA" : ""}</span></span></summary>
   ${e.conteudo ? `<pre class="wa" style="margin-top:8px">${esc(e.conteudo)}</pre>` : ""}${e.arquivo ? `<a class="btn sm" style="margin-top:8px" href="/api/arquivo?k=${encodeURIComponent(e.arquivo)}">Baixar PDF emitido</a>` : ""}</details>`; }).join("") || '<p class="empty">Nada emitido ainda.</p>'}</div></div>`;
   $("ft").onchange = () => { route = { v: "relatorios", f: $("ft").value }; render(); };
 };
@@ -615,16 +678,231 @@ VIEWS.config = async () => {
   <label>Versão<input data-k="termo_versao" value="${esc(c.termo_versao || TERMO_VERSAO)}"></label>
   <label>Texto<textarea data-k="termo" rows="16">${esc(termo)}</textarea></label>
   <label class="check"><input type="checkbox" id="rv" ${c.termo_revisado ? "checked" : ""}> Revisei o termo e autorizo o uso nas Salas do Cliente</label>
+  <h2>Comissão padrão</h2><p class="hint">Valores sugeridos nos pedidos ao anunciante e nos negócios. Em cada negócio você ajusta.</p>
+  <div class="grid"><label class="u">Venda<input data-k="com_venda_pct" inputmode="decimal" value="${esc(c.com_venda_pct || "6")}"><span>%</span></label><label class="u">Locação<input data-k="com_locacao_alugueis" inputmode="decimal" value="${esc(c.com_locacao_alugueis || "1")}"><span>aluguéis</span></label></div>
+  <h3>Modelos de divisão</h3><div id="fm"></div><button class="sm" id="addm">+ Modelo</button>
+  <label class="check"><input type="checkbox" id="cr" ${c.com_revisada ? "checked" : ""}> Conferi os percentuais e os modelos de divisão</label>
+  <h2>Termos de autorização do anunciante</h2>
+  <p class="hint">O anunciante aceita um destes textos pelo link ou no PDF. O sistema preenche {{CODIGO}}, {{TITULO}}, {{OPERACAO}}, {{COMISSAO}}, {{QUADRO}} e {{VALOR}}. Os campos [__] você define com seu advogado.</p>
+  <label>Versão<input data-k="aut_versao" value="${esc(c.aut_versao || AUT_VERSAO)}"></label>
+  <label>Parceria com imobiliária ou corretor<textarea data-k="aut_parceria" rows="12">${esc(c.aut_parceria || AUT_PARCERIA)}</textarea></label>
+  <label>Autorização do proprietário<textarea data-k="aut_proprietario" rows="12">${esc(c.aut_proprietario || AUT_PROPRIETARIO)}</textarea></label>
+  <label class="check"><input type="checkbox" id="ra" ${c.aut_revisado ? "checked" : ""}> Revisei os dois termos de autorização e autorizo o uso</label>
+  <h2>Acordo de divisão de honorários</h2>
+  <p class="hint">Documento que todas as partes do negócio assinam (imobiliária, corretor parceiro e PrimeCorp). O sistema preenche {{OPERACAO}}, {{CODIGO}}, {{TITULO}}, {{CLIENTE}}, {{COMISSAO}}, {{VALOR}}, {{TOTAL}}, {{QUADRO}} e {{RECEBEDOR}}.</p>
+  <label>Versão<input data-k="acordo_versao" value="${esc(c.acordo_versao || ACORDO_VERSAO)}"></label>
+  <label>Texto<textarea data-k="acordo" rows="14">${esc(c.acordo || ACORDO_PADRAO)}</textarea></label>
+  <label class="check"><input type="checkbox" id="rac" ${c.acordo_revisado ? "checked" : ""}> Revisei o acordo de divisão e autorizo o uso</label>
   <button class="p" id="sv">Salvar configurações</button><div class="status" id="st"></div></div>
   <div class="card"><h2>Coleta automática de alertas</h2><div id="cs"><p class="hint">Verificando…</p></div></div>`;
   editing = true;
-  $("sv").onclick = async () => { const v = readK($("fc")); const rev = $("rv").checked;
-    if (rev && v.termo.includes("[__")) { $("st").className = "status err"; $("st").textContent = "O termo ainda tem campos [__] sem preencher."; return; }
-    editing = false; try { await store.save("config", { ...c, id: "geral", ...v, termo_revisado: rev, atualizado: now() }); toast("Configurações salvas."); } catch { editing = true; } };
+  let mods = JSON.parse(JSON.stringify(Array.isArray(c.modelos) && c.modelos.length ? c.modelos : PC.MODELOS_PADRAO));
+  const lerMods = () => [...$("fm").querySelectorAll("[data-m]")].map((el, i) => ({ id: mods[i]?.id || uid("m"), nome: el.querySelector("[data-mn]").value.trim(), partes: lerPartes(el).map((p) => ({ papel: p.papel, pct: PC.parseBR(p.pct) || 0 })) }));
+  const drawMods = () => {
+    $("fm").innerHTML = mods.map((m, i) => `<div data-m="${i}" style="border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px"><div class="row"><input data-mn value="${esc(m.nome)}" style="flex:1"><button class="sm g" data-rmm="${i}">Excluir</button></div>${partesHTML(m.partes, false)}<div class="row"><button class="sm" data-addpm="${i}">+ Parte</button><span class="hint" data-sm></span></div></div>`).join("");
+    const somas = () => $("fm").querySelectorAll("[data-m]").forEach((el) => { const t = lerPartes(el).reduce((a, p) => a + (PC.parseBR(p.pct) || 0), 0); const sp = el.querySelector("[data-sm]"); sp.textContent = "Soma " + PC.nf(t) + "%"; sp.style.color = Math.abs(t - 100) > 0.01 ? "var(--bad)" : "var(--ok)"; });
+    $("fm").querySelectorAll("[data-m]").forEach((el) => ligarPartes(el, somas, false)); somas();
+    $("fm").querySelectorAll("[data-rmm]").forEach((b) => (b.onclick = () => { mods = lerMods(); mods.splice(Number(b.dataset.rmm), 1); drawMods(); }));
+    $("fm").querySelectorAll("[data-addpm]").forEach((b) => (b.onclick = () => { mods = lerMods(); mods[Number(b.dataset.addpm)].partes.push({ papel: "Corretor parceiro", pct: 0 }); drawMods(); }));
+  };
+  drawMods();
+  $("addm").onclick = () => { mods = lerMods(); mods.push({ id: uid("m"), nome: "Novo modelo", partes: [{ papel: "PrimeCorp (indicação)", pct: 100 }] }); drawMods(); };
+  $("sv").onclick = async () => { const v = readK($("fc")); const rev = $("rv").checked, ra = $("ra").checked, cr = $("cr").checked, rac = $("rac").checked; const st = $("st");
+    const err = (m) => { st.className = "status err"; st.textContent = m; };
+    if (rev && v.termo.includes("[__")) return err("O termo do cliente ainda tem campos [__] sem preencher.");
+    if (ra && (v.aut_parceria.includes("[__") || v.aut_proprietario.includes("[__"))) return err("Os termos de autorização ainda têm campos [__] sem preencher.");
+    if (rac && v.acordo.includes("[__")) return err("O acordo de divisão ainda tem campos [__] sem preencher.");
+    const ms = lerMods(); const ruim = ms.find((m) => !m.nome || !m.partes.length || Math.abs(m.partes.reduce((a, p) => a + p.pct, 0) - 100) > 0.01);
+    if (ruim) return err(`O modelo "${ruim.nome || "sem nome"}" precisa somar 100%.`);
+    if (!PC.parseBR(v.com_venda_pct) || !PC.parseBR(v.com_locacao_alugueis)) return err("Informe a comissão padrão de venda e de locação.");
+    editing = false; try { await store.save("config", { ...c, id: "geral", ...v, modelos: ms, termo_revisado: rev, aut_revisado: ra, com_revisada: cr, acordo_revisado: rac, atualizado: now() }); toast("Configurações salvas."); } catch { editing = true; } };
   try { const s = await api("status"); if (!$("cs")) return;
     $("cs").innerHTML = s.coleta_configurada ? `<p>Caixa de alertas: <b>${esc(s.caixa_alertas)}</b>. A coleta roda a cada 30 minutos.</p><button class="sm" id="rc">Coletar agora</button><div class="status" id="rcs"></div>` : `<p class="hint">Ainda não configurada. Crie um Gmail só para alertas, ative a verificação em duas etapas, gere uma senha de app e cadastre no Netlify as variáveis ALERTAS_IMAP_USER, ALERTAS_IMAP_SENHA e COLETA_SEGREDO (veja o guia de publicação).</p>`;
     const rc = $("rc"); if (rc) rc.onclick = async () => { rc.disabled = true; try { await api("coleta", { method: "POST" }); $("rcs").textContent = "Coleta iniciada. As ofertas aparecem em “A revisar” em alguns minutos."; } catch (e) { $("rcs").className = "status err"; $("rcs").textContent = e.message; } };
   } catch {}
+};
+
+/* ================= ANUNCIANTE: pedidos de dados e autorização ================= */
+const STATUS_P = { aberto: "Aguardando resposta", respondido: "Dados recebidos, sem autorização", autorizado: "Autorizado", encerrado: "Encerrado" };
+const modelosCfg = () => { const m = CFG().modelos; return Array.isArray(m) && m.length ? m : PC.MODELOS_PADRAO; };
+const comPadrao = () => ({ pct: CFG().com_venda_pct || "6", alugueis: CFG().com_locacao_alugueis || "1" });
+const baseDe = (o) => { const op = PC.norm(o.operacao || "Locação"); return op.startsWith("venda") ? "venda" : op.includes("venda") ? "ambos" : "locacao"; };
+function textoComissaoPedido(c) {
+  if (c.base === "ambos") return `${PC.nf(PC.parseBR(c.pct) || 0)}% sobre o valor da venda ou ${PC.nf(PC.parseBR(c.alugueis) || 0)} aluguel(éis) mensal(is) na locação`;
+  return PC.textoComissao(c);
+}
+function demandaPara(o) { return S.briefings.filter((b) => (b.status || "ativo") === "ativo").map((b) => ({ b, r: PC.score(o, b, chkOf(o)) })).filter((x) => !x.r.fora); }
+const creciTxt = (c) => (c ? (/creci/i.test(c) ? c : "CRECI " + c) : "");
+function partesHTML(partes, comNomes) {
+  const cfg = CFG(); partes = partes.map((p) => (PC.ehPC(p) && !p.nome ? { ...p, nome: cfg.corretor_nome || "Rodrigo França Viana", creci: p.creci || cfg.corretor_creci || "CRECI-SP 297692" } : p));
+  const opts = (sel) => S.contatos.filter((c) => /^(Corretor|Imobili)/.test(c.tipo || "")).sort((a, b) => nomeC(a).localeCompare(nomeC(b))).map((c) => `<option value="${c.id}" ${c.id === sel ? "selected" : ""}>${esc(nomeC(c))}</option>`).join("");
+  return partes.map((p) => `<div class="parte">
+  <label>Papel<select data-pp="papel">${PC.PAPEIS.map((x) => `<option ${x === p.papel ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
+  <label class="u">Participação<input data-pp="pct" inputmode="decimal" value="${esc(p.pct ?? "")}"><span>%</span></label>
+  ${comNomes ? `<label>Contato no CRM<select data-pp="contato"><option value="">—</option>${opts(p.contato)}</select></label><label>Nome<input data-pp="nome" value="${esc(p.nome || "")}"></label><label class="full">CRECI<input data-pp="creci" value="${esc(p.creci || "")}"></label>` : ""}
+  <div class="val"><span data-pv></span><button class="sm g" data-rm>Remover</button></div></div>`).join("");
+}
+function lerPartes(root) { return [...root.querySelectorAll(".parte")].map((el) => { const o = {}; el.querySelectorAll("[data-pp]").forEach((x) => (o[x.dataset.pp] = x.value.trim())); return o; }); }
+function ligarPartes(root, onChange, comNomes) {
+  root.querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => { b.closest(".parte").remove(); onChange(); }));
+  root.querySelectorAll('[data-pp="contato"]').forEach((s) => (s.onchange = () => { const c = C(s.value); const el = s.closest(".parte"); if (c) { el.querySelector('[data-pp="nome"]').value = c.empresa || c.nome || ""; el.querySelector('[data-pp="creci"]').value = c.creci || ""; } onChange(); }));
+  root.addEventListener("input", onChange); root.addEventListener("change", onChange);
+}
+
+VIEWS.novopedido = () => {
+  const o = O(route.o); if (!o) return back(); header("Pedido ao anunciante");
+  const cfg = CFG();
+  const pend = !cfg.aut_revisado || [cfg.aut_parceria, cfg.aut_proprietario].some((t) => !t || t.includes("[__")) || !cfg.com_revisada;
+  if (pend) {
+    $("main").innerHTML = `<div class="card"><h2>Revise os termos e a comissão antes</h2><p class="hint">O anunciante vai aceitar um termo com a divisão de honorários. Em Configurações: preencha os campos [__] dos dois termos de autorização, confira os percentuais padrão de comissão e os modelos de divisão, e marque as revisões.</p><button class="p" id="cf">Abrir configurações</button></div>`;
+    $("cf").onclick = () => go({ v: "config" }); return;
+  }
+  const comp = PC.completude(o); const dem = demandaPara(o); const base = baseDe(o); const cp = comPadrao();
+  const tipoT = o.anunciante_tipo === "Proprietário" ? "proprietario" : "parceria";
+  const mods = modelosCfg(); const mod0 = mods.find((m) => m.id === (tipoT === "proprietario" ? "prop_pc" : "imob_pc")) || mods[0];
+  const partes0 = mod0.partes.map((p) => ({ ...p, nome: /imobili|anunciante/i.test(p.papel) ? o.anunciante || "" : "", creci: /imobili|anunciante/i.test(p.papel) ? o.anunciante_creci || "" : "" }));
+  $("main").innerHTML = `<div class="card" id="fp"><span class="k">${esc(o.codigo || "")} ${esc(tituloO(o))}</span>
+  <p class="hint">${comp.ok ? "Ficha completa: o anunciante recebe a ficha e a autorização de indicação." : `Ficha mínima em ${comp.pct}%: o anunciante recebe as ${comp.faltam.filter((f) => !f.extra).length} perguntas e a autorização.`} Ele responde pelo link no celular ou no PDF editável.</p>
+  <label>Tipo de termo<select id="tt"><option value="parceria" ${tipoT === "parceria" ? "selected" : ""}>Parceria com imobiliária ou corretor</option><option value="proprietario" ${tipoT === "proprietario" ? "selected" : ""}>Autorização do proprietário</option></select></label>
+  <div class="grid"><label>Anunciante<input id="an" value="${esc(o.anunciante || "")}"></label>
+  <label>Contato no CRM<select id="ct"><option value="">— nenhum —</option>${S.contatos.filter((c) => /^(Corretor|Imobili|Propriet)/.test(c.tipo || "")).map((c) => `<option value="${c.id}">${esc(nomeC(c))} · ${esc(c.tipo)}</option>`).join("")}</select></label></div>
+  <h3>Honorários</h3><div class="grid">
+  ${base !== "locacao" ? `<label class="u">Venda<input id="pct" inputmode="decimal" value="${esc(cp.pct)}"><span>%</span></label>` : ""}
+  ${base !== "venda" ? `<label class="u">Locação<input id="alg" inputmode="decimal" value="${esc(cp.alugueis)}"><span>aluguéis</span></label>` : ""}</div>
+  <label>Modelo de divisão<select id="md">${mods.map((m) => `<option value="${m.id}" ${m.id === mod0.id ? "selected" : ""}>${esc(m.nome)}</option>`).join("")}</select></label>
+  <div id="pts">${partesHTML(partes0, true)}</div><button class="sm" id="addp">+ Parte</button>
+  <div class="tot"><span>Soma</span><span id="soma"></span></div><div id="perr"></div>
+  <label>Validade do link<select id="vd"><option value="15">15 dias</option><option value="30" selected>30 dias</option><option value="60">60 dias</option></select></label>
+  ${dem.length ? `<label class="check"><input type="checkbox" id="dm" checked> Citar que tenho ${dem.length} cliente(s) com demanda compatível (sem identificar)</label>` : '<p class="hint">Nenhum briefing ativo compatível agora: o pedido não cita demanda.</p>'}
+  <button class="p" id="cr">Gerar link e PDF</button><div class="status" id="st"></div></div>`;
+  editing = true;
+  const pts = $("pts");
+  const atualiza = () => { const ps = lerPartes(pts); const soma = ps.reduce((a, p) => a + (PC.parseBR(p.pct) || 0), 0); $("soma").textContent = PC.nf(soma) + "%"; $("soma").style.color = Math.abs(soma - 100) > 0.01 ? "var(--bad)" : "var(--ok)"; };
+  const ligar = () => { ligarPartes(pts, atualiza, true); atualiza(); };
+  ligar();
+  $("md").onchange = () => { const m = mods.find((x) => x.id === $("md").value); pts.innerHTML = partesHTML(m.partes.map((p) => ({ ...p, nome: /imobili|anunciante/i.test(p.papel) ? $("an").value : "", creci: /imobili|anunciante/i.test(p.papel) ? o.anunciante_creci || "" : "" })), true); ligar(); };
+  $("addp").onclick = () => { pts.insertAdjacentHTML("beforeend", partesHTML([{ papel: "Corretor parceiro", pct: "" }], true)); ligar(); };
+  $("cr").onclick = async () => {
+    const st = $("st"); const partes = lerPartes(pts).map((p) => ({ ...p, pct: PC.parseBR(p.pct) || 0 }));
+    const com = { base, pct: $("pct") ? $("pct").value : "", alugueis: $("alg") ? $("alg").value : "", partes };
+    const soma = partes.reduce((a, p) => a + p.pct, 0);
+    if (!partes.length || Math.abs(soma - 100) > 0.01) { st.className = "status err"; st.textContent = `A divisão precisa fechar em 100% (está em ${PC.nf(soma)}%).`; return; }
+    if ((base !== "locacao" && !PC.parseBR(com.pct)) || (base !== "venda" && !PC.parseBR(com.alugueis))) { st.className = "status err"; st.textContent = "Informe os honorários."; return; }
+    com.texto = textoComissaoPedido(com);
+    $("cr").disabled = true; st.className = "status"; st.textContent = "Gerando…";
+    try {
+      const codigo = await garantirCodigo(o); const atual = O(o.id) || o;
+      const tipo = $("tt").value; const d = PC.num(atual);
+      const vars = { CODIGO: codigo, TITULO: PC.autoTitle(d), OPERACAO: (atual.operacao || "locação").toLowerCase(), COMISSAO: com.texto, QUADRO: PC.quadroComissao(com), VALOR: [d.venda && PC.brl(d.venda) + " (venda)", d.aluguel && PC.brl(d.aluguel) + "/mês (locação)"].filter(Boolean).join(" ou ") || "a definir" };
+      const termo = PC.preencher(tipo === "proprietario" ? cfg.aut_proprietario : cfg.aut_parceria, vars);
+      const token = tokenAleatorio(32); const ct = C($("ct").value);
+      const ped = { id: token, oferta: atual.id, codigo, titulo: tituloO(atual), operacao: atual.operacao || "", tipo_termo: tipo, anunciante: $("an").value.trim(), contato: ct ? ct.id : null,
+        demanda: $("dm") && $("dm").checked ? dem.length : 0, conhecidos: PC.conhecidos(atual), faltam: comp.faltam, comissao: com, termo_texto: termo, termo_versao: cfg.aut_versao || AUT_VERSAO,
+        modo: comp.ok ? "autorizacao" : "complementacao", expira: new Date(Date.now() + Number($("vd").value) * 864e5).toISOString(), status: "aberto", criado: now(), respostas: [],
+        corretor: { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "", email: cfg.corretor_email || "" } };
+      editing = false; await store.save("pedidos", ped);
+      if (!atual.anunciante && ped.anunciante) await store.save("ofertas", { ...atual, anunciante: ped.anunciante, atualizado: now() });
+      await pdfAnunciante(ped, true);
+      stack.pop(); route = { v: "pedido", id: token }; render(); toast("Pedido criado.");
+    } catch (e) { st.className = "status err"; st.textContent = "Falhou: " + e.message; $("cr").disabled = false; editing = true; }
+  };
+};
+async function pdfAnunciante(ped, registrar) {
+  const o = O(ped.oferta) || {};
+  const link = `${location.origin}/anunciante.html?t=${ped.id}`;
+  const doc = PC.pdfAnunciante(jsPDF, { ...o, titulo: ped.titulo }, { modo: ped.modo, codigo: ped.codigo, faltam: ped.faltam, demanda: ped.demanda, link, anunciante: ped.anunciante, comissao: { ...ped.comissao, texto: ped.comissao.texto }, termo: ped.termo_texto, termo_versao: ped.termo_versao, corretor: ped.corretor, logos: LOGOS.dark ? LOGOS : null });
+  const blob = doc.output("blob"); const nome = PC.filenameAnunciante(PC.num(o), ped.modo).replace(/\.pdf$/, `_${ped.codigo}.pdf`);
+  if (registrar) await emitir({ tipo: "pedido_anunciante", oferta_id: ped.oferta, contato_id: ped.contato, destinatario: ped.anunciante, nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: `${link}\n${ped.modo === "autorizacao" ? "Ficha e autorização" : ped.faltam.filter((f) => !f.extra).length + " pergunta(s) e autorização"} · ${ped.comissao.texto} · ${PC.quadroComissao(ped.comissao)}`, meta: { pedido: ped.id, codigo: ped.codigo } });
+  await compartilharOuBaixar(blob, nome);
+}
+VIEWS.pedidos = () => {
+  header("Anunciantes");
+  const ps = [...S.pedidos].sort((a, b) => (b.respondido_em || b.criado || "").localeCompare(a.respondido_em || a.criado || ""));
+  $("main").innerHTML = `<div class="card"><p class="hint">Pedidos de dados e autorização enviados aos anunciantes. Crie um pedido a partir da oferta.</p><div class="list">${ps.map((p) => `<button class="item" data-p="${p.id}"><span class="dot ${p.aceite ? "verde" : p.respondido_em ? "amarelo" : ""}"></span><span class="t"><b>${esc(p.codigo + " · " + (p.anunciante || "Anunciante"))}</b><span>${esc(STATUS_P[p.status] || p.status)} · ${esc(fdt(p.respondido_em || p.criado))}</span></span>${p.respondido_em && !p.visto ? '<span class="tag r">novo</span>' : ""}</button>`).join("") || '<p class="empty">Nenhum pedido ainda.</p>'}</div></div>`;
+  document.querySelectorAll("[data-p]").forEach((x) => (x.onclick = () => go({ v: "pedido", id: x.dataset.p })));
+};
+VIEWS.pedido = () => {
+  const p = S.pedidos.find((x) => x.id === route.id); if (!p) return back(); header("Pedido " + p.codigo);
+  const o = O(p.oferta); const link = `${location.origin}/anunciante.html?t=${p.id}`; const expirado = p.expira && new Date(p.expira) < new Date();
+  const ct = C(p.contato); const tel = (ct && ct.telefone) || (o && o.anunciante_contato) || "";
+  const msg = `Olá${p.anunciante ? ", " + p.anunciante : ""}! Sou ${p.corretor?.nome || "Rodrigo França Viana"}, corretor de imóveis (${p.corretor?.creci || "CRECI-SP 297692"}).${p.demanda ? ` Tenho ${p.demanda} cliente${p.demanda > 1 ? "s" : ""} com demanda compatível com o seu imóvel` : " Tenho interesse em apresentar o seu imóvel"} (${p.titulo}, ref. ${p.codigo}) aos meus clientes.${p.modo === "autorizacao" ? " Preciso só da sua autorização de indicação." : " Para isso, preciso de algumas informações e da sua autorização de indicação."} Você responde pelo celular neste link:\n${link}`;
+  const adere = o ? demandaPara(o) : [];
+  const resp = [...(p.respostas || [])].reverse();
+  $("main").innerHTML = `<div class="card"><span class="k">${esc(STATUS_P[p.status] || p.status)}</span><h2>${esc(p.titulo)}</h2>
+  <p class="hint">${esc(p.anunciante || "")} · ${p.tipo_termo === "proprietario" ? "Autorização do proprietário" : "Parceria"} · ${p.status === "encerrado" ? "encerrado" : expirado ? "link expirado" : "válido até " + esc(fdt(p.expira))}</p>
+  <div class="linkbox" id="lk">${esc(link)}</div>
+  <div class="row"><button class="grow" id="cp">Copiar link</button><a class="btn grow" target="_blank" rel="noopener" href="${esc(waLink(tel, msg))}">Enviar no WhatsApp</a></div>
+  <div class="row"><button class="sm" id="pdf">PDF editável</button><button class="sm" id="pr">Prorrogar 30 dias</button>${p.status !== "encerrado" ? '<button class="sm" id="enc">Encerrar</button>' : ""}${o ? '<button class="sm" id="vo">Ver oferta</button>' : ""}</div></div>
+  <div class="card"><h2>Honorários</h2><p>${esc(p.comissao?.texto || "")}</p><ul class="log">${(p.comissao?.partes || []).map((x) => `<li><time>${esc(PC.nf(x.pct))}%</time><span>${esc(x.papel)}${x.nome && !PC.ehPC(x) ? " · " + esc(x.nome) : ""}</span></li>`).join("")}</ul></div>
+  <div class="card"><h2>Autorização</h2>${p.aceite ? `<p><b>${esc(p.aceite.razao)}</b> · ${esc(p.aceite.documento)}${p.aceite.creci ? " · CRECI " + esc(p.aceite.creci) : ""}<br>${esc(p.aceite.responsavel)}${p.aceite.cargo ? " (" + esc(p.aceite.cargo) + ")" : ""} · ${esc(p.aceite.email)} · ${esc(p.aceite.telefone)}</p><p class="hint">Aceito em ${esc(fdt(p.aceite.em))} · IP ${esc(p.aceite.ip || "—")} · termo ${esc(p.aceite.termo_versao || "")}<br>SHA-256 ${esc((p.aceite.termo_sha256 || "").slice(0, 24))}…</p>${!ct ? '<button class="sm" id="crm">Salvar anunciante no CRM</button>' : ""}` : '<p class="empty">Ainda não autorizado.</p>'}</div>
+  <div class="card"><h2>Respostas</h2>${resp.length ? resp.map((r) => `<p class="hint">${esc(fdt(r.em))}</p><ul class="log">${Object.entries(r.campos).map(([k, v]) => `<li><time>${esc((PC.CAMPOS[k] || [k])[0])}</time><span>${esc(v)}</span></li>`).join("")}</ul>`).join("") : '<p class="empty">Nenhuma resposta ainda.</p>'}
+  ${o && o.revisar_anunciante ? '<p class="note">As respostas já estão na oferta, marcadas em verde. Abra a oferta, confira e salve.</p>' : ""}</div>
+  ${o ? `<div class="card"><h2>Cruzamento com os briefings</h2>${adere.length ? `<div class="list">${adere.map((x) => `<button class="item" data-b="${x.b.id}"><span class="t"><b>${esc(nomeB(x.b))}</b><span>${esc(x.r.motivos.slice(0, 2).join(" · ") || "Atende a todos os critérios")}</span></span><span class="score">${x.r.score}</span></button>`).join("")}</div>` : '<p class="empty">Nenhum briefing ativo compatível agora.</p>'}</div>` : ""}`;
+  $("cp").onclick = () => copiar(link);
+  $("pdf").onclick = () => pdfAnunciante(p, true);
+  $("pr").onclick = async () => { await store.save("pedidos", { ...p, expira: new Date(Math.max(Date.now(), new Date(p.expira || 0).getTime()) + 30 * 864e5).toISOString(), status: p.status === "encerrado" ? (p.aceite ? "autorizado" : p.respondido_em ? "respondido" : "aberto") : p.status }); toast("Validade prorrogada."); };
+  const enc = $("enc"); if (enc) confirmar2(enc, "Toque de novo para encerrar", async () => { await store.save("pedidos", { ...p, status: "encerrado" }); });
+  const vo = $("vo"); if (vo) vo.onclick = () => go({ v: "oferta", id: o.id });
+  const crm = $("crm"); if (crm) crm.onclick = async () => { const a = p.aceite; const c = { id: uid("c"), nome: a.responsavel, empresa: a.razao, documento: a.documento, creci: a.creci, cargo: a.cargo, email: a.email, telefone: a.telefone, tipo: p.tipo_termo === "proprietario" ? "Proprietário" : "Imobiliária", origem: "Sala do Anunciante", criado: now(), atualizado: now(), log: [{ t: a.em, ev: `Autorizou a indicação de ${p.codigo}` }] }; await store.save("contatos", c); await store.save("pedidos", { ...(S.pedidos.find((x) => x.id === p.id) || p), contato: c.id }); toast("Anunciante salvo no CRM."); };
+  document.querySelectorAll("[data-b]").forEach((x) => (x.onclick = () => go({ v: "briefing", id: x.dataset.b })));
+  if (p.respondido_em && !p.visto) store.save("pedidos", { ...p, visto: true }).catch(() => {});
+};
+
+/* ================= COMISSÃO do negócio ================= */
+VIEWS.comissao = () => {
+  const n = N(route.id); if (!n) return back(); header("Comissão do negócio");
+  const o = O(n.oferta) || {}; const b = B(n.briefing) || {}; const d = PC.num(o); const cp = comPadrao();
+  let cur = n.comissao;
+  if (!cur) {
+    const base = baseDe(o) === "venda" ? "venda" : "locacao";
+    const au = o.autorizacao;
+    let partes;
+    if (au && au.comissao && au.comissao.partes) partes = au.comissao.partes.map((p) => ({ ...p, nome: /imobili|anunciante/i.test(p.papel) ? au.razao : p.nome || "", creci: /imobili|anunciante/i.test(p.papel) ? au.creci : p.creci || "" }));
+    else { const m = modelosCfg().find((x) => x.id === (o.anunciante_tipo === "Proprietário" ? "prop_pc" : "imob_pc")) || modelosCfg()[0]; partes = m.partes.map((p) => ({ ...p, nome: /imobili|anunciante/i.test(p.papel) ? o.anunciante || "" : "", creci: /imobili|anunciante/i.test(p.papel) ? o.anunciante_creci || "" : "" })); }
+    const par = C(b.parceiro_id); partes = partes.map((p) => (/corretor parceiro/i.test(p.papel) && par && !p.nome ? { ...p, contato: par.id, nome: par.nome || par.empresa, creci: par.creci || "" } : p));
+    cur = { base, valor_base: base === "venda" ? d.venda || "" : d.aluguel || "", pct: au?.comissao?.pct || cp.pct, alugueis: au?.comissao?.alugueis || cp.alugueis, partes };
+  }
+  const mods = modelosCfg();
+  $("main").innerHTML = `<div class="card" id="fk"><span class="k">${esc(o.codigo || "")} ${esc(o.titulo || PC.autoTitle(d))}</span>
+  <div class="grid"><label>Base<select id="bs"><option value="venda" ${cur.base === "venda" ? "selected" : ""}>Venda</option><option value="locacao" ${cur.base !== "venda" ? "selected" : ""}>Locação</option></select></label>
+  <label class="u">Valor do negócio<input id="vb" inputmode="decimal" value="${esc(fmtIn("valor_base", PC.parseBR(cur.valor_base)))}"><span>R$</span></label>
+  <label class="u" id="lpct">Comissão<input id="pct" inputmode="decimal" value="${esc(cur.pct)}"><span>%</span></label>
+  <label class="u" id="lalg">Comissão<input id="alg" inputmode="decimal" value="${esc(cur.alugueis)}"><span>aluguéis</span></label></div>
+  <p class="hint">Na locação, o valor do negócio é o aluguel mensal acordado. Na venda, o preço final.</p>
+  <label>Aplicar modelo<select id="md"><option value="">— manter as partes abaixo —</option>${mods.map((m) => `<option value="${m.id}">${esc(m.nome)}</option>`).join("")}</select></label>
+  <div id="pts">${partesHTML(cur.partes, true)}</div><button class="sm" id="addp">+ Parte</button>
+  <div class="tot"><span>Honorários totais</span><span id="tot"></span></div><div id="msgs"></div>
+  <label>Quem recebe os honorários e repassa às demais partes<select id="rcb"></select></label>
+  <label class="check"><input type="checkbox" id="ac" ${cur.acordado ? "checked" : ""}> Divisão acordada com as partes</label>
+  <button class="p" id="sv">Salvar comissão</button><div class="status" id="st"></div></div>`;
+  editing = true;
+  const pts = $("pts");
+  const ler = () => ({ base: $("bs").value, valor_base: $("vb").value, pct: $("pct").value, alugueis: $("alg").value, partes: lerPartes(pts) });
+  const atualiza = () => {
+    const v = ler(); $("lpct").hidden = v.base !== "venda"; $("lalg").hidden = v.base === "venda";
+    const c = PC.calcComissao(v); $("tot").textContent = PC.brl2(c.total) || "R$ 0,00";
+    pts.querySelectorAll(".parte").forEach((el, i) => { const p = c.partes[i]; el.querySelector("[data-pv]").textContent = p ? `${PC.brl2(p.valor) || "R$ 0,00"}` : ""; });
+    const rs = $("rcb"); const sel = rs.value !== "" ? Number(rs.value) : Number.isInteger(cur.recebe) ? cur.recebe : null;
+    const def = PC.partes0Recebe(c.partes); rs.innerHTML = c.partes.map((p, i) => `<option value="${i}" ${i === (sel != null && c.partes[sel] ? sel : def) ? "selected" : ""}>${esc(p.papel)}${p.nome ? " · " + esc(p.nome) : ""}</option>`).join("");
+    $("msgs").innerHTML = (c.erros.length ? `<p class="status err">${esc(c.erros.join(" "))}</p>` : "") + (c.avisos.length ? `<p class="note">${esc(c.avisos.join(" "))}</p>` : "");
+    return c;
+  };
+  const ligar = () => { ligarPartes(pts, atualiza, true); atualiza(); };
+  ligar(); $("fk").addEventListener("input", atualiza); $("fk").addEventListener("change", atualiza);
+  $("md").onchange = () => { const m = mods.find((x) => x.id === $("md").value); if (!m) return; pts.innerHTML = partesHTML(m.partes.map((p) => ({ ...p, nome: /imobili|anunciante/i.test(p.papel) ? o.autorizacao?.razao || o.anunciante || "" : "", creci: /imobili|anunciante/i.test(p.papel) ? o.autorizacao?.creci || o.anunciante_creci || "" : "" })), true); ligar(); };
+  $("addp").onclick = () => { pts.insertAdjacentHTML("beforeend", partesHTML([{ papel: "Corretor parceiro", pct: "" }], true)); ligar(); };
+  $("sv").onclick = async () => {
+    const v = ler(); const c = atualiza();
+    if (!c.ok) { $("st").className = "status err"; $("st").textContent = "Corrija antes de salvar: " + c.erros.join(" "); return; }
+    const ac = $("ac").checked;
+    const com = { ...v, recebe: Number($("rcb").value) || 0, partes: v.partes.map((p) => ({ ...p, pct: PC.parseBR(p.pct) || 0 })), acordado: ac, acordado_em: ac ? n.comissao?.acordado_em || now() : null };
+    const atual = N(n.id) || n; editing = false;
+    try {
+      await store.save("negocios", { ...atual, comissao: com, atualizado: now(), log: [...(atual.log || []), { t: now(), ev: `Comissão ${ac ? "acordada" : "atualizada"}: ${PC.brl2(c.total)} · ${PC.quadroComissao(com)}` }] });
+      await emitir({ tipo: "comissao", negocio_id: n.id, oferta_id: n.oferta, briefing_id: n.briefing, destinatario: n.parceiro || "", conteudo: `Honorários ${PC.brl2(c.total)} (${PC.textoComissao(com)} sobre ${PC.brl(c.valor)})\n` + c.partes.map((p) => `${p.papel}${p.nome && !PC.ehPC(p) ? " · " + p.nome : ""}${p.creci ? " · " + creciTxt(p.creci) : ""}: ${PC.nf(p.pct)}% = ${PC.brl2(p.valor)}`).join("\n"), meta: { acordado: ac } });
+      toast("Comissão salva."); back();
+    } catch { editing = true; }
+  };
 };
 
 iniciar();

@@ -3,8 +3,8 @@ import { build } from 'esbuild'; import { NetlifyDB } from "@netlify/database-de
 const db = new NetlifyDB(); process.env.NETLIFY_DB_URL = await db.start(); await db.applyMigrations("./netlify/database/migrations");
 globalThis.__user = { email: 'contato@primecorpconsultoria.com.br' };
 fs.rmSync('test/www', { recursive: true, force: true }); fs.cpSync('public', 'test/www', { recursive: true });
-await build({ entryPoints: ['src/app.js', 'src/sala.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
-const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default;
+await build({ entryPoints: ['src/app.js', 'src/sala.js', 'src/anunciante.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
+const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default; const anun = (await import('./out/anunciante.mjs')).default;
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/json' };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost:8899');
@@ -12,6 +12,7 @@ http.createServer(async (req, res) => {
   let fn = null, params = {};
   if (url.pathname.startsWith('/api/')) fn = api;
   const m = url.pathname.match(/^\/publico\/sala\/([^/]+)$/); if (m) { fn = sala; params = { token: m[1] }; }
+  const m2 = url.pathname.match(/^\/publico\/anunciante\/([^/]+)$/); if (m2) { fn = anun; params = { token: m2[1] }; }
   if (fn) {
     const h = { ...req.headers }; if (h.origin) h.origin = 'https://pc.test';
     const r = await fn(new Request('https://pc.test' + url.pathname + url.search, { method: req.method, headers: h, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), { params, ip: '127.0.0.1', site: { url: 'http://localhost:8899' } });

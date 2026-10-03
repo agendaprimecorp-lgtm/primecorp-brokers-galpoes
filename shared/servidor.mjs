@@ -3,7 +3,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser } from "@netlify/identity";
 import Anthropic from "@anthropic-ai/sdk";
 
-export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "config"];
+export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config"];
 
 let _db = null;
 export function db() {
@@ -125,3 +125,34 @@ export async function chamarIA(prompt, texto, maxTokens = 4000) {
   const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
   return extrairJSON(out);
 }
+
+/* ---------------- Documentos (CNPJ/CPF) ---------------- */
+export const soDig = (s) => s.replace(/\D/g, "");
+
+export function cnpjValido(c) {
+  const d = soDig(c);
+  if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
+  const calc = (base, pesos) => {
+    const s = base.split("").reduce((acc, x, i) => acc + Number(x) * pesos[i], 0);
+    const r = s % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  const p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const p2 = [6, ...p1];
+  const d1 = calc(d.slice(0, 12), p1);
+  const d2 = calc(d.slice(0, 12) + d1, p2);
+  return d.endsWith(`${d1}${d2}`);
+}
+export function cpfValido(c) {
+  const d = soDig(c);
+  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+  let s = 0;
+  for (let i = 0; i < 9; i++) s += Number(d[i]) * (10 - i);
+  let r = (s * 10) % 11; if (r === 10) r = 0;
+  if (r !== Number(d[9])) return false;
+  s = 0;
+  for (let i = 0; i < 10; i++) s += Number(d[i]) * (11 - i);
+  r = (s * 10) % 11; if (r === 10) r = 0;
+  return r === Number(d[10]);
+}
+

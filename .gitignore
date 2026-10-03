@@ -2,3 +2,6 @@ node_modules/
 public/app.js
 public/sala.js
 .netlify/
+public/anunciante.js
+test/out/
+test/www/

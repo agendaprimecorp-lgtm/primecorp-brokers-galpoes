@@ -1,39 +1,10 @@
 import type { Config, Context } from "@netlify/functions";
 import { createHash } from "node:crypto";
-import { json, erro, obterRegistro, salvarRegistro, registrarEmissao, db } from "../../shared/servidor.mjs";
+import { json, erro, obterRegistro, salvarRegistro, registrarEmissao, db, soDig, cnpjValido, cpfValido } from "../../shared/servidor.mjs";
 
 // Sala do Cliente: rota PÚBLICA. Só entrega nível 1 (faixas), e só depois do aceite do termo.
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 const lim = (s: unknown, n: number) => String(s ?? "").trim().slice(0, n);
-const soDig = (s: string) => s.replace(/\D/g, "");
-
-function cnpjValido(c: string) {
-  const d = soDig(c);
-  if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
-  const calc = (base: string, pesos: number[]) => {
-    const s = base.split("").reduce((acc, x, i) => acc + Number(x) * pesos[i], 0);
-    const r = s % 11;
-    return r < 2 ? 0 : 11 - r;
-  };
-  const p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const p2 = [6, ...p1];
-  const d1 = calc(d.slice(0, 12), p1);
-  const d2 = calc(d.slice(0, 12) + d1, p2);
-  return d.endsWith(`${d1}${d2}`);
-}
-function cpfValido(c: string) {
-  const d = soDig(c);
-  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
-  let s = 0;
-  for (let i = 0; i < 9; i++) s += Number(d[i]) * (10 - i);
-  let r = (s * 10) % 11; if (r === 10) r = 0;
-  if (r !== Number(d[9])) return false;
-  s = 0;
-  for (let i = 0; i < 10; i++) s += Number(d[i]) * (11 - i);
-  r = (s * 10) % 11; if (r === 10) r = 0;
-  return r === Number(d[10]);
-}
-
 function publico(s: Record<string, any>) {
   const aceito = !!s.aceite;
   return {

@@ -22,7 +22,7 @@ PC.m2 = n => (n ? PC.nf(Math.round(n), 0) + ' m²' : null);
 PC.brl = n => (n ? 'R$ ' + PC.nf(Math.round(n), 0) : null);
 PC.brl2 = n => (n ? 'R$ ' + PC.nf(n, 2) : null);
 PC.num = d => {
-  const k = ['terreno', 'construida', 'fabril', 'administrativo', 'apoio', 'pe_direito', 'piso_carga', 'docas', 'energia_kva', 'aluguel', 'venda', 'condominio', 'iptu'];
+  const k = ['terreno', 'construida', 'fabril', 'administrativo', 'apoio', 'pe_direito', 'piso_carga', 'docas', 'energia_kva', 'aluguel', 'venda', 'condominio', 'iptu', 'frente'];
   const o = Object.assign({}, d);
   k.forEach(f => (o[f] = PC.parseBR(d[f])));
   o.diferenciais = PC.lines(d.diferenciais);
@@ -121,11 +121,23 @@ PC.whats = function (d, chk) {
   return L.join('\n');
 };
 
+/* Assunto de um item a confirmar: evita repetir a mesma dúvida com palavras diferentes. */
+PC.TOPICOS = [
+  ['area', /constru[íi]da ou (de )?terreno|área (informada|constru|fabril|locável)|quadro de áreas|terreno x|x terreno|soma das áreas/i],
+  ['pe', /p[ée]-direito/i], ['piso', /\bpiso\b/i], ['energia', /energia|kva|cabine/i], ['docas', /\bdocas?\b/i],
+  ['avcb', /avcb|inc[êe]ndio/i], ['iptu', /iptu/i], ['aluguel', /aluguel|loca[çc][ãa]o mensal/i], ['venda', /valor de venda|pre[çc]o de venda/i],
+  ['regiao', /localiza[çc][ãa]o|regi[ãa]o|endere[çc]o/i], ['disp', /disponib/i], ['dup', /duplic/i], ['doc', /matr[íi]cula|documenta/i],
+];
+PC.topico = s => { for (const [k, re] of PC.TOPICOS) if (re.test(s)) return k; return null; };
 PC.itensPDF = function (d, chk) {
   const out = [];
   const seen = new Set();
-  d.itens.concat(chk.alerts.map(a => a.item)).forEach(s => {
-    const k = s.toLowerCase().slice(0, 18);
+  // checagens primeiro (mais específicas), depois as dúvidas digitadas/da IA
+  chk.alerts.map(a => a.item).concat(d.itens).forEach(s => {
+    if (!s) return;
+    const genericos = /^confirmar especifica[çc][õo]es t[ée]cnicas/i.test(s) ? ['pe', 'piso', 'docas', 'energia'] : null;
+    if (genericos && genericos.every(t => seen.has(t))) return;
+    const k = PC.topico(s) || s.toLowerCase().replace(/[^a-zà-ú0-9]/g, '').slice(0, 24);
     if (!seen.has(k)) { seen.add(k); out.push(s); }
   });
   return out;
@@ -167,13 +179,17 @@ PC.pdf = function (jsPDF, d, chk, logos) {
 
   // KPIs
   y += 12;
-  const k = [];
-  k.push([d.fabril ? PC.m2(d.fabril) : AC, 'Área fabril / galpão']);
-  k.push([d.construida ? PC.m2(d.construida) : AC, 'Área construída']);
-  k.push([d.terreno ? PC.m2(d.terreno) : AC, 'Terreno']);
-  if (d.pe_direito) k.push([PC.nf(d.pe_direito) + ' m', 'Pé-direito']);
-  else if (d.docas) k.push([PC.nf(d.docas), 'Docas']);
-  else k.push([d.energia_kva ? PC.nf(d.energia_kva) + ' kVA' : AC, 'Energia']);
+  // cartões: primeiro o que é conhecido, depois o que falta
+  const cand = [
+    [d.fabril && PC.m2(d.fabril), 'Área fabril / galpão'],
+    [d.construida && PC.m2(d.construida), 'Área construída'],
+    [d.terreno && PC.m2(d.terreno), 'Terreno'],
+    [d.pe_direito && PC.nf(d.pe_direito) + ' m', 'Pé-direito'],
+    [d.docas && PC.nf(d.docas), 'Docas'],
+    [d.energia_kva && PC.nf(d.energia_kva) + ' kVA', 'Energia'],
+  ];
+  const k = cand.filter(c => c[0]).slice(0, 4);
+  cand.filter(c => !c[0]).forEach(c => { if (k.length < 4) k.push([AC, c[1]]); });
   const kg = 8, kw = (IW - 3 * kg) / 4, kh = 50;
   k.forEach((c, i) => {
     const x = M + i * (kw + kg);
@@ -247,6 +263,7 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     const tot = d.aluguel + (d.condominio || 0) + d.iptu / 12;
     cond.push(['Custo de ocupação', PC.brl(tot), 'IPTU rateado mensal']);
   } else cond.push(['Disponibilidade', d.disponibilidade || AC, '']);
+  if (d.documentacao) cond.push(['Documentação', d.documentacao, '']);
   y = table(M, y, IW, 'CONDIÇÕES COMERCIAIS', cond, [150]) + 16;
 
   // bullets
@@ -393,5 +410,293 @@ PC.teaser = function (oRaw, chk, rotulo) {
   L.push('Rodrigo França Viana · CRECI-SP 297692');
   return L.join('\n');
 };
+
+/* ===== v3: ficha mínima, completude, comissão e documento ao anunciante ===== */
+PC.grupo = tipo => (/área|area|terreno|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja/i.test(tipo || '') ? 'comercial' : 'galpao');
+// campo: [rótulo, pergunta objetiva, tipo de resposta]
+PC.CAMPOS = {
+  cidade: ['Cidade', 'Em qual cidade fica o imóvel?', 'text'],
+  regiao: ['Região / eixo', 'Qual a região ou o eixo de acesso (ex.: Rod. Anhanguera, km aproximado)?', 'text'],
+  construida: ['Área construída', 'Qual é a área construída total?', 'm²'],
+  terreno: ['Área do terreno', 'Qual é a área do terreno?', 'm²'],
+  fabril: ['Área do galpão', 'Qual é a área do galpão (armazenagem/produção)?', 'm²'],
+  pe_direito: ['Pé-direito livre', 'Qual é o pé-direito livre (do piso à parte mais baixa da estrutura)?', 'm'],
+  docas: ['Docas', 'Quantas docas para caminhão o imóvel tem?', 'nº'],
+  energia_kva: ['Energia', 'Qual a potência de energia disponível (kVA)? Há cabine primária?', 'kVA'],
+  piso_carga: ['Piso', 'Qual a capacidade de carga do piso?', 't/m²'],
+  avcb: ['AVCB', 'O AVCB está vigente? Até quando?', 'text'],
+  aluguel: ['Aluguel mensal', 'Qual o valor do aluguel mensal?', 'R$'],
+  venda: ['Valor de venda', 'Qual o valor de venda?', 'R$'],
+  iptu: ['IPTU', 'Qual o valor do IPTU?', 'R$'],
+  iptu_periodo: ['IPTU: periodicidade', 'O valor do IPTU é mensal ou anual?', 'sel:mensal|anual'],
+  condominio: ['Condomínio', 'Qual o condomínio mensal? (0 se não houver)', 'R$'],
+  zoneamento: ['Zoneamento', 'Qual o zoneamento do terreno (uso permitido)?', 'text'],
+  frente: ['Frente', 'Qual a medida de frente do terreno?', 'm'],
+  disponibilidade: ['Disponibilidade', 'O imóvel está disponível? A partir de quando?', 'text'],
+  documentacao: ['Documentação', 'A matrícula está regular e com a construção averbada?', 'text'],
+};
+PC.CAMPOS_NUM = ['construida', 'terreno', 'fabril', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'aluguel', 'venda', 'iptu', 'condominio', 'frente'];
+PC.OBRIG = {
+  galpao: ['cidade', 'regiao', 'construida', 'terreno', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'avcb', 'VALOR', 'iptu', 'disponibilidade', 'documentacao'],
+  area: ['cidade', 'regiao', 'terreno', 'zoneamento', 'VALOR', 'iptu', 'disponibilidade', 'documentacao'],
+  comercial: ['cidade', 'regiao', 'construida', 'VALOR', 'iptu', 'condominio', 'disponibilidade', 'documentacao'],
+};
+PC.completude = function (oRaw) {
+  const d = PC.num(oRaw); const g = PC.grupo(d.tipo); const op = PC.norm(d.operacao || 'Locação');
+  const campos = [];
+  PC.OBRIG[g].forEach(c => {
+    if (c !== 'VALOR') return campos.push(c);
+    if (!op.startsWith('venda')) campos.push('aluguel');
+    if (op.includes('venda')) campos.push('venda');
+  });
+  const vazio = c => {
+    if (c === 'condominio' && String(oRaw.condominio ?? '').trim() === '0') return false;
+    if (PC.CAMPOS_NUM.includes(c)) return !d[c];
+    return String(oRaw[c] ?? '').trim() === '';
+  };
+  const faltam = [];
+  const item = (campo, pergunta, extra) => faltam.push({ campo, rotulo: PC.CAMPOS[campo][0], pergunta: pergunta || PC.CAMPOS[campo][1], tipo: PC.CAMPOS[campo][2], extra: !!extra });
+  let pend = 0;
+  campos.forEach(c => {
+    if (!vazio(c)) {
+      if (c === 'iptu' && !['mensal', 'anual'].includes(oRaw.iptu_periodo)) { pend += 0.5; item('iptu_periodo', `O IPTU de ${PC.brl(d.iptu)} é mensal ou anual?`); }
+      return;
+    }
+    pend++;
+    let q = null;
+    if (c === 'terreno' && d.construida && !d.fabril) q = `Os ${PC.m2(d.construida)} informados são de área construída ou de terreno? Qual é a área do terreno?`;
+    if (c === 'construida' && d.fabril) q = `Além dos ${PC.m2(d.fabril)} de galpão, qual é a área construída total (com escritórios e apoio)?`;
+    if (c === 'construida' && !d.fabril && d.terreno) q = `Os ${PC.m2(d.terreno)} informados são do terreno? Qual é a área construída?`;
+    item(c, q);
+    if (c === 'iptu') item('iptu_periodo', null, true);
+  });
+  const total = campos.length;
+  const pct = Math.max(0, Math.round(((total - pend) / total) * 100));
+  return { grupo: g, total, pct, ok: pend === 0, faltam };
+};
+
+/* --- Comissão dividida por indicação (2, 3 ou mais partes) --- */
+PC.PAPEIS = ['Imobiliária anunciante', 'Corretor do anunciante', 'Corretor parceiro', 'PrimeCorp (indicação)', 'Outro'];
+PC.MODELOS_PADRAO = [
+  { id: 'imob_pc', nome: 'Imobiliária + PrimeCorp', partes: [{ papel: 'Imobiliária anunciante', pct: 50 }, { papel: 'PrimeCorp (indicação)', pct: 50 }] },
+  { id: 'imob_cor_pc', nome: 'Imobiliária + Corretor parceiro + PrimeCorp', partes: [{ papel: 'Imobiliária anunciante', pct: 50 }, { papel: 'Corretor parceiro', pct: 25 }, { papel: 'PrimeCorp (indicação)', pct: 25 }] },
+  { id: 'prop_pc', nome: 'Proprietário direto + PrimeCorp', partes: [{ papel: 'PrimeCorp (indicação)', pct: 100 }] },
+  { id: 'prop_cor_pc', nome: 'Proprietário direto + Corretor parceiro + PrimeCorp', partes: [{ papel: 'Corretor parceiro', pct: 50 }, { papel: 'PrimeCorp (indicação)', pct: 50 }] },
+];
+PC.ehPC = p => /primecorp/i.test(p.papel || '');
+PC.calcComissao = function (c) {
+  const base = c.base === 'venda' ? 'venda' : 'locacao';
+  const valor = PC.parseBR(c.valor_base) || 0;
+  const pct = PC.parseBR(c.pct) || 0, alug = PC.parseBR(c.alugueis) || 0;
+  const total = Math.round((base === 'venda' ? (valor * pct) / 100 : valor * alug) * 100) / 100;
+  const partes = (c.partes || []).map(p => { const pp = PC.parseBR(p.pct) || 0; return { ...p, pct: pp, valor: Math.round(total * pp) / 100 }; });
+  const soma = Math.round(partes.reduce((a, p) => a + p.pct, 0) * 100) / 100;
+  const erros = [], avisos = [];
+  if (!valor) erros.push(base === 'venda' ? 'Informe o valor de venda.' : 'Informe o aluguel mensal.');
+  if (base === 'venda' && !pct) erros.push('Informe o percentual de comissão sobre a venda.');
+  if (base === 'locacao' && !alug) erros.push('Informe quantos aluguéis compõem a comissão.');
+  if (!partes.length) erros.push('Inclua as partes da divisão.');
+  else if (Math.abs(soma - 100) > 0.01) erros.push(`A soma das partes é ${PC.nf(soma)}%: precisa fechar em 100%.`);
+  if (partes.length && !partes.some(PC.ehPC)) avisos.push('A participação da PrimeCorp não está na divisão.');
+  partes.forEach((p, i) => {
+    if (PC.ehPC(p)) return;
+    if (!p.nome) avisos.push(`Parte ${i + 1} (${p.papel}) sem nome.`);
+    if (!/\d{3,}/.test(String(p.creci || ''))) avisos.push(`${p.nome || p.papel}: CRECI não informado. Honorários só se dividem com inscritos no CRECI.`);
+  });
+  return { base, valor, pct, alugueis: alug, total, partes, soma, erros, avisos, ok: !erros.length };
+};
+PC.textoComissao = c => (c.base === 'venda' ? `${PC.nf(PC.parseBR(c.pct) || 0)}% sobre o valor da venda` : `${PC.nf(PC.parseBR(c.alugueis) || 0)} aluguel(éis) mensal(is)`);
+PC.quadroComissao = c => (c.partes || []).map(p => `${p.papel}${p.nome && !PC.ehPC(p) ? ' (' + p.nome + ')' : ''}: ${PC.nf(PC.parseBR(p.pct) || 0)}%`).join(' · ');
+PC.preencher = (txt, v) => String(txt || '').replace(/\{\{(\w+)\}\}/g, (m, k) => (v[k] != null && v[k] !== '' ? String(v[k]) : m));
+
+/* --- PDF ao anunciante: solicitação de informações e/ou ficha + autorização (campos editáveis) --- */
+PC.valorCampo = function (d, c) {
+  const v = d[c];
+  if (v === null || v === undefined || v === '') return null;
+  const u = PC.CAMPOS[c] ? PC.CAMPOS[c][2] : 'text';
+  if (u === 'm²') return PC.m2(v);
+  if (u === 'R$') return c === 'iptu' && d.iptu_periodo ? PC.brl(v) + (d.iptu_periodo === 'anual' ? '/ano' : '/mês') : PC.brl(v) + (c === 'aluguel' || c === 'condominio' ? '/mês' : '');
+  if (u === 'm') return PC.nf(v) + ' m';
+  if (u === 't/m²') return PC.nf(v) + ' t/m²';
+  if (u === 'kVA') return PC.nf(v) + ' kVA';
+  return String(v);
+};
+PC.conhecidos = function (oRaw) {
+  const d = PC.num(oRaw);
+  return ['cidade', 'regiao', 'construida', 'fabril', 'terreno', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'avcb', 'aluguel', 'venda', 'condominio', 'iptu', 'zoneamento', 'frente', 'disponibilidade', 'documentacao']
+    .map(c => [PC.CAMPOS[c][0], PC.valorCampo(d, c)]).filter(r => r[1]);
+};
+PC.pdfAnunciante = function (jsPDF, oRaw, o) {
+  const d = PC.num(oRaw);
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+  const W = 595.28, H = 841.89, M = 38, IW = W - 2 * M, BOT = H - 58;
+  const C = { g: [30, 34, 39], r: [200, 16, 46], p: [244, 245, 247], z: [250, 250, 251], t: [30, 34, 39], t2: [90, 96, 104], ln: [217, 220, 225], w: [255, 255, 255], wl: [190, 195, 202] };
+  const fill = c => doc.setFillColor(c[0], c[1], c[2]), ink = c => doc.setTextColor(c[0], c[1], c[2]), pen = c => doc.setDrawColor(c[0], c[1], c[2]);
+  const F = (s, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(s); };
+  const clean = s => String(s == null ? '' : s).replace(/[≈]/g, '~').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x00-\xFF–—•²³ºª·€]/g, '');
+  const T = (s, x, y, op) => doc.text(clean(s), x, y, op);
+  const wrap = (s, w) => doc.splitTextToSize(clean(s), w);
+  const aut = o.modo === 'autorizacao';
+  let y = 0, nf = 0;
+  const field = (name, x, yy, w, h, multi) => { const f = new doc.AcroFormTextField(); f.fieldName = 'f' + (++nf) + '_' + name; f.Rect = [x, yy, w, h]; f.fontSize = 9; f.multiline = !!multi; f.value = ''; f.maxFontSize = 9; doc.addField(f); pen(C.ln); doc.setLineWidth(0.6); fill(C.w); doc.rect(x, yy, w, h, 'FD'); };
+  const cab = () => {
+    fill(C.r); doc.rect(0, 0, W, 8, 'F');
+    F(8.2, true); ink(C.r); T((aut ? 'FICHA DO IMÓVEL E AUTORIZAÇÃO DE INDICAÇÃO' : 'SOLICITAÇÃO DE INFORMAÇÕES E AUTORIZAÇÃO DE INDICAÇÃO'), M, 34);
+    F(7.6, false); ink(C.t2); T(`${(d.tipo || 'Imóvel').toUpperCase()} · ${(d.operacao || '').toUpperCase()} · REF. ${o.codigo || ''}`, M, 46);
+    if (o.logos && o.logos.dark) { const lh = 24, lw = lh * o.logos.ratio; doc.addImage(o.logos.dark, 'PNG', W - M - lw, 18, lw, lh); }
+    y = 70;
+  };
+  const novaPag = () => { doc.addPage(); cab(); };
+  const precisa = h => { if (y + h > BOT) novaPag(); };
+  const secao = t => { precisa(40); F(8.6, true); ink(C.r); T(t, M, y); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, y + 5, W - M, y + 5); y += 18; };
+  const para = (txt, s = 9.4, cor = C.t, w = IW, x = M) => { F(s, false); ink(cor); wrap(txt, w).forEach(l => { precisa(s + 4); T(l, x, y); y += s + 4; }); };
+
+  cab();
+  F(18, true); ink(C.t);
+  wrap(oRaw.titulo || PC.autoTitle(d), IW).slice(0, 2).forEach(l => { T(l, M, y); y += 22; });
+  y += 2;
+  F(9.4, false); ink(C.t2); T(`A/C: ${o.anunciante || 'Responsável pelo anúncio'}`, M, y); y += 18;
+  para(`Atuo na representação de empresas e investidores que procuram imóveis (Tenant & Buyer Representation). Identifiquei o imóvel acima no seu anúncio e gostaria de apresentá-lo aos meus clientes${aut ? '. Os dados abaixo foram levantados e conferidos.' : ', mas faltam informações básicas para que ele entre na seleção.'} Peço, por gentileza, ${aut ? 'a sua autorização para a indicação' : 'que complete os dados e autorize a indicação'}.`);
+  y += 4;
+  if (o.demanda > 0) {
+    precisa(34); fill(C.p); doc.rect(M, y, IW, 28, 'F'); fill(C.r); doc.rect(M, y, 3.5, 28, 'F');
+    F(9.6, true); ink(C.t); T(`Tenho ${o.demanda} cliente${o.demanda > 1 ? 's' : ''} com demanda ativa compatível com este imóvel.`, M + 14, y + 18); y += 38;
+  }
+  if (o.link) {
+    precisa(40); fill(C.g); doc.rect(M, y, IW, 34, 'F');
+    F(8.6, true); ink(C.w); T('Mais rápido pelo celular: responda e autorize online', M + 12, y + 14);
+    F(8, false); ink(C.wl); doc.textWithLink(clean(o.link), M + 12, y + 26, { url: o.link }); y += 46;
+  }
+
+  // dados já levantados
+  const conhecidos = PC.conhecidos(oRaw);
+  secao('DADOS JÁ LEVANTADOS');
+  if (!conhecidos.length) para('Nenhum dado técnico consta no anúncio.', 9, C.t2);
+  const cw = (IW - 12) / 2;
+  for (let i = 0; i < conhecidos.length; i += 2) {
+    precisa(17);
+    [conhecidos[i], conhecidos[i + 1]].forEach((r, j) => { if (!r) return; const x = M + j * (cw + 12); fill((i / 2) % 2 ? C.z : C.p); doc.rect(x, y, cw, 16, 'F'); F(8.4, false); ink(C.t2); T(r[0], x + 8, y + 11); F(8.4, true); ink(C.t); T(wrap(r[1], cw - 110)[0], x + cw - 8, y + 11, { align: 'right' }); });
+    y += 16.5;
+  }
+  y += 12;
+
+  // informações necessárias (campos editáveis)
+  const faltam = o.faltam || [];
+  if (faltam.length) {
+    secao('INFORMAÇÕES NECESSÁRIAS (PREENCHA NOS CAMPOS)');
+    faltam.forEach((f, i) => {
+      const ls = wrap(`${i + 1}. ${f.pergunta}`, IW - 190);
+      const h = Math.max(20, ls.length * 11 + 6);
+      precisa(h + 6);
+      F(8.8, false); ink(C.t); ls.forEach((l, k) => T(l, M, y + 12 + k * 11));
+      field(f.campo, W - M - 180, y + 1, 180, 18);
+      y += h + 4;
+    });
+    y += 8;
+  }
+
+  // autorização e comissão
+  secao('AUTORIZAÇÃO DE INDICAÇÃO E DIVISÃO DE HONORÁRIOS');
+  if (o.comissao) {
+    precisa(30 + (o.comissao.partes || []).length * 16);
+    fill(C.g); doc.rect(M, y, IW, 18, 'F'); F(8, true); ink(C.w); T('Honorários totais: ' + PC.textoComissao(o.comissao), M + 8, y + 12.2); y += 18;
+    (o.comissao.partes || []).forEach((p, i) => { fill(i % 2 ? C.z : C.p); doc.rect(M, y, IW, 16, 'F'); F(8.4, false); ink(C.t); T(p.papel + (p.nome && !PC.ehPC(p) ? ' · ' + p.nome : ''), M + 8, y + 11); F(8.4, true); T(PC.nf(PC.parseBR(p.pct) || 0) + '%', W - M - 8, y + 11, { align: 'right' }); y += 16; });
+    y += 10;
+  }
+  if (o.termo) { F(7.4, true); ink(C.t2); precisa(14); T(`Termo ${o.termo_versao || ''}`, M, y); y += 11; para(o.termo, 7.6, C.t2); y += 8; }
+
+  // identificação e aceite
+  secao('IDENTIFICAÇÃO E ACEITE');
+  const ids = [['Nome / razão social', 'razao'], ['CNPJ / CPF', 'documento'], ['CRECI (pessoa física ou jurídica)', 'creci'], ['Responsável', 'responsavel'], ['Cargo', 'cargo'], ['E-mail', 'email'], ['Telefone / WhatsApp', 'telefone'], ['Local e data', 'local_data']];
+  for (let i = 0; i < ids.length; i += 2) {
+    precisa(36);
+    [ids[i], ids[i + 1]].forEach((r, j) => { if (!r) return; const x = M + j * (cw + 12); F(7.6, false); ink(C.t2); T(r[0], x, y + 8); field(r[1], x, y + 12, cw, 18); });
+    y += 38;
+  }
+  precisa(60); y += 22; pen(C.t2); doc.setLineWidth(0.6); doc.line(M, y, M + cw, y); F(7.6, false); ink(C.t2); T('Assinatura do responsável', M, y + 11);
+  y += 24;
+
+  // rodapé em todas as páginas
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40);
+    F(7.4, false); ink(C.t2);
+    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}${o.corretor?.whatsapp ? ' · ' + o.corretor.whatsapp : ''}`, M, H - 27);
+    T(`Ref. ${o.codigo || ''} · ${i}/${n}`, W - M, H - 27, { align: 'right' });
+  }
+  return doc;
+};
+PC.filenameAnunciante = (d, modo) => PC.filename(d).replace(/^Descritivo_/, modo === 'autorizacao' ? 'Autorizacao_' : 'Solicitacao_');
+
+/* --- Acordo de divisão de honorários (todas as partes assinam) --- */
+PC.recebedor = (c) => { const ps = c.partes || []; const i = Number.isInteger(c.recebe) && ps[c.recebe] ? c.recebe : Math.max(0, ps.findIndex(p => !PC.ehPC(p))); return ps[i] || null; };
+PC.partes0Recebe = ps => Math.max(0, (ps || []).findIndex(p => !PC.ehPC(p)));
+PC.nomeParte = p => (p ? (PC.ehPC(p) ? (p.nome || 'Rodrigo França Viana') + ' · PrimeCorp Brokers' : p.nome || p.papel) : '');
+PC.pdfAcordo = function (jsPDF, o) {
+  const c = PC.calcComissao(o.comissao);
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+  const W = 595.28, H = 841.89, M = 38, IW = W - 2 * M, BOT = H - 58;
+  const C = { g: [30, 34, 39], r: [200, 16, 46], p: [244, 245, 247], z: [250, 250, 251], t: [30, 34, 39], t2: [90, 96, 104], ln: [217, 220, 225], w: [255, 255, 255] };
+  const fill = k => doc.setFillColor(k[0], k[1], k[2]), ink = k => doc.setTextColor(k[0], k[1], k[2]), pen = k => doc.setDrawColor(k[0], k[1], k[2]);
+  const F = (s, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(s); };
+  const clean = s => String(s == null ? '' : s).replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x00-\xFF–—•²³ºª·€§]/g, '');
+  const T = (s, x, yy, op) => doc.text(clean(s), x, yy, op);
+  const wrap = (s, w) => doc.splitTextToSize(clean(s), w);
+  let y = 0;
+  const cab = () => {
+    fill(C.r); doc.rect(0, 0, W, 8, 'F');
+    F(8.2, true); ink(C.r); T('ACORDO DE DIVISÃO DE HONORÁRIOS', M, 34);
+    F(7.6, false); ink(C.t2); T(`${(o.tipo || 'IMÓVEL').toUpperCase()} · ${(c.base === 'venda' ? 'VENDA' : 'LOCAÇÃO')} · REF. ${o.codigo || ''}`, M, 46);
+    if (o.logos && o.logos.dark) { const lh = 24, lw = lh * o.logos.ratio; doc.addImage(o.logos.dark, 'PNG', W - M - lw, 18, lw, lh); }
+    y = 70;
+  };
+  const precisa = h => { if (y + h > BOT) { doc.addPage(); cab(); } };
+  const secao = t => { precisa(40); F(8.6, true); ink(C.r); T(t, M, y); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, y + 5, W - M, y + 5); y += 18; };
+  const para = (txt, s = 8.2, cor = C.t2) => { F(s, false); ink(cor); wrap(txt, IW).forEach(l => { precisa(s + 4); T(l, M, y); y += s + 4; }); };
+  cab();
+  F(17, true); ink(C.t); wrap(o.titulo || '', IW).slice(0, 2).forEach(l => { T(l, M, y); y += 21; });
+  F(9.2, false); ink(C.t2); T(`Cliente: ${o.cliente || 'a identificar'}`, M, y); y += 20;
+  // KPIs
+  const kp = [[PC.brl2(c.total) || 'R$ 0,00', 'Honorários totais'], [c.base === 'venda' ? PC.nf(c.pct) + '% da venda' : PC.nf(c.alugueis) + (c.alugueis === 1 ? ' aluguel' : ' aluguéis'), 'Base de cálculo'], [PC.brl(c.valor) || '—', c.base === 'venda' ? 'Valor da venda' : 'Aluguel mensal'], [String(c.partes.length), 'Partes na divisão']];
+  const kw = (IW - 18) / 4;
+  kp.forEach((k, i) => { const x = M + i * (kw + 6); fill(C.r); doc.rect(x, y, kw, 3, 'F'); fill(C.p); doc.rect(x, y + 3, kw, 40, 'F'); F(12, true); ink(C.t); T(wrap(k[0], kw - 14)[0], x + 8, y + 21); F(7.4, false); ink(C.t2); T(k[1], x + 8, y + 35); });
+  y += 58;
+  // quadro
+  secao('QUADRO DE DIVISÃO');
+  const cols = [M + 8, M + 138, M + 300, W - M - 112, W - M - 8];
+  fill(C.g); doc.rect(M, y, IW, 18, 'F'); F(7.8, true); ink(C.w);
+  T('PAPEL', cols[0], y + 12); T('NOME / RAZÃO SOCIAL', cols[1], y + 12); T('CRECI', cols[2], y + 12); T('%', cols[3], y + 12, { align: 'right' }); T('VALOR ESTIMADO', cols[4], y + 12, { align: 'right' }); y += 18;
+  const rec = PC.recebedor(o.comissao);
+  c.partes.forEach((p, i) => {
+    const nm = wrap(PC.ehPC(p) ? (p.nome || 'Rodrigo França Viana') : (p.nome || '—'), 150); const h = Math.max(18, nm.length * 10 + 8);
+    precisa(h); fill(i % 2 ? C.z : C.p); doc.rect(M, y, IW, h, 'F');
+    F(8.2, false); ink(C.t); T(wrap(p.papel, 135)[0], cols[0], y + 12); nm.forEach((l, k) => T(l, cols[1], y + 12 + k * 10));
+    T(wrap(p.creci || (PC.ehPC(p) ? 'CRECI-SP 297692' : '—'), 92)[0], cols[2], y + 12); F(8.2, true); T(PC.nf(p.pct) + '%', cols[3], y + 12, { align: 'right' }); T(PC.brl2(p.valor) || '—', cols[4], y + 12, { align: 'right' });
+    y += h;
+  });
+  fill(C.g); doc.rect(M, y, IW, 18, 'F'); F(8.2, true); ink(C.w); T('Total', cols[0], y + 12); T(PC.nf(c.soma) + '%', cols[3], y + 12, { align: 'right' }); T(PC.brl2(c.total) || '—', cols[4], y + 12, { align: 'right' }); y += 32;
+  F(7.6, false); ink(C.t2); T(`Recebe e repassa: ${PC.nomeParte(rec)}. Valores estimados sobre o valor de referência; o cálculo final usa o valor contratado.`, M, y); y += 18;
+  // cláusulas
+  secao('CONDIÇÕES');
+  F(7.4, true); ink(C.t2); precisa(12); T(`Acordo ${o.versao || ''}`, M, y); y += 11;
+  String(o.texto || '').split(/\n\s*\n/).forEach(bl => { para(bl.trim()); y += 4; });
+  // assinaturas
+  precisa(70 + Math.ceil(c.partes.length / 2) * 64);
+  secao('ASSINATURAS');
+  F(7.6, false); ink(C.t2); T('Local e data: ______________________________________', M, y + 6); y += 26;
+  const cw = (IW - 24) / 2;
+  for (let i = 0; i < c.partes.length; i += 2) {
+    precisa(64);
+    [c.partes[i], c.partes[i + 1]].forEach((p, j) => { if (!p) return; const x = M + j * (cw + 24); pen(C.t2); doc.setLineWidth(0.6); doc.line(x, y + 26, x + cw, y + 26);
+      F(8, true); ink(C.t); T(wrap(PC.nomeParte(p), cw)[0], x, y + 38); F(7.4, false); ink(C.t2); T(wrap(`${p.papel} · ${p.creci || (PC.ehPC(p) ? 'CRECI-SP 297692' : 'CRECI: ______')} · ${PC.nf(p.pct)}%`, cw)[0], x, y + 49); });
+    y += 64;
+  }
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40); F(7.4, false); ink(C.t2);
+    T(`${o.corretor?.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${o.corretor?.creci || 'CRECI-SP 297692'} · ${o.corretor?.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
+    T(`Ref. ${o.codigo || ''} · ${i}/${n}`, W - M, H - 27, { align: 'right' }); }
+  return doc;
+};
+PC.varsAcordo = (o) => { const c = PC.calcComissao(o.comissao); return { OPERACAO: c.base === 'venda' ? 'Venda' : 'Locação', CODIGO: o.codigo || '', TITULO: o.titulo || '', CLIENTE: o.cliente || 'a identificar', COMISSAO: PC.textoComissao(o.comissao), VALOR: (PC.brl(c.valor) || '—') + (c.base === 'venda' ? '' : '/mês'), TOTAL: PC.brl2(c.total) || '—', QUADRO: c.partes.map(p => `${PC.nomeParte(p)} (${PC.ehPC(p) ? 'indicação' : p.papel}): ${PC.nf(p.pct)}%`).join('; '), RECEBEDOR: PC.nomeParte(PC.recebedor(o.comissao)) }; };
 
 export default PC;
