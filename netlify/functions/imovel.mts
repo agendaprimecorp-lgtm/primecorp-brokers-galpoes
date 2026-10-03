@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
-import { obterRegistro, db } from "../../shared/servidor.mjs";
+import { obterRegistro, db, env } from "../../shared/servidor.mjs";
 
 // Landing pública do anúncio (link para WhatsApp). Mostra só o que foi publicado (instantâneo), nunca o endereço.
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -84,7 +84,10 @@ export default async (req: Request, context: Context) => {
     return new Response(data as ArrayBuffer, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=3600" } });
   }
   try { await db().sql`UPDATE registros SET dados = jsonb_set(dados, '{visitas}', to_jsonb(COALESCE((dados->>'visitas')::int, 0) + 1)) WHERE colecao = 'anuncios' AND id = ${m[1]}`; } catch {}
-  return new Response(pagina(a, url.origin, m[1]), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY" } });
+  // "Tenho interesse" cai no WhatsApp da Zoe (lead entra no CRM e na agenda), salvo se desligado em Mais → Zoe
+  let an = a;
+  try { const z = await obterRegistro("config", "zoe"); const num = soDig(env("WHATSAPP_NUMERO")); if (num.length >= 10 && z?.anuncios_pela_zoe !== false && z?.ativa !== false) an = { ...a, corretor: { ...(a.corretor || {}), whatsapp: num } }; } catch {}
+  return new Response(pagina(an, url.origin, m[1]), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY" } });
 };
 
 export const config: Config = {

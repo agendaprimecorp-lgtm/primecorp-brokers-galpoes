@@ -10,7 +10,7 @@ import { varrer } from "../../shared/varredura.mjs";
 import V from "../../shared/verif.mjs";
 import { criarContexto } from "../../shared/zoe-run.mjs";
 import { responder, anexarMsg } from "../../shared/zoe.mjs";
-import { enviar, janelaAberta, equipeWA } from "../../shared/whatsapp.mjs";
+import { enviar, janelaAberta, equipeWA, conectarWebhook360 } from "../../shared/whatsapp.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_PDF = 4 * 1024 * 1024; // 4 MB
@@ -271,6 +271,14 @@ export default async (req: Request, context: Context) => {
       if (conv.modo === "humano") conv.modo = "zoe"; // na simulação, segue com a Zoe
       delete conv.id; await salvarRegistro("conversas", id, conv);
       return json({ ok: true, conversa: id, resposta: r.texto, botoes: r.botoes, acoes: r.acoes, simulado: g.simulado, avisos: (g.avisos || []).map((x: any) => x.texto) });
+    }
+    if (rota === "zoe" && a === "conectar" && req.method === "POST") {
+      if (!admin) return erro("Somente o administrador conecta o WhatsApp.", 403);
+      if ((env("WHATSAPP_PROVEDOR") || "").toLowerCase() !== "360dialog") return erro("Conexão automática só no modo 360dialog (WHATSAPP_PROVEDOR=360dialog).");
+      const destino = (env("URL") || url.origin) + "/whatsapp/webhook";
+      try { await conectarWebhook360(destino); } catch (e) { return erro(e instanceof Error ? e.message : String(e), 502); }
+      await registrarEmissao({ tipo: "zoe_aviso", conteudo: "WhatsApp conectado ao sistema: " + destino, meta: { usuario: u.email } });
+      return json({ ok: true, webhook: destino });
     }
     if (rota === "zoe" && (a === "enviar" || a === "modo") && req.method === "POST") {
       const body = await req.json().catch(() => null);

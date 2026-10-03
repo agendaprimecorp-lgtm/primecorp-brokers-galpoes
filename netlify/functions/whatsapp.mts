@@ -13,7 +13,7 @@ export default async (req: Request, _context: Context) => {
   if (req.method !== "POST") return new Response("Método não permitido", { status: 405 });
   const corpo = await req.text();
   if (!env("WHATSAPP_APP_SECRET") && !env("WHATSAPP_WEBHOOK_CHAVE")) return new Response("Não configurado", { status: 503 });
-  const autentico = (env("WHATSAPP_APP_SECRET") && assinaturaValida(corpo, req.headers.get("x-hub-signature-256") || "", env("WHATSAPP_APP_SECRET"))) || chaveValida(url.searchParams.get("chave") || "");
+  const autentico = (env("WHATSAPP_APP_SECRET") && assinaturaValida(corpo, req.headers.get("x-hub-signature-256") || "", env("WHATSAPP_APP_SECRET"))) || chaveValida(req.headers.get("x-chave-webhook") || url.searchParams.get("chave") || "");
   if (!autentico) return new Response("Assinatura inválida", { status: 401 });
   let payload: any; try { payload = JSON.parse(corpo); } catch { return new Response("ok"); }
   const esperado = env("WHATSAPP_PHONE_ID");
