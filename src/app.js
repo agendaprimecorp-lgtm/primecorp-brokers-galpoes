@@ -4,6 +4,7 @@ import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, r
 import { tratarFoto, blobB64 } from "./foto.js";
 import { ditar, vozDisponivel } from "./voz.js";
 import { zipSync, strToU8 } from "fflate";
+import qrcode from "qrcode-generator";
 import { roteiroFotos } from "../shared/roteiro.mjs";
 import { xmlVRSync, csvImovel, textoImovel, nomeFoto } from "../shared/exporta.mjs";
 import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO, VISITA_PADRAO, RECIBO_PADRAO, CLAUSULA_SPLIT, MANDATO_PADRAO, VERSAO_DOCS, PRAZOS, CORRETOR_PADRAO, varsPrazos, pendencias, extenso, reaisExtenso } from "./termo.js";
@@ -122,8 +123,28 @@ async function abrir() {
   $("main").innerHTML = `<div class="card"><p class="hint">Carregando dados…</p></div>`;
   try { await store.carregar(); try { EU = await api("status"); } catch {} }
   catch (e) { if (e.status !== 401) $("main").innerHTML = `<div class="card"><p class="status err">Não foi possível carregar: ${esc(e.message)}</p><button id="rt">Tentar de novo</button></div>`; const rt = $("rt"); if (rt) rt.onclick = abrir; return; }
-  route = { v: "painel" }; stack.length = 0; render();
+  route = { v: "painel" }; stack.length = 0; assinaturaDados = assinatura(); ultimaSync = new Date(); render();
 }
+/* ---------- Modo de tela: celular (campo, alimenta o sistema) x computador (escritório, gestão) ---------- */
+const lerPref = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const gravarPref = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+const modoAuto = () => (window.matchMedia("(pointer: fine)").matches && window.innerWidth >= 1024 ? "escritorio" : "campo");
+const MODO = () => document.documentElement.dataset.modo || "campo";
+function aplicarModo() { const pref = lerPref("pc_modo"); const m = pref === "escritorio" || pref === "campo" ? pref : modoAuto(); if (document.documentElement.dataset.modo !== m) { document.documentElement.dataset.modo = m; return true; } return false; }
+aplicarModo();
+window.addEventListener("resize", () => { if (!lerPref("pc_modo") && aplicarModo() && usuarioAtual) render(); });
+/** QR em SVG para abrir o sistema no celular. */
+function qrSVG(txt, tam = 168) { const q = qrcode(0, "M"); q.addData(txt); q.make(); return q.createSvgTag({ cellSize: Math.max(2, Math.floor(tam / (q.getModuleCount() + 8))), margin: 4, scalable: true }); }
+const cartaoCelular = (titulo, texto) => `<div class="card celular"><div class="qr">${qrSVG(location.origin)}</div><div><span class="k">Use o celular</span><h2>${esc(titulo)}</h2><p class="hint">${esc(texto)}</p><p class="hint">Aponte a câmera do celular para o código ou abra <b>${esc(location.host)}</b>. O que for registrado no celular aparece aqui em segundos.</p></div></div>`;
+// No computador, o painel acompanha o que chega do celular (sincroniza a cada 20 s).
+let ultimaSync = null, assinaturaDados = "";
+const assinatura = () => S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
+async function sincronizar(forcar) {
+  if (!usuarioAtual || document.visibilityState !== "visible") return;
+  if (editing && !forcar) return;
+  try { await store.carregar(); ultimaSync = new Date(); const a = assinatura(); const mudou = a !== assinaturaDados; assinaturaDados = a; const sy = document.getElementById("sync"); if (sy) sy.textContent = "Sincronizado " + ultimaSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); if (mudou && !editing) render(); } catch {}
+}
+setInterval(() => { if (MODO() === "escritorio") sincronizar(); }, window.__syncMs || 20000);
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || !usuarioAtual || editing) return;
   try { await store.carregar(); render(); } catch {}
@@ -147,6 +168,7 @@ function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = "tabs-in c6";
   $("tabs").innerHTML = TABS.map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="${k === "captar" ? "5 7 54 49" : "0 0 24 24"}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
+  if (MODO() === "escritorio") { $("tabs").insertAdjacentHTML("afterbegin", `<div class="side-top"><img class="logo d" src="/logo-escuro.png" alt="PrimeCorp Brokers"><img class="logo w" src="/logo-claro.png" alt="PrimeCorp Brokers"><small>Escritório · gestão</small></div>`); $("tabs").insertAdjacentHTML("beforeend", `<div class="side-foot"><span id="sync" class="sync">${ultimaSync ? "Sincronizado " + ultimaSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}</span><button class="sm" id="syncb">Atualizar agora</button></div>`); $("syncb").onclick = () => sincronizar(true); }
   $("tabs").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { stack.length = 0; go({ v: b.dataset.tab }, false); }));
 }
 function header(title) {
@@ -213,6 +235,8 @@ VIEWS.painel = () => {
   <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
   <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>Tecnologia Propto</em></span><span>›</span></button>
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
+  ${MODO() === "escritorio" ? (() => { const cs = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada").sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || "")).slice(0, 6);
+    return `<div class="card campo"><div class="row" style="justify-content:space-between"><h2>Chegando do campo</h2><span class="hint">registros feitos no celular</span></div>${cs.length ? `<div class="campo-grid">${cs.map((o) => { const ambs = o.captacao?.ambientes || []; const k = o.capa || ambs.flatMap((a) => (a.fotos || []).map((f) => f.k))[0]; return `<button class="campo-it" data-cap="${o.id}">${k ? `<img loading="lazy" src="${fotoURL(k)}" alt="">` : '<span class="semfoto">sem foto</span>'}<span class="t"><b>${esc(o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação")}</b><small>${esc([perfilPorEmail(o.captador).nome.split(" ")[0], fotosDe(o) + " foto(s)", ambs.filter((a) => a.descricao).length + " ambiente(s) descrito(s)", fdt(o.atualizado)].join(" · "))}</small></span></button>`; }).join("")}</div>` : '<p class="hint">Nenhum registro ainda. As visitas feitas no celular aparecem aqui automaticamente.</p>'}</div>`; })() : ""}
   ${(() => { const sv = sinaisVerdes(); return sv.length ? `<div class="card verde"><h3>🟢 Sinal verde: ${sv.length} oferta(s) com cliente interessado</h3><p class="hint">Ainda sem autorização nem pedido ao anunciante. Um toque gera o pedido com o termo e a comissão padrão.</p><div class="list">${sv.map((o) => `<div class="item" style="cursor:default"><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + tituloO(o))}</b><span>${esc([o.anunciante, o.anunciante_contato].filter(Boolean).join(" · ") || "Anunciante a identificar")}</span></span><button class="sm p" data-sv="${o.id}">Pedir</button></div>`).join("")}</div></div>` : ""; })()}
   ${novas.length ? `<button class="card" id="gonovas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot amarelo"></span><span style="flex:1"><b>${novas.length} oferta${novas.length > 1 ? "s" : ""} a revisar</b><br><span class="hint">Confira os dados antes de cruzar com os briefings.</span></span><span>›</span></button>` : ""}
   ${pedNovos.length ? `<button class="card" id="gopeds" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot verde"></span><span style="flex:1"><b>${pedNovos.length} resposta(s) de anunciante</b><br><span class="hint">Dados completados ou autorizações de indicação recebidas.</span></span><span>›</span></button>` : ""}
@@ -227,6 +251,7 @@ VIEWS.painel = () => {
   const gn = $("gonovas"); if (gn) gn.onclick = () => go({ v: "ofertas", f: "nova" }, false);
   const gs = $("gosalas"); if (gs) gs.onclick = () => go({ v: "salas" });
   const gp = $("gopeds"); if (gp) gp.onclick = () => go({ v: "pedidos" });
+  document.querySelectorAll("[data-cap]").forEach((b) => (b.onclick = () => go({ v: "captacao", id: b.dataset.cap })));
   document.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = async () => { b.disabled = true; try { const ped = await sinalVerde(O(b.dataset.sv)); if (ped) { toast("Pedido criado. Envie ao anunciante."); go({ v: "pedido", id: ped.id }); } } catch (e) { toast("Falhou: " + e.message); b.disabled = false; } }));
   $("csv").onclick = exportCSV;
   document.querySelectorAll("[data-bv]").forEach((b) => (b.onclick = () => go(b.dataset.bv === "editb" ? { v: "editb", id: null } : { v: b.dataset.bv }, b.dataset.bv !== "captar")));
@@ -746,6 +771,8 @@ VIEWS.mais = () => {
   $("main").innerHTML = `<div class="card"><div class="menu">
   <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button>' : ""}
   <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
+  <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
+  <div class="seg" id="modo">${[["auto", "Automático"], ["campo", "Celular"], ["escritorio", "Computador"]].map(([k, l]) => `<button data-modo="${k}" class="${(lerPref("pc_modo") || "auto") === k ? "on" : ""}">${l}</button>`).join("")}</div><p class="hint">Agora: <b>${MODO() === "escritorio" ? "computador (escritório)" : "celular (campo)"}</b></p></div>
   <div class="card"><h3>SAC · dúvidas, sugestões e reclamações</h3><p class="hint">Este e-mail aparece para clientes, anunciantes e proprietários nas páginas públicas (anúncio, Sala do Cliente e Sala do Anunciante).</p><div class="row"><b class="grow">${esc(PC.SAC)}</b><button class="sm" id="sacc">Copiar</button></div></div>
   <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
@@ -753,6 +780,7 @@ VIEWS.mais = () => {
   $("m8").onclick = () => go({ v: "anuncios" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
   $("sacc").onclick = () => copiar(PC.SAC);
+  document.querySelectorAll("#modo [data-modo]").forEach((b) => (b.onclick = () => { gravarPref("pc_modo", b.dataset.modo === "auto" ? null : b.dataset.modo); aplicarModo(); render(); }));
 };
 const TIPOS_E = { pacote_exportado: "Pacote exportado", teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
@@ -1141,7 +1169,7 @@ function etapaCap(o) {
 VIEWS.captar = () => {
   header("Captação no local"); const f = route.f || (ehAdmin() ? "todas" : "minhas");
   const caps = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada" && (f === "todas" || o.captador === EU.usuario)).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
-  $("main").innerHTML = `<button class="captar-cta" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Iniciar registro fotográfico</b><small>Escolha o tipo: o app pede cada foto, você descreve e a IA organiza</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
+  $("main").innerHTML = `${MODO() === "escritorio" ? cartaoCelular("Registro fotográfico é feito no celular", "No computador você revisa as captações, ajusta textos, publica e acompanha. A visita com a câmera guiada acontece no celular.") : ""}<button class="captar-cta ${MODO() === "escritorio" ? "sec" : ""}" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Iniciar registro fotográfico</b><small>Escolha o tipo: o app pede cada foto, você descreve e a IA organiza</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
   <div class="seg">${[["minhas", "Minhas"], ["todas", "Todas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <div class="card"><div class="list">${caps.map((o) => { const [cor, et] = etapaCap(o); const an = anuncioDe(o); return `<button class="item" data-c="${o.id}"><span class="dot ${cor}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação sem título"))}</b><span>${esc([et, fotosDe(o) + " foto(s)", perfilPorEmail(o.captador).nome.split(" ")[0], an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhuma captação ainda.</p>'}</div></div>`;
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));
@@ -1158,7 +1186,7 @@ VIEWS.iniciar = () => {
     ${GRUPOS_CAP.map(([g, ts]) => `<h3 class="gtit">${g}</h3><div class="tiposel">${ts.map((t) => `<button data-ti="${esc(t)}" class="${tipo === t ? "on" : ""}">${esc(t)}</button>`).join("")}</div>`).join("")}
     <div class="grid"><label>Operação<select id="iop">${["Venda", "Locação", "Locação / Venda"].map((x) => `<option ${x === op ? "selected" : ""}>${x}</option>`).join("")}</select></label><label>Cidade<input id="icid" value="${esc(cid)}"></label><label class="full">Bairro / região (aparece no anúncio)<input id="ireg" value="${esc(reg)}"></label></div></div>
     <div class="card"><span class="k">Passo 2 de 2</span>${tipo ? `<p>Roteiro de <b>${esc(tipo)}</b>: ${roteiroFotos(tipo, {}).filter((x) => x.obrigatorio).map((x) => esc(x.nome)).join(" · ")}.</p>` : '<p class="hint">Escolha o tipo acima.</p>'}
-    <button class="p" id="ini" ${tipo ? "" : "disabled"}>📷 Começar: câmera guiada</button><button class="g" id="iniManual" ${tipo ? "" : "disabled"}>Abrir a ficha sem câmera</button></div>`;
+    ${MODO() === "escritorio" ? '<p class="hint">No computador a ficha abre sem câmera. Para a visita guiada, abra o sistema no celular.</p><button class="g" id="ini" hidden></button>' : `<button class="p" id="ini" ${tipo ? "" : "disabled"}>📷 Começar: câmera guiada</button>`}<button class="g" id="iniManual" ${tipo ? "" : "disabled"}>Abrir a ficha sem câmera</button></div>`;
     document.querySelectorAll("[data-ti]").forEach((b) => (b.onclick = () => { tipo = b.dataset.ti; op = $("iop").value; cid = $("icid").value; reg = $("ireg").value; desenhar(); }));
     $("iop").onchange = () => (op = $("iop").value);
     const criar = async (visita) => {
@@ -1424,6 +1452,7 @@ async function descreverAmbiente(oid, aid) {
 VIEWS.visita = () => {
   const o0 = O(route.id); if (!o0) return back();
   header("Visita guiada" + (o0.codigo ? " · " + o0.codigo : ""));
+  if (MODO() === "escritorio" && !route.webcam) { $("main").innerHTML = cartaoCelular("Continue a visita no celular", "A câmera guiada foi feita para o celular, no local do imóvel. Abra este imóvel em Captar no celular e toque em Visita guiada.") + `<div class="card"><button id="wc">Usar a webcam deste computador mesmo assim</button></div>`; $("wc").onclick = () => { route.webcam = true; VIEWS.visita(); }; return; }
   const itens = () => { const r = casarRoteiro(O(route.id)); return [...r.itens.filter((x) => x.obrigatorio), ...r.itens.filter((x) => !x.obrigatorio)]; };
   let idx = Math.max(0, itens().findIndex((x) => x.obrigatorio && !x.amb)); if (route.idx != null) idx = route.idx;
   let extraId = null; // ambiente extra em andamento

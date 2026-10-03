@@ -16,7 +16,8 @@
     "fflate": "^0.8.2",
     "imapflow": "^2.2.1",
     "jspdf": "^2.5.1",
-    "mailparser": "^3.9.33"
+    "mailparser": "^3.9.33",
+    "qrcode-generator": "^1.4.4"
   },
   "devDependencies": {
     "@netlify/database-dev": "^1.0.1",
