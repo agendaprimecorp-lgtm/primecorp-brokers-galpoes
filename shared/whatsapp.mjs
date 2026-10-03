@@ -65,6 +65,15 @@ export function enviar(para, texto, botoes = []) {
 export function enviarModelo(para, nome, parametros = [], idioma = "pt_BR") {
   return post({ to: para, type: "template", template: { name: nome, language: { code: idioma }, components: parametros.length ? [{ type: "body", parameters: parametros.map((p) => ({ type: "text", text: String(p).slice(0, 1000) })) }] : [] } });
 }
+/** 360dialog: aponta o webhook do número para o sistema, com a chave num cabeçalho privado. */
+export async function conectarWebhook360(urlWebhook) {
+  const tok = env("WHATSAPP_TOKEN"), chave = env("WHATSAPP_WEBHOOK_CHAVE");
+  if (!tok || !chave || chave.length < 24) throw new Error("Cadastre WHATSAPP_TOKEN e WHATSAPP_WEBHOOK_CHAVE (24+ caracteres) no Netlify e faça novo deploy.");
+  const r = await (globalThis.__fetchWA || fetch)((env("WHATSAPP_API_BASE") || "https://waba-v2.360dialog.io") + "/v1/configs/webhook", { method: "POST", headers: { "D360-API-KEY": tok, "content-type": "application/json" }, body: JSON.stringify({ url: urlWebhook, headers: { "x-chave-webhook": chave } }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.meta?.developer_message || j?.error?.message || `360dialog recusou (${r.status})`);
+  return j;
+}
 export const marcarLida = (id) => post({ status: "read", message_id: id }).catch(() => null);
 
 /** Números da equipe (variável ZOE_EQUIPE, separados por vírgula). */
