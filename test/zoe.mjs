@@ -174,6 +174,29 @@ await t("Zoe: botões e limpeza da resposta", async () => {
   const f = Z.finalizar("Olá!\n[[botoes: Busco imóvel | Tenho um imóvel | Sou corretor(a) parceiro]]"); assert.equal(f.texto, "Olá!"); assert.equal(f.botoes.length, 3); assert.ok(f.botoes.every((b) => b.length <= 20));
   assert.equal(Z.waNum("(19) 99805-1985"), "5519998051985");
 });
+await t("coexistência: resposta pelo celular pausa a Zoe e ela retoma depois do prazo", async () => {
+  const eco = (texto, id, ts) => JSON.stringify({ entry: [{ changes: [{ field: "smb_message_echoes", value: { metadata: { phone_number_id: "999" }, message_echoes: [{ from: "558781315053", to: "5519955556666", id, timestamp: String(ts), type: "text", text: { body: texto } }] } }] }] });
+  await W(payload("5519955556666", "Oi, tenho um terreno", "wamid.D1"));
+  const velho = Math.floor(Date.now() / 1000) - 13 * 3600; await W(eco("Oi! Aqui é o Rodrigo, já te ligo.", "wamid.D2", velho));
+  let d = await J(await api(R("GET", "/api/dados"), ctx())); let cv = d.j.conversas.find((x) => x.id === "5519955556666");
+  assert.equal(cv.modo, "humano"); assert.equal(cv.msgs[cv.msgs.length - 1].de, "humano"); assert.equal(cv.msgs[cv.msgs.length - 1].por, "WhatsApp Business (celular)");
+  globalThis.__zoe = () => fala("Oi de novo! Posso ajudar com o terreno?");
+  await W(payload("5519955556666", "alguém aí?", "wamid.D3"));
+  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519955556666", espera: 0 }) }));
+  d = await J(await api(R("GET", "/api/dados"), ctx())); cv = d.j.conversas.find((x) => x.id === "5519955556666"); assert.equal(cv.modo, "zoe"); assert.equal(cv.msgs[cv.msgs.length - 1].de, "zoe", "retomou após 12 h sem resposta humana");
+  await W(eco("Respondo eu.", "wamid.D4", Math.floor(Date.now() / 1000))); await W(payload("5519955556666", "ok", "wamid.D5"));
+  const n = enviados.length; await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519955556666", espera: 0 }) })); assert.equal(enviados.length, n, "resposta recente pelo celular: Zoe calada");
+});
+await t("360dialog: envio pelo parceiro e webhook com chave na URL", async () => {
+  Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog", WHATSAPP_WEBHOOK_CHAVE: "k".repeat(32) }); const urls = []; const ant = globalThis.__fetchWA;
+  globalThis.__fetchWA = async (url, op) => { urls.push([url, op.headers]); return new Response(JSON.stringify({ messages: [{ id: "x" }] }), { status: 200 }); };
+  const { enviar } = await import("../shared/whatsapp.mjs"); await enviar("5519900000000", "teste");
+  assert.equal(urls[0][0], "https://waba-v2.360dialog.io/messages"); assert.equal(urls[0][1]["D360-API-KEY"], "tk");
+  const c = payload("5519977778888", "Oi", "wamid.F1");
+  assert.equal((await wh(new Request("https://pc.test/whatsapp/webhook?chave=" + "k".repeat(32), { method: "POST", body: c }), ctx())).status, 200);
+  assert.equal((await wh(new Request("https://pc.test/whatsapp/webhook?chave=" + "x".repeat(32), { method: "POST", body: c }), ctx())).status, 401);
+  globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR; delete process.env.WHATSAPP_WEBHOOK_CHAVE;
+});
 await t("status mostra WhatsApp configurado e webhook", async () => { const s = await J(await api(R("GET", "/api/status"), ctx())); assert.equal(s.j.whatsapp_configurado, true); assert.match(s.j.webhook, /\/whatsapp\/webhook$/); });
 
 console.log(`\n${ok} testes de verificação e Zoe OK`);
