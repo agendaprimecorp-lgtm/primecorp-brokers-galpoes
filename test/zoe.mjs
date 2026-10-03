@@ -197,6 +197,23 @@ await t("360dialog: envio pelo parceiro e webhook com chave na URL", async () =>
   assert.equal((await wh(new Request("https://pc.test/whatsapp/webhook?chave=" + "x".repeat(32), { method: "POST", body: c }), ctx())).status, 401);
   globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR; delete process.env.WHATSAPP_WEBHOOK_CHAVE;
 });
+await t("anúncio público: 'Tenho interesse' vai para o WhatsApp da Zoe", async () => {
+  const imov = (await import("./out/imovel.mjs")).default; const TK = "A".repeat(24);
+  await api(R("PUT", "/api/dados/anuncios/" + TK, { status: "ativo", codigo: "PC-0001", titulo: "Galpão", corretor: { nome: "Rodrigo", whatsapp: "19998051985" }, fotos: [] }), ctx());
+  process.env.WHATSAPP_NUMERO = "(19) 98110-5192";
+  let h = await (await imov(new Request("https://pc.test/i/" + TK), ctx())).text(); assert.match(h, /wa\.me\/5519981105192/);
+  await api(R("PUT", "/api/dados/config/zoe", { anuncios_pela_zoe: false }), ctx());
+  h = await (await imov(new Request("https://pc.test/i/" + TK), ctx())).text(); assert.match(h, /wa\.me\/5519998051985/);
+  delete process.env.WHATSAPP_NUMERO;
+});
+await t("360dialog: botão conecta o webhook com chave em cabeçalho", async () => {
+  Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog", WHATSAPP_WEBHOOK_CHAVE: "k".repeat(32) }); const ant = globalThis.__fetchWA; let req;
+  globalThis.__fetchWA = async (url, op) => { req = [url, JSON.parse(op.body), op.headers]; return new Response("{}", { status: 200 }); };
+  const r = await J(await api(R("POST", "/api/zoe/conectar"), ctx())); assert.equal(r.s, 200);
+  assert.equal(req[0], "https://waba-v2.360dialog.io/v1/configs/webhook"); assert.match(req[1].url, /\/whatsapp\/webhook$/); assert.equal(req[1].headers["x-chave-webhook"], "k".repeat(32));
+  assert.equal((await wh(new Request("https://pc.test/whatsapp/webhook", { method: "POST", headers: { "x-chave-webhook": "k".repeat(32) }, body: payload("5519977770000", "Oi", "wamid.G1") }), ctx())).status, 200);
+  globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR; delete process.env.WHATSAPP_WEBHOOK_CHAVE;
+});
 await t("status mostra WhatsApp configurado e webhook", async () => { const s = await J(await api(R("GET", "/api/status"), ctx())); assert.equal(s.j.whatsapp_configurado, true); assert.match(s.j.webhook, /\/whatsapp\/webhook$/); });
 
 console.log(`\n${ok} testes de verificação e Zoe OK`);
