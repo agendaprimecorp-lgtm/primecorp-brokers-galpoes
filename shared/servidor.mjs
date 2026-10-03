@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import dns from "node:dns/promises";
 import net from "node:net";
 
-export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios"];
+export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios", "conversas", "agenda"];
 
 let _db = null;
 export function db() {
@@ -115,7 +115,7 @@ Responda SOMENTE um objeto JSON com estas chaves (null quando o anúncio não in
 "dormitorios":número,"suites":número,"banheiros":número,"vagas":número,
 "pe_direito":número,"piso_carga":número,"docas":número,"energia_kva":número,"pontes":"texto curto|null","avcb":"texto curto|null",
 "area_ha":número em HECTARES (converta: alqueire paulista = 2,42 ha; alqueire mineiro/goiano = 4,84 ha; m² ÷ 10.000),"aptidao":string,"agua":string,"benfeitorias":string,"car":string,"ccir":string,"georref":string,"distancia_asfalto":número km,
-"aluguel":número mensal,"venda":número,"condominio":número mensal,"iptu":número,"iptu_periodo":"mensal|anual|null (só se explícito)","disponibilidade":string,"documentacao":string,"data_anuncio":"AAAA-MM-DD|null","anunciante":"nome da imobiliária/anunciante|null",
+"aluguel":número mensal,"venda":número,"condominio":número mensal,"iptu":número,"iptu_periodo":"mensal|anual|null (só se explícito)","disponibilidade":string,"documentacao":string,"matricula":"nº da matrícula se o anúncio citar|null","cartorio":"cartório de registro se citado|null","inscricao":"inscrição imobiliária/IPTU se citada|null","cep":"CEP se aparecer|null","nirf":"NIRF se citado|null","data_anuncio":"AAAA-MM-DD|null","anunciante":"nome da imobiliária/anunciante|null",
 "titulo":"título curto, ex.: 'Casa com 3 dormitórios em Sumaré', 'Fazenda de 48 ha em Mogi Mirim', 'Galpão com 12.400 m² de área fabril em Sumaré'","descricao":"parágrafo de 350 a 550 caracteres, 3ª pessoa, só fatos do anúncio","diferenciais":["até 6 itens curtos"],"itens":["até 4 dúvidas específicas a confirmar"],"alertas_ia":[{"lvl":"a|v","msg":"inconsistência no próprio texto","item":"frase curta para itens a confirmar"}]}
 REGRAS: números puros (12400). Área rural sempre em hectares em area_ha, com a unidade original citada em alertas_ia se houver conversão de alqueire. Se total = útil = construída com número redondo, use construida e alerte que pode ser o terreno. Em titulo, subtitulo, descricao e diferenciais é PROIBIDO citar rua, número, nome de condomínio, imobiliária, corretor, portal, código do anúncio, telefone ou e-mail.`;
 

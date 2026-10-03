@@ -1,0 +1,56 @@
+// WhatsApp Business Platform (Cloud API da Meta): assinatura do webhook, leitura das mensagens e envio.
+import crypto from "node:crypto";
+import { env } from "./servidor.mjs";
+
+export const GRAPH = () => `https://graph.facebook.com/${env("WHATSAPP_GRAPH_VERSAO") || "v25.0"}`;
+
+/** Confere X-Hub-Signature-256 = sha256=HMAC(app secret, corpo bruto). */
+export function assinaturaValida(corpo, cabecalho, segredo) {
+  if (!segredo || !cabecalho || !cabecalho.startsWith("sha256=")) return false;
+  const esperado = Buffer.from("sha256=" + crypto.createHmac("sha256", segredo).update(corpo, "utf8").digest("hex"));
+  const recebido = Buffer.from(cabecalho);
+  return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido);
+}
+
+/** Extrai as mensagens recebidas do payload do webhook. */
+export function lerEntradas(payload) {
+  const out = [];
+  for (const e of payload?.entry || []) for (const ch of e.changes || []) {
+    const v = ch.value || {}; if (ch.field && ch.field !== "messages") continue;
+    const nomes = Object.fromEntries((v.contacts || []).map((c) => [c.wa_id, c.profile?.name || ""]));
+    for (const m of v.messages || []) {
+      let texto = "", midia = null;
+      if (m.type === "text") texto = m.text?.body || "";
+      else if (m.type === "interactive") texto = m.interactive?.button_reply?.title || m.interactive?.list_reply?.title || "";
+      else if (m.type === "button") texto = m.button?.text || "";
+      else if (m.type === "location") texto = `[localização enviada: ${m.location?.latitude}, ${m.location?.longitude}]`;
+      else { midia = m.type; texto = m[m.type]?.caption || ""; }
+      out.push({ id: m.id, de: m.from, nome: nomes[m.from] || "", t: new Date(Number(m.timestamp) * 1000 || Date.now()).toISOString(), texto: String(texto).slice(0, 4000), midia, numero_empresa: v.metadata?.phone_number_id || "" });
+    }
+  }
+  return out;
+}
+
+async function post(corpo) {
+  const id = env("WHATSAPP_PHONE_ID"), tok = env("WHATSAPP_TOKEN");
+  if (!id || !tok) throw new Error("WhatsApp não configurado (WHATSAPP_PHONE_ID / WHATSAPP_TOKEN).");
+  const r = await (globalThis.__fetchWA || fetch)(`${GRAPH()}/${id}/messages`, { method: "POST", headers: { authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", ...corpo }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j?.error?.message || `WhatsApp recusou (${r.status})`); e.codigo = j?.error?.code; throw e; }
+  return j?.messages?.[0]?.id || null;
+}
+
+/** Texto simples ou com até 3 botões de resposta (só dentro da janela de 24 h). */
+export function enviar(para, texto, botoes = []) {
+  if (botoes.length) return post({ to: para, type: "interactive", interactive: { type: "button", body: { text: texto.slice(0, 1024) }, action: { buttons: botoes.slice(0, 3).map((b, i) => ({ type: "reply", reply: { id: "b" + i, title: b.slice(0, 20) } })) } } });
+  return post({ to: para, type: "text", text: { body: texto.slice(0, 4096), preview_url: true } });
+}
+/** Modelo aprovado (fora da janela de 24 h). Parâmetros vão no corpo, em ordem. */
+export function enviarModelo(para, nome, parametros = [], idioma = "pt_BR") {
+  return post({ to: para, type: "template", template: { name: nome, language: { code: idioma }, components: parametros.length ? [{ type: "body", parameters: parametros.map((p) => ({ type: "text", text: String(p).slice(0, 1000) })) }] : [] } });
+}
+export const marcarLida = (id) => post({ status: "read", message_id: id }).catch(() => null);
+
+/** Números da equipe (variável ZOE_EQUIPE, separados por vírgula). */
+export const equipeWA = () => (env("ZOE_EQUIPE") || "").split(",").map((s) => { const d = s.replace(/\D/g, ""); return d.length === 10 || d.length === 11 ? "55" + d : d; }).filter(Boolean);
+export const janelaAberta = (conv, agora = Date.now()) => { const u = [...(conv?.msgs || [])].reverse().find((m) => m.de === "cliente"); return !!u && agora - Date.parse(u.t) < 24 * 3600e3 - 60e3; };
