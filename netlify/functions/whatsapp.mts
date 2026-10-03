@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { env, obterRegistro, salvarRegistro } from "../../shared/servidor.mjs";
-import { assinaturaValida, lerEntradas, equipeWA, marcarLida } from "../../shared/whatsapp.mjs";
+import { assinaturaValida, chaveValida, lerEntradas, equipeWA, marcarLida } from "../../shared/whatsapp.mjs";
 import { anexarMsg, waNum } from "../../shared/zoe.mjs";
 
 // Webhook público do WhatsApp (Cloud API). Valida a assinatura da Meta, grava a mensagem e aciona a Zoe em segundo plano.
@@ -12,8 +12,9 @@ export default async (req: Request, _context: Context) => {
   }
   if (req.method !== "POST") return new Response("Método não permitido", { status: 405 });
   const corpo = await req.text();
-  if (!env("WHATSAPP_APP_SECRET")) return new Response("Não configurado", { status: 503 });
-  if (!assinaturaValida(corpo, req.headers.get("x-hub-signature-256") || "", env("WHATSAPP_APP_SECRET"))) return new Response("Assinatura inválida", { status: 401 });
+  if (!env("WHATSAPP_APP_SECRET") && !env("WHATSAPP_WEBHOOK_CHAVE")) return new Response("Não configurado", { status: 503 });
+  const autentico = (env("WHATSAPP_APP_SECRET") && assinaturaValida(corpo, req.headers.get("x-hub-signature-256") || "", env("WHATSAPP_APP_SECRET"))) || chaveValida(url.searchParams.get("chave") || "");
+  if (!autentico) return new Response("Assinatura inválida", { status: 401 });
   let payload: any; try { payload = JSON.parse(corpo); } catch { return new Response("ok"); }
   const esperado = env("WHATSAPP_PHONE_ID");
   const msgs = lerEntradas(payload).filter((m) => !esperado || !m.numero_empresa || m.numero_empresa === esperado);
@@ -22,6 +23,11 @@ export default async (req: Request, _context: Context) => {
     const wa = waNum(m.de);
     const conv: any = (await obterRegistro("conversas", wa)) || { modo: "zoe", msgs: [], criado: new Date().toISOString(), canal: "whatsapp" };
     if ((conv.msgs || []).some((x: any) => x.id === m.id)) continue; // a Meta reenvia: ignora repetidas
+    if (m.eco) { // a equipe respondeu pelo app do celular: registra e a Zoe pausa nesta conversa
+      anexarMsg(conv, { id: m.id, de: "humano", por: "WhatsApp Business (celular)", t: m.t, texto: m.texto, ...(m.midia ? { midia: m.midia } : {}) });
+      conv.modo = "humano"; conv.precisa_humano = null; conv.modo_por = "celular"; conv.modo_em = m.t;
+      await salvarRegistro("conversas", wa, conv); continue;
+    }
     conv.equipe = equipe.includes(wa);
     if (!conv.nome && m.nome) conv.nome = m.nome;
     if (conv.optout && m.texto.trim()) conv.optout = false; // voltou a escrever: reabre
