@@ -18,6 +18,9 @@ Briefings, ofertas, cruzamento, CRM, Sala do Cliente, relatórios emitidos, back
 | Pedido ao anunciante | Link (Sala do Anunciante) e PDF editável: o anunciante completa os dados e aceita a autorização de indicação com a divisão de honorários |
 | Comissão | Honorários por negócio (% da venda ou nº de aluguéis), divisão em 2, 3 ou mais partes, quem recebe e repassa, soma travada em 100% |
 | Acordo de divisão | PDF padronizado para todas as partes assinarem (imobiliária, corretor parceiro, PrimeCorp); fica nos Relatórios emitidos |
+| Captação no local | Câmera do celular por ambiente, tratamento automático das fotos (luz, cor, nitidez), ditado por voz, IA que nomeia o ambiente e extrai números da fala |
+| Anúncio | IA redige título, chamada, descrição e destaques a partir das fotos e falas; página pública `/i/…` para WhatsApp com fotos por ambiente, sem endereço, com contador de visitas |
+| Equipe e permissões | Administrador e corretor(a); cada captação fica no nome de quem captou (ficha, autorização e anúncio saem com o CRECI dela/dele) |
 | Coleta de alertas | A cada 30 min, lê os e-mails de alerta dos portais e cria ofertas "a revisar" |
 
 ## Publicar (uma vez, cerca de 30 minutos)
@@ -33,6 +36,11 @@ Briefings, ofertas, cruzamento, CRM, Sala do Cliente, relatórios emitidos, back
 2. Em **Registration**, marque **Invite only**. Ninguém se cadastra sozinho.
 3. Em **Identity → Users → Invite users**, convide `contato@primecorpconsultoria.com.br`.
 4. Abra o e-mail de convite, toque no link e crie a senha. Pronto.
+
+### 2b. Equipe (Joselia e outras pessoas)
+1. No app: **Mais → Equipe e permissões → Cadastrar Rodrigo e Joselia** (ou **+ Pessoa**). Defina a permissão: Administrador ou Corretor(a).
+2. Na Netlify: **Identity → Invite users** com o mesmo e-mail (ex.: `comercial@primecorpconsultoria.com.br`). A pessoa cria a própria senha pelo link do convite.
+3. Quem está em `ADMIN_EMAILS` é sempre administrador. Os demais entram pela lista da Equipe; "Inativo" corta o acesso na hora.
 
 ### 3. Variáveis de ambiente
 Em **Project configuration → Environment variables**, com escopo **Functions**:
@@ -74,6 +82,11 @@ Em **Mais → Configurações**:
 2. Preencha os `[__]` dos dois termos de autorização (parceria com imobiliária/corretor e proprietário) e do acordo de divisão; revise com o advogado e marque as revisões.
 
 Sem isso, o sistema não cria pedido ao anunciante nem emite acordo de divisão.
+
+### 6c. Captação no celular
+1. Na primeira foto, o iPhone pede acesso à câmera; no primeiro "Falar", ao microfone e ao reconhecimento de fala. Permita.
+2. Se o ditado não funcionar no app instalado na Tela de Início, use o microfone do teclado do iPhone: o texto vai para o mesmo campo.
+3. A página do anúncio só é publicada depois da autorização do proprietário (pelo link/PDF ou registrada manualmente, em seu nome).
 
 ### 7. No iPhone
 Abra o endereço do site no Safari → Compartilhar → **Adicionar à Tela de Início**. O app abre em tela cheia, com o ícone PrimeCorp.

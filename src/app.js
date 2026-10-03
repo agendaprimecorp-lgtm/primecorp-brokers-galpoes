@@ -1,6 +1,8 @@
 import PC from "../shared/core.mjs";
 import { jsPDF } from "jspdf";
 import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, requestPasswordRecovery } from "@netlify/identity";
+import { tratarFoto, blobB64 } from "./foto.js";
+import { ditar, vozDisponivel } from "./voz.js";
 import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO } from "./termo.js";
 
 /* ================= Utilidades ================= */
@@ -37,7 +39,7 @@ async function api(path, opts = {}) {
   if (!r.ok) throw new ErroAPI(j.erro || "Erro " + r.status, r.status);
   return j;
 }
-const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [] };
+const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [] };
 const store = {
   async carregar() { const d = await api("dados"); Object.keys(S).forEach((k) => (S[k] = d[k] || [])); },
   async save(n, o) {
@@ -60,6 +62,8 @@ const CFG = () => S.config.find((c) => c.id === "geral") || {};
 
 /* ================= Autenticação ================= */
 let usuarioAtual = null;
+let EU = { papel: "admin", perfil: {} };
+const ehAdmin = () => EU.papel === "admin";
 function telaAuth(html) { $("hdr").innerHTML = ""; $("tabs").innerHTML = ""; $("main").innerHTML = `<div class="auth"><img class="logo d" src="/logo-escuro.png" alt="PrimeCorp Brokers"><img class="logo w" src="/logo-claro.png" alt="PrimeCorp Brokers">${html}</div>`; }
 function telaLogin(msg) {
   usuarioAtual = null;
@@ -105,7 +109,7 @@ async function iniciar() {
 }
 async function abrir() {
   $("main").innerHTML = `<div class="card"><p class="hint">Carregando dados…</p></div>`;
-  try { await store.carregar(); }
+  try { await store.carregar(); try { EU = await api("status"); } catch {} }
   catch (e) { if (e.status !== 401) $("main").innerHTML = `<div class="card"><p class="status err">Não foi possível carregar: ${esc(e.message)}</p><button id="rt">Tentar de novo</button></div>`; const rt = $("rt"); if (rt) rt.onclick = abrir; return; }
   route = { v: "painel" }; stack.length = 0; render();
 }
@@ -118,18 +122,19 @@ document.addEventListener("visibilitychange", async () => {
 let route = { v: "painel" }; const stack = []; let editing = false;
 function go(r, push = true) { editing = false; if (push) stack.push(route); route = r; render(); window.scrollTo(0, 0); }
 function back() { editing = false; route = stack.pop() || { v: "painel" }; render(); window.scrollTo(0, 0); }
-const TOP = ["painel", "briefings", "ofertas", "contatos", "mais"];
+const TOP = ["painel", "briefings", "captar", "ofertas", "contatos", "mais"];
 const TABS = [
   ["painel", "Painel", '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>'],
   ["briefings", "Briefings", '<path d="M8 4h8v3H8zM6 6H4v15h16V6h-2M8 12h8M8 16h5"/>'],
+  ["captar", "Captar", '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/>'],
   ["ofertas", "Ofertas", '<path d="M3 21V9l9-6 9 6v12H3zM9 21v-6h6v6"/>'],
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
 ];
-const PAI = { briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
+const PAI = { captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
-  $("tabs").className = "tabs-in c5";
+  $("tabs").className = "tabs-in c6";
   $("tabs").innerHTML = TABS.map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
   $("tabs").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { stack.length = 0; go({ v: b.dataset.tab }, false); }));
 }
@@ -144,7 +149,7 @@ const VIEWS = {};
 function render() {
   if (!usuarioAtual) return;
   renderTabs();
-  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao"].includes(route.v)) return;
+  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe"].includes(route.v)) return;
   try { (VIEWS[route.v] || VIEWS.painel)(); }
   catch (e) { console.error(e); $("main").innerHTML = `<div class="card"><p class="status err">Erro ao exibir esta tela: ${esc(e.message)}</p></div>`; }
 }
@@ -154,7 +159,7 @@ const B = (id) => S.briefings.find((x) => x.id === id);
 const O = (id) => S.ofertas.find((x) => x.id === id);
 const N = (id) => S.negocios.find((x) => x.id === id);
 const C = (id) => S.contatos.find((x) => x.id === id);
-function hist(excl) { return S.ofertas.filter((x) => x.id !== excl && x.status !== "descartada").map((x) => { const d = PC.num(x); return { id: x.id, cidade: d.cidade, fabril: d.fabril, construida: d.construida, titulo: x.titulo || PC.autoTitle(d), quando: x.criado ? new Date(x.criado).toLocaleDateString("pt-BR") : "" }; }); }
+function hist(excl) { return S.ofertas.filter((x) => x.id !== excl && x.status !== "descartada" && x.status !== "captacao").map((x) => { const d = PC.num(x); return { id: x.id, cidade: d.cidade, fabril: d.fabril, construida: d.construida, titulo: x.titulo || PC.autoTitle(d), quando: x.criado ? new Date(x.criado).toLocaleDateString("pt-BR") : "" }; }); }
 const chkOf = (o) => PC.checks(PC.num(o), hist(o.id));
 const tituloO = (o) => o.titulo || PC.autoTitle(PC.num(o));
 const nomeB = (b) => (b ? b.nome || "Briefing sem nome" : "(briefing removido)");
@@ -168,13 +173,13 @@ function fmtIn(f, v) {
 }
 const OF_FIELDS = ["tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "frente", "zoneamento", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "disponibilidade", "documentacao", "titulo", "descricao", "diferenciais", "itens"];
 function fromAI(o) { const r = {}; OF_FIELDS.forEach((f) => { if (o[f] !== undefined && o[f] !== null) r[f] = fmtIn(f, o[f]); }); return r; }
-function ranking(b) { return S.ofertas.filter((o) => o.status !== "descartada").map((o) => { const c = chkOf(o); return Object.assign({ o, c }, PC.score(o, b, c)); }).sort((x, y) => y.score - x.score); }
+function ranking(b) { return S.ofertas.filter((o) => o.status !== "descartada" && o.status !== "captacao").map((o) => { const c = chkOf(o); return Object.assign({ o, c }, PC.score(o, b, c)); }).sort((x, y) => y.score - x.score); }
 function faixaArea(b) { const n = PC.numB(b); if (n.areaMin && n.areaMax) return PC.nf(n.areaMin) + " a " + PC.nf(n.areaMax) + " m²"; if (n.areaMin) return "a partir de " + PC.nf(n.areaMin) + " m²"; if (n.areaMax) return "até " + PC.nf(n.areaMax) + " m²"; return ""; }
 function confirmar2(btn, txt, fn) { let armed = false; btn.onclick = async () => { if (!armed) { armed = true; btn.dataset.orig = btn.textContent; btn.textContent = txt; setTimeout(() => { armed = false; if (btn.isConnected) btn.textContent = btn.dataset.orig; }, 4000); return; } btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } }; }
 
 /* ================= PAINEL ================= */
 VIEWS.painel = () => {
-  header(usuarioAtual?.email || "");
+  header(EU.perfil?.nome || usuarioAtual?.email || "");
   const abertos = S.negocios.filter((n) => n.etapa !== "perdido" && n.etapa !== "fechado");
   const ativos = S.briefings.filter((b) => (b.status || "ativo") === "ativo");
   const novas = S.ofertas.filter((o) => o.status === "nova");
@@ -186,7 +191,9 @@ VIEWS.painel = () => {
     const ns = S.negocios.filter((n) => n.etapa === k).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
     return `<div class="col"><h3><span>${l}</span><span class="muted">${ns.length}</span></h3>${ns.map((n) => { const o = O(n.oferta), b = B(n.briefing); return `<button class="deal" data-n="${n.id}"><b>${esc(o ? (o.codigo ? o.codigo + " · " : "") + tituloO(o) : "(oferta removida)")}</b><span>${esc(nomeB(b))}${n.parceiro ? " · " + esc(n.parceiro) : ""}</span></button>`; }).join("")}</div>`;
   }).join("");
+  const capAbertas = S.ofertas.filter((o) => o.status === "captacao" && (ehAdmin() || o.captador === EU.usuario)).length;
   $("main").innerHTML = `
+  <button class="captar-cta" id="qcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small></span><span>›</span></button>
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
   ${novas.length ? `<button class="card" id="gonovas" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot amarelo"></span><span style="flex:1"><b>${novas.length} oferta${novas.length > 1 ? "s" : ""} a revisar</b><br><span class="hint">Confira os dados antes de cruzar com os briefings.</span></span><span>›</span></button>` : ""}
   ${pedNovos.length ? `<button class="card" id="gopeds" style="text-align:left;cursor:pointer;flex-direction:row;align-items:center"><span class="dot verde"></span><span style="flex:1"><b>${pedNovos.length} resposta(s) de anunciante</b><br><span class="hint">Dados completados ou autorizações de indicação recebidas.</span></span><span>›</span></button>` : ""}
@@ -202,7 +209,7 @@ VIEWS.painel = () => {
   const gs = $("gosalas"); if (gs) gs.onclick = () => go({ v: "salas" });
   const gp = $("gopeds"); if (gp) gp.onclick = () => go({ v: "pedidos" });
   $("csv").onclick = exportCSV;
-  $("qnova").onclick = () => go({ v: "nova" });
+  $("qnova").onclick = () => go({ v: "nova" }); $("qcap").onclick = () => go({ v: "captar" }, false);
   $("qbrief").onclick = () => go({ v: "editb", id: null });
 };
 async function exportCSV() {
@@ -491,7 +498,7 @@ VIEWS.ofertas = () => {
   <input id="q" placeholder="Buscar por código, cidade, tipo ou título" value="${esc(route.q || "")}">
   <div class="card"><div class="list" id="ls"></div></div>`;
   const draw = () => { const q = PC.norm($("q").value); const rows = os.filter((o) => !q || PC.norm([o.codigo, tituloO(o), o.cidade, o.tipo, o.regiao, o.origem].join(" ")).includes(q));
-    $("ls").innerHTML = rows.map((o) => { const c = chkOf(o); return `<button class="item" data-o="${o.id}"><span class="dot ${c.sem}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + tituloO(o))}</b><span>${esc([o.cidade, o.origem, o.status === "nova" ? "a revisar" : ""].filter(Boolean).join(" · "))}</span></span><span class="chip">${esc(o.operacao || "")}</span></button>`; }).join("") || '<p class="empty">Nada por aqui.</p>';
+    $("ls").innerHTML = rows.map((o) => { const c = chkOf(o); return `<button class="item" data-o="${o.id}"><span class="dot ${c.sem}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + tituloO(o))}</b><span>${esc([o.cidade, o.origem, o.status === "nova" ? "a revisar" : o.status === "captacao" ? "em captação" : ""].filter(Boolean).join(" · "))}</span></span><span class="chip">${esc(o.operacao || "")}</span></button>`; }).join("") || '<p class="empty">Nada por aqui.</p>';
     $("ls").querySelectorAll("[data-o]").forEach((x) => (x.onclick = () => { route.q = $("q").value; go({ v: "oferta", id: x.dataset.o }); })); };
   draw(); $("q").addEventListener("input", draw);
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "ofertas", f: x.dataset.f }; render(); }));
@@ -582,7 +589,7 @@ VIEWS.oferta = () => {
 async function gerarPDF(o, ctx = {}) {
   try {
     const codigo = await garantirCodigo(o); const atual = O(o.id) || { ...o, codigo };
-    const d = { ...PC.num(atual), codigo }; const chk = PC.checks(PC.num(atual), hist(atual.id));
+    const d = { ...PC.num(atual), codigo, corretor: corretorDaOferta(atual) }; const chk = PC.checks(PC.num(atual), hist(atual.id));
     const doc = PC.pdf(jsPDF, d, chk, LOGOS.dark ? LOGOS : null);
     const blob = doc.output("blob"); const nome = PC.filename(d).replace(/\.pdf$/, `_${codigo}.pdf`);
     const em = await emitir({ tipo: "ficha_pdf", oferta_id: atual.id, negocio_id: ctx.negocio?.id || null, briefing_id: ctx.negocio?.briefing || null, contato_id: ctx.negocio?.contato || null, destinatario: ctx.destinatario || ctx.negocio?.parceiro || "", nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: tituloO(atual), meta: { codigo, sem_termo: !!ctx.semTermo, incompleta: !!ctx.incompleta } });
@@ -634,13 +641,15 @@ VIEWS.nova = () => {
 VIEWS.mais = () => {
   header("Mais");
   $("main").innerHTML = `<div class="card"><div class="menu">
-  <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button><button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button><button id="m6">Sair <span>›</span></button></div></div>
-  <p class="foot">Conectado como ${esc(usuarioAtual?.email || "")}</p>`;
+  <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button>' : ""}
+  <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
+  <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
-  $("m4").onclick = () => go({ v: "backup" }); $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
+  if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
+  $("m8").onclick = () => go({ v: "anuncios" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
 };
-const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", coleta: "Coleta de alertas", restauracao: "Restauração" };
+const TIPOS_E = { teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
   header("Relatórios emitidos"); $("main").innerHTML = `<div class="card"><p class="hint">Carregando…</p></div>`;
   let em = []; try { em = (await api("emissoes?limite=500")).emissoes; } catch (e) { $("main").innerHTML = `<div class="card"><p class="status err">${esc(e.message)}</p></div>`; return; }
@@ -794,12 +803,12 @@ VIEWS.novopedido = () => {
       const codigo = await garantirCodigo(o); const atual = O(o.id) || o;
       const tipo = $("tt").value; const d = PC.num(atual);
       const vars = { CODIGO: codigo, TITULO: PC.autoTitle(d), OPERACAO: (atual.operacao || "locação").toLowerCase(), COMISSAO: com.texto, QUADRO: PC.quadroComissao(com), VALOR: [d.venda && PC.brl(d.venda) + " (venda)", d.aluguel && PC.brl(d.aluguel) + "/mês (locação)"].filter(Boolean).join(" ou ") || "a definir" };
-      const termo = PC.preencher(tipo === "proprietario" ? cfg.aut_proprietario : cfg.aut_parceria, vars);
+      const termo = trocaCorretor(PC.preencher(tipo === "proprietario" ? cfg.aut_proprietario : cfg.aut_parceria, vars), corretorDaOferta(atual));
       const token = tokenAleatorio(32); const ct = C($("ct").value);
       const ped = { id: token, oferta: atual.id, codigo, titulo: tituloO(atual), operacao: atual.operacao || "", tipo_termo: tipo, anunciante: $("an").value.trim(), contato: ct ? ct.id : null,
         demanda: $("dm") && $("dm").checked ? dem.length : 0, conhecidos: PC.conhecidos(atual), faltam: comp.faltam, comissao: com, termo_texto: termo, termo_versao: cfg.aut_versao || AUT_VERSAO,
         modo: comp.ok ? "autorizacao" : "complementacao", expira: new Date(Date.now() + Number($("vd").value) * 864e5).toISOString(), status: "aberto", criado: now(), respostas: [],
-        corretor: { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "", email: cfg.corretor_email || "" } };
+        corretor: corretorDaOferta(atual) };
       editing = false; await store.save("pedidos", ped);
       if (!atual.anunciante && ped.anunciante) await store.save("ofertas", { ...atual, anunciante: ped.anunciante, atualizado: now() });
       await pdfAnunciante(ped, true);
@@ -903,6 +912,295 @@ VIEWS.comissao = () => {
       toast("Comissão salva."); back();
     } catch { editing = true; }
   };
+};
+
+/* ================= EQUIPE, CAPTAÇÃO NO LOCAL E ANÚNCIOS ================= */
+const RODRIGO_ID = "RODRIGO FRANÇA VIANA, corretor de imóveis inscrito no CRECI-SP sob o nº 297692";
+const creciFmt = (c) => { const t = String(c || "").trim(); return !t ? "" : /creci/i.test(t) ? t : "CRECI-SP " + t; };
+function perfilPorEmail(email) {
+  const e = String(email || "").toLowerCase(); const cfg = CFG();
+  const u = S.usuarios.find((x) => String(x.email || "").toLowerCase() === e);
+  if (u) return { nome: u.nome || e, creci: creciFmt(u.creci), whatsapp: u.telefone || "", email: u.email };
+  return { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "(19) 99805-1985", email: cfg.corretor_email || "contato@primecorpconsultoria.com.br" };
+}
+const corretorDaOferta = (o) => perfilPorEmail(o && o.origem === "Captação própria" && o.captador ? o.captador : CFG().corretor_email || "contato@primecorpconsultoria.com.br");
+function trocaCorretor(txt, c) {
+  if (!c || /rodrigo/i.test(c.nome || "")) return txt;
+  return String(txt).split(RODRIGO_ID).join(`${String(c.nome).toUpperCase()}, corretor(a) de imóveis inscrito(a) no ${c.creci || "CRECI"}`);
+}
+
+/* ---------- Equipe e permissões (administrador) ---------- */
+const EQUIPE_INICIAL = [
+  { nome: "Rodrigo França Viana", email: "contato@primecorpconsultoria.com.br", creci: "CRECI-SP 297692", telefone: "(19) 99805-1985", papel: "admin", ativo: true },
+  { nome: "Joselia Junqueira Viana", email: "comercial@primecorpconsultoria.com.br", creci: "CRECI-SP 300760", telefone: "(19) 99919-4447", papel: "corretor", ativo: true },
+];
+const idUsuario = (email) => "u_" + String(email).toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 60);
+VIEWS.equipe = () => {
+  header("Equipe e permissões");
+  if (!ehAdmin()) { $("main").innerHTML = `<div class="card"><p class="status err">Somente o administrador acessa esta área.</p></div>`; return; }
+  const us = [...S.usuarios].sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+  const faltam = EQUIPE_INICIAL.filter((e) => !us.some((u) => String(u.email).toLowerCase() === e.email));
+  $("main").innerHTML = `<div class="card"><h2>Quem acessa o sistema</h2>
+  <p class="hint"><b>Administrador:</b> tudo, inclusive configurações, termos, equipe, backup e exclusões. <b>Corretor(a):</b> capta imóveis, cria ofertas, briefings, salas, pedidos e negócios; não altera configurações nem exclui registros.</p>
+  <div class="list">${us.map((u) => `<button class="item" data-u="${u.id}"><span class="dot ${u.ativo === false ? "" : "verde"}"></span><span class="t"><b>${esc(u.nome || u.email)}</b><span>${esc([u.email, creciFmt(u.creci), u.papel === "admin" ? "Administrador" : "Corretor(a)", u.ativo === false ? "INATIVO" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`).join("") || '<p class="empty">Ninguém cadastrado ainda.</p>'}</div>
+  ${faltam.length ? `<button class="p" id="seed">Cadastrar ${esc(faltam.map((f) => f.nome.split(" ")[0]).join(" e "))}</button>` : ""}
+  <button id="novo">+ Pessoa</button></div>
+  <div class="card" id="fu" hidden></div>
+  <div class="card"><h2>Acesso (login)</h2><p class="hint">Cada pessoa cria a própria senha pelo convite. No Netlify: <b>Project configuration → Identity → Invite users</b> com o e-mail cadastrado acima. A pessoa abre o e-mail, toca no link e cria a senha. Senhas nunca ficam no sistema nem devem ser enviadas por mensagem.</p></div>`;
+  editing = true;
+  const form = (u) => {
+    const f = $("fu"); f.hidden = false;
+    f.innerHTML = `<h2>${u.id ? "Editar" : "Nova pessoa"}</h2><div class="grid">
+    <label class="full">Nome<input id="un" value="${esc(u.nome || "")}"></label>
+    <label class="full">E-mail de acesso<input id="ue" type="email" value="${esc(u.email || "")}" ${u.id ? "readonly" : ""}></label>
+    <label>CRECI<input id="uc" value="${esc(u.creci || "")}"></label><label>WhatsApp<input id="ut" type="tel" value="${esc(u.telefone || "")}"></label>
+    <label>Permissão<select id="up"><option value="corretor" ${u.papel !== "admin" ? "selected" : ""}>Corretor(a)</option><option value="admin" ${u.papel === "admin" ? "selected" : ""}>Administrador</option></select></label>
+    <label>Situação<select id="ua"><option value="1" ${u.ativo !== false ? "selected" : ""}>Ativo</option><option value="0" ${u.ativo === false ? "selected" : ""}>Inativo (sem acesso)</option></select></label></div>
+    <button class="p" id="us">Salvar</button><div class="status" id="ust"></div>`;
+    f.scrollIntoView({ behavior: "smooth" });
+    $("us").onclick = async () => {
+      const email = $("ue").value.trim().toLowerCase(); const st = $("ust");
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { st.className = "status err"; st.textContent = "E-mail inválido."; return; }
+      if (!$("un").value.trim()) { st.className = "status err"; st.textContent = "Informe o nome."; return; }
+      const reg = { ...u, id: u.id || idUsuario(email), email, nome: $("un").value.trim(), creci: creciFmt($("uc").value), telefone: $("ut").value.trim(), papel: $("up").value, ativo: $("ua").value === "1", atualizado: now(), criado: u.criado || now() };
+      editing = false; try { await store.save("usuarios", reg); toast("Equipe atualizada."); VIEWS.equipe(); } catch { editing = true; }
+    };
+  };
+  document.querySelectorAll("[data-u]").forEach((b) => (b.onclick = () => form(S.usuarios.find((x) => x.id === b.dataset.u))));
+  $("novo").onclick = () => form({ papel: "corretor", ativo: true });
+  const sd = $("seed"); if (sd) sd.onclick = async () => { editing = false; for (const e of faltam) await store.save("usuarios", { ...e, id: idUsuario(e.email), criado: now(), atualizado: now() }); toast("Equipe cadastrada."); VIEWS.equipe(); };
+};
+
+/* ---------- Lista de captações ---------- */
+const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Chácara", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial"];
+const fotosDe = (o) => (o.captacao?.ambientes || []).reduce((a, x) => a + (x.fotos || []).length, 0);
+const anuncioDe = (o) => o.anuncio_token ? S.anuncios.find((a) => a.id === o.anuncio_token) : null;
+function etapaCap(o) {
+  const an = anuncioDe(o);
+  if (an && an.status === "ativo") return ["verde", "Anúncio publicado"];
+  if (o.autorizacao || o.autorizacao_manual) return ["verde", "Autorizado: pronto para publicar"];
+  if (S.pedidos.some((p) => p.oferta === o.id && !p.aceite)) return ["amarelo", "Aguardando autorização"];
+  if (o.descricao && o.titulo) return ["amarelo", "Anúncio gerado"];
+  return ["", "Em captação"];
+}
+VIEWS.captar = () => {
+  header("Captação no local"); const f = route.f || (ehAdmin() ? "todas" : "minhas");
+  const caps = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada" && (f === "todas" || o.captador === EU.usuario)).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
+  $("main").innerHTML = `<button class="captar-cta" id="nc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg><span><b>Nova captação</b><small>Fotografe cada ambiente e fale sobre ele</small></span><span>›</span></button>
+  <div class="seg">${[["minhas", "Minhas"], ["todas", "Todas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
+  <div class="card"><div class="list">${caps.map((o) => { const [cor, et] = etapaCap(o); const an = anuncioDe(o); return `<button class="item" data-c="${o.id}"><span class="dot ${cor}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação sem título"))}</b><span>${esc([et, fotosDe(o) + " foto(s)", perfilPorEmail(o.captador).nome.split(" ")[0], an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhuma captação ainda.</p>'}</div></div>`;
+  document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));
+  document.querySelectorAll("[data-c]").forEach((x) => (x.onclick = () => go({ v: "captacao", id: x.dataset.c })));
+  $("nc").onclick = async () => {
+    const o = { id: uid("o"), origem: "Captação própria", status: "captacao", captador: EU.usuario || usuarioAtual?.email, tipo: "Casa", operacao: "Venda", uf: "SP", anunciante_tipo: "Proprietário",
+      captacao: { iniciada: now(), ambientes: [], fala_geral: "" }, criado: now(), atualizado: now() };
+    try { await store.save("ofertas", o); go({ v: "captacao", id: o.id }); } catch {}
+  };
+};
+
+/* ---------- Captação de um imóvel ---------- */
+const MINI = {}; // miniaturas em memória para a IA (base64)
+async function miniDe(k) {
+  if (MINI[k]) return MINI[k];
+  try { const b = await (await fetch("/api/foto?k=" + encodeURIComponent(k))).blob(); const r = await tratarFoto(new File([b], "f.jpg", { type: "image/jpeg" }), { lado: 768, tratar: false }); MINI[k] = r.mini; return r.mini; } catch { return null; }
+}
+const fotoURL = (k) => "/api/foto?k=" + encodeURIComponent(k);
+const CAMPOS_RES = [["construida", "Área útil / construída", "m²"], ["terreno", "Terreno", "m²"], ["dormitorios", "Dormitórios", ""], ["suites", "Suítes", ""], ["banheiros", "Banheiros", ""], ["vagas", "Vagas", ""]];
+const CAMPOS_GAL = [["construida", "Área construída", "m²"], ["fabril", "Galpão / fabril", "m²"], ["terreno", "Terreno", "m²"], ["pe_direito", "Pé-direito", "m"], ["docas", "Docas", ""], ["energia_kva", "Energia", "kVA"]];
+const camposCap = (tipo) => (PC.grupo(tipo) === "residencial" ? CAMPOS_RES : PC.grupo(tipo) === "area" ? [["terreno", "Terreno", "m²"], ["frente", "Frente", "m"], ["construida", "Construída", "m²"]] : CAMPOS_GAL);
+const NUM_IA = ["dormitorios", "suites", "banheiros", "vagas", "construida", "terreno", "fabril", "pe_direito", "docas", "aluguel", "venda", "condominio", "iptu"];
+function mesclarDados(o, dados) { const p = {}; Object.entries(dados || {}).forEach(([k, v]) => { if (v === null || v === undefined || v === "") return; if (NUM_IA.includes(k) && !PC.parseBR(o[k])) p[k] = fmtIn(k, Number(v)); else if (!NUM_IA.includes(k) && !String(o[k] || "").trim()) p[k] = String(v); }); return p; }
+
+VIEWS.captacao = () => {
+  const o0 = O(route.id); if (!o0) return back();
+  header(o0.codigo ? "Captação " + o0.codigo : "Captação");
+  const cur = () => O(route.id) || o0;
+  let voz = null; const parar = () => { if (voz) { voz.parar(); voz = null; } document.querySelectorAll(".mic.on").forEach((b) => b.classList.remove("on")); };
+  const salvar = async (patch, msg) => { const at = cur(); const n = { ...at, ...patch, captacao: { ...(at.captacao || {}), ...(patch.captacao || {}) }, atualizado: now() }; try { await store.save("ofertas", n); if (msg) toast(msg); return n; } catch { return null; } };
+  const podeEditar = ehAdmin() || cur().captador === EU.usuario;
+  const opts = (arr, v) => arr.map((x) => `<option ${String(v || "") === x ? "selected" : ""}>${esc(x)}</option>`).join("");
+  const o = cur(); const usuarios = S.usuarios.filter((u) => u.ativo !== false);
+  $("main").innerHTML = `<div id="capw" style="display:flex;flex-direction:column;gap:14px">
+  <div class="card" id="fi"><h2>Imóvel</h2><div class="grid">
+  <label>Tipo<select data-c="tipo">${opts(TIPOS_CAP, o.tipo)}</select></label><label>Operação<select data-c="operacao">${opts(["Venda", "Locação", "Locação / Venda"], o.operacao)}</select></label>
+  <label>Cidade<input data-c="cidade" value="${esc(o.cidade || "")}"></label><label>Bairro / região<input data-c="regiao" value="${esc(o.regiao || "")}" placeholder="aparece no anúncio"></label>
+  <label class="full">Endereço completo (privado, não sai no anúncio)<input data-c="endereco" value="${esc(o.endereco || "")}"></label>
+  <label>Proprietário<input data-c="proprietario_nome" value="${esc(o.proprietario_nome || "")}"></label><label>Telefone do proprietário<input data-c="proprietario_tel" type="tel" value="${esc(o.proprietario_tel || "")}"></label>
+  <label class="full">Captado por<select data-c="captador" ${ehAdmin() ? "" : "disabled"}>${(usuarios.length ? usuarios : EQUIPE_INICIAL).map((u) => `<option value="${esc(u.email)}" ${String(u.email).toLowerCase() === String(o.captador || "").toLowerCase() ? "selected" : ""}>${esc(u.nome)} · ${esc(creciFmt(u.creci))}</option>`).join("")}</select></label></div></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h2>Ambientes</h2><span class="chip" id="nf"></span></div>
+  <p class="hint">Para cada ambiente: fotografe (celular na horizontal), toque em <b>Falar</b> e descreva o que vê. A IA nomeia o ambiente, organiza a descrição e confere as fotos.</p>
+  <div id="ambs"></div>
+  <label class="btn p cam"><input type="file" id="camN" accept="image/*" capture="environment" multiple hidden>📷 Novo ambiente: tirar fotos</label>
+  <label class="btn sm"><input type="file" id="galN" accept="image/*" multiple hidden>Escolher da galeria</label></div>
+  <div class="card"><h2>Informações gerais</h2><p class="hint">Fale valores, áreas, condomínio, IPTU, documentação, disponibilidade e o que o proprietário contou.</p>
+  <textarea id="fg" rows="4" placeholder="Ex.: venda 850 mil, aceita financiamento, condomínio 620, IPTU 2.400 por ano, matrícula ok, desocupada…">${esc(o.captacao?.fala_geral || "")}</textarea>
+  <div class="row"><button class="mic" data-mic="fg">🎙 Falar</button></div></div>
+  <div class="card" id="fa"><div class="row" style="justify-content:space-between"><h2>Anúncio</h2><button class="sm p" id="ga">Gerar com IA</button></div>
+  <div id="pend"></div>
+  <div class="grid3" id="nums"></div>
+  <div class="grid"><label class="u">Venda<input data-c="venda" inputmode="decimal" value="${esc(fmtIn("venda", PC.parseBR(o.venda)))}"><span>R$</span></label><label class="u">Aluguel<input data-c="aluguel" inputmode="decimal" value="${esc(fmtIn("aluguel", PC.parseBR(o.aluguel)))}"><span>R$/mês</span></label>
+  <label class="u">Condomínio<input data-c="condominio" inputmode="decimal" value="${esc(fmtIn("condominio", PC.parseBR(o.condominio)))}"><span>R$/mês</span></label><label class="u">IPTU<input data-c="iptu" inputmode="decimal" value="${esc(fmtIn("iptu", PC.parseBR(o.iptu)))}"><span>R$</span></label>
+  <label>IPTU é<select data-c="iptu_periodo"><option value="">—</option><option value="mensal" ${o.iptu_periodo === "mensal" ? "selected" : ""}>Mensal</option><option value="anual" ${o.iptu_periodo === "anual" ? "selected" : ""}>Anual</option></select></label>
+  <label>Disponibilidade<input data-c="disponibilidade" value="${esc(o.disponibilidade || "")}"></label><label class="full">Documentação<input data-c="documentacao" value="${esc(o.documentacao || "")}" placeholder="Matrícula, averbação, financiável…"></label></div>
+  <label>Título<input data-c="titulo" value="${esc(o.titulo || "")}"></label><label>Chamada<input data-c="subtitulo" value="${esc(o.subtitulo || "")}"></label>
+  <label>Descrição<textarea data-c="descricao" rows="6">${esc(o.descricao || "")}</textarea></label>
+  <label>Destaques (um por linha)<textarea data-c="diferenciais" rows="4">${esc(PC.lines(o.diferenciais).join("\n"))}</textarea></label>
+  <div class="meter"><i id="cbar"></i></div><p class="hint" id="ctxt"></p></div>
+  <div class="card" id="fx"></div></div>`;
+  editing = true;
+  if (!podeEditar) $("main").insertAdjacentHTML("afterbegin", `<p class="note">Captação de ${esc(perfilPorEmail(o.captador).nome)}: você pode ver, mas só quem captou ou o administrador altera.</p>`);
+
+  const desenharNums = () => { const at = cur(); $("nums").innerHTML = camposCap(at.tipo).map(([k, l, u]) => `<label class="u">${esc(l)}<input data-c="${k}" inputmode="decimal" value="${esc(fmtIn(k, PC.parseBR(at[k])))}"><span>${esc(u)}</span></label>`).join(""); };
+  const medidor = () => { const at = cur(); const cp = PC.completude(at); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : ""; $("ctxt").textContent = cp.ok ? "Ficha completa." : `Ficha ${cp.pct}% · falta: ${cp.faltam.filter((f) => !f.extra).map((f) => f.rotulo).join(", ")}`; $("nf").textContent = fotosDe(at) + " foto(s)"; };
+  desenharNums();
+  // salvar campos (debounce)
+  let tSalvar = null; const lerCampos = () => { const p = {}; document.querySelectorAll("[data-c]").forEach((el) => (p[el.dataset.c] = el.value.trim())); p.anunciante = p.proprietario_nome; p.anunciante_contato = p.proprietario_tel; return p; };
+  const agendar = () => { clearTimeout(tSalvar); tSalvar = setTimeout(async () => { await salvar(lerCampos()); medidor(); }, 700); };
+  $("capw").addEventListener("input", (e) => { if (e.target.closest("[data-c]") || e.target.dataset.c) agendar(); });
+  $("capw").addEventListener("change", (e) => { if (e.target.dataset.c === "tipo") { clearTimeout(tSalvar); salvar(lerCampos()).then(() => { desenharNums(); medidor(); }); } else if (e.target.dataset.c) agendar(); });
+  $("fg").addEventListener("input", () => { clearTimeout($("fg")._t); $("fg")._t = setTimeout(() => salvar({ captacao: { fala_geral: $("fg").value } }), 700); });
+
+  // ambientes
+  const desenharAmbs = () => {
+    const at = cur(); const ambs = at.captacao?.ambientes || [];
+    const vivos = {}; document.querySelectorAll("[data-fala]").forEach((x) => (vivos[x.dataset.fala] = x.value));
+    const micOn = document.querySelector(".mic.on")?.dataset.mic;
+    $("ambs").innerHTML = ambs.map((a, i) => `<div class="amb" data-a="${a.id}"><div class="row" style="justify-content:space-between"><input class="ambn" data-an="${a.id}" value="${esc(a.nome || "Ambiente " + (i + 1))}"><button class="sm g" data-rm="${a.id}">Remover</button></div>
+      <div class="thumbs">${(a.fotos || []).map((f) => `<div class="th ${at.capa === f.k ? "capa" : ""}"><img src="${fotoURL(f.k)}" loading="lazy" alt=""><button data-capa="${f.k}" title="Usar como capa">★</button><button data-xf="${a.id}|${f.k}" title="Excluir">✕</button>${(f.avisos || []).length ? `<i title="${esc(f.avisos.join(" "))}">!</i>` : ""}</div>`).join("")}
+      <label class="th add"><input type="file" accept="image/*" capture="environment" multiple hidden data-addf="${a.id}">＋</label></div>
+      ${(a.avisos || []).length ? `<p class="note">${esc(a.avisos.join(" · "))}</p>` : ""}
+      <textarea data-fala="${a.id}" rows="2" placeholder="Fale ou digite: o que tem neste ambiente?">${esc(a.fala || "")}</textarea>
+      ${a.descricao ? `<p class="desc">${esc(a.descricao)}</p>` : ""}${(a.caracteristicas || []).length ? `<div class="chips">${a.caracteristicas.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : ""}
+      <div class="row"><button class="mic" data-mic="${a.id}">🎙 Falar</button><button class="sm" data-ia="${a.id}">${a.ia_em ? "Reorganizar" : "Organizar com IA"}</button></div></div>`).join("") || '<p class="empty">Nenhum ambiente ainda. Comece pela fachada.</p>';
+    ambs.forEach((a) => { const el = document.querySelector(`[data-fala="${a.id}"]`); if (el && vivos[a.id] !== undefined && vivos[a.id] !== (a.fala || "")) { el.value = vivos[a.id]; salvarFala(a.id, el.value); } });
+    if (micOn && micOn !== "fg") { const b = document.querySelector(`[data-mic="${micOn}"]`); if (b) b.classList.add("on"); }
+    ligarAmbs(); medidor();
+  };
+  const salvarFala = (id, v) => setAmbs((ambs) => { const a = ambs.find((y) => y.id === id); if (a) a.fala = v; });
+  const setAmbs = async (fn) => { const at = cur(); const ambs = JSON.parse(JSON.stringify(at.captacao?.ambientes || [])); fn(ambs); return await salvar({ captacao: { ambientes: ambs } }); };
+  const enviarFotos = async (files, ambId) => {
+    if (!files || !files.length) return; parar();
+    const prog = document.createElement("p"); prog.className = "status"; $("ambs").appendChild(prog);
+    let alvo = ambId; if (!alvo) { alvo = uid("a"); await setAmbs((ambs) => ambs.push({ id: alvo, nome: "Ambiente " + (ambs.length + 1), fotos: [], fala: "", criado: now() })); desenharAmbs(); }
+    const novas = [];
+    for (let i = 0; i < files.length; i++) {
+      prog.textContent = `Tratando e enviando foto ${i + 1} de ${files.length}…`;
+      try {
+        const r = await tratarFoto(files[i]);
+        const up = await api("fotos", { method: "POST", body: JSON.stringify({ oferta: route.id, jpeg_base64: await blobB64(r.blob) }) });
+        MINI[up.k] = r.mini; novas.push({ k: up.k, w: r.w, h: r.h, avisos: r.avisos, em: now() });
+      } catch (e) { toast("Foto " + (i + 1) + ": " + e.message); }
+    }
+    await setAmbs((ambs) => { const a = ambs.find((x) => x.id === alvo); if (a) a.fotos = [...(a.fotos || []), ...novas]; });
+    prog.remove(); desenharAmbs();
+    if (novas.length) { const a = (cur().captacao.ambientes || []).find((x) => x.id === alvo); if (a && !a.ia_em) organizar(alvo); }
+  };
+  const organizar = async (id) => {
+    const at = cur(); const a = (at.captacao?.ambientes || []).find((x) => x.id === id); if (!a) return;
+    const btn = document.querySelector(`[data-ia="${id}"]`); if (btn) { btn.disabled = true; btn.textContent = "Organizando…"; }
+    try {
+      const imgs = (await Promise.all((a.fotos || []).slice(0, 3).map((f) => miniDe(f.k)))).filter(Boolean);
+      const r = await api("ia/ambiente", { method: "POST", body: JSON.stringify({ imagens: imgs, fala: a.fala || "", tipo: at.tipo }) });
+      await setAmbs((ambs) => { const x = ambs.find((y) => y.id === id); if (!x) return; if (!x.nome_manual && r.ambiente) x.nome = r.ambiente; x.descricao = r.descricao || x.descricao; x.caracteristicas = r.caracteristicas || []; x.avisos = r.foto && r.foto.ok === false ? r.foto.problemas || [] : []; x.ia_em = now(); });
+      const p = mesclarDados(cur(), r.dados); if (Object.keys(p).length) { await salvar(p); desenharNums(); document.querySelectorAll("[data-c]").forEach((el) => { if (p[el.dataset.c] !== undefined) el.value = p[el.dataset.c]; }); toast("Dados da fala aplicados: " + Object.keys(p).map((k) => PC.CAMPOS[k]?.[0] || k).join(", ")); }
+    } catch (e) { toast("IA indisponível: " + e.message); }
+    desenharAmbs();
+  };
+  const microfone = (btn, alvoDe) => {
+    if (btn.classList.contains("on")) return parar();
+    parar();
+    const mid = btn.dataset.mic; const botao = () => document.querySelector(`[data-mic="${mid}"]`);
+    if (!vozDisponivel()) { alvoDe().focus(); toast("Use o microfone do teclado para ditar."); return; }
+    btn.classList.add("on");
+    voz = ditar({ aoTexto: (t) => { const alvo = alvoDe(); if (!alvo) return; alvo.value = (alvo.value ? alvo.value.replace(/\s+$/, "") + " " : "") + t; if (mid === "fg") alvo.dispatchEvent(new Event("input", { bubbles: true })); else salvarFala(mid, alvo.value); },
+      aoParcial: () => {}, aoFim: () => { const b = botao(); if (b) b.classList.remove("on"); }, aoErro: (e) => { const b = botao(); if (b) b.classList.remove("on"); voz = null; const alvo = alvoDe(); if (alvo) alvo.focus(); toast(e === "not-allowed" ? "Libere o microfone para este site nas configurações do Safari." : "Ditado indisponível: use o microfone do teclado."); } });
+  };
+  function ligarAmbs() {
+    document.querySelectorAll("[data-addf]").forEach((x) => (x.onchange = () => enviarFotos([...x.files], x.dataset.addf)));
+    document.querySelectorAll("[data-ia]").forEach((x) => (x.onclick = () => organizar(x.dataset.ia)));
+    document.querySelectorAll("[data-capa]").forEach((x) => (x.onclick = async () => { await salvar({ capa: x.dataset.capa }, "Capa definida."); desenharAmbs(); }));
+    document.querySelectorAll("[data-xf]").forEach((x) => confirmar2(x, "?", async () => { const [aid, k] = x.dataset.xf.split("|"); await setAmbs((ambs) => { const a = ambs.find((y) => y.id === aid); if (a) a.fotos = a.fotos.filter((f) => f.k !== k); }); api("fotos?k=" + encodeURIComponent(k), { method: "DELETE" }).catch(() => {}); desenharAmbs(); }));
+    document.querySelectorAll("[data-rm]").forEach((x) => confirmar2(x, "Confirmar", async () => { await setAmbs((ambs) => ambs.splice(ambs.findIndex((y) => y.id === x.dataset.rm), 1)); desenharAmbs(); }));
+    document.querySelectorAll("[data-an]").forEach((x) => (x.onchange = () => setAmbs((ambs) => { const a = ambs.find((y) => y.id === x.dataset.an); if (a) { a.nome = x.value.trim(); a.nome_manual = true; } })));
+    document.querySelectorAll("[data-fala]").forEach((x) => x.addEventListener("input", () => { clearTimeout(x._t); x._t = setTimeout(() => salvarFala(x.dataset.fala, x.value), 700); }));
+    document.querySelectorAll("[data-mic]").forEach((b) => (b.onclick = () => microfone(b, () => (b.dataset.mic === "fg" ? $("fg") : document.querySelector(`[data-fala="${b.dataset.mic}"]`)))));
+  }
+  $("camN").onchange = () => enviarFotos([...$("camN").files]); $("galN").onchange = () => enviarFotos([...$("galN").files]);
+  desenharAmbs();
+
+  // gerar anúncio
+  $("ga").onclick = async () => {
+    parar(); clearTimeout(tSalvar); await salvar({ ...lerCampos(), captacao: { fala_geral: $("fg").value } });
+    const at = cur(); const b = $("ga"); b.disabled = true; b.textContent = "Gerando…";
+    try {
+      const ficha = {}; ["tipo", "operacao", "cidade", "regiao", ...NUM_IA, "iptu_periodo", "disponibilidade", "documentacao"].forEach((k) => { if (at[k]) ficha[k] = at[k]; });
+      const r = await api("ia/anuncio", { method: "POST", body: JSON.stringify({ ficha, ambientes: (at.captacao?.ambientes || []).map((a) => ({ nome: a.nome, descricao: a.descricao, caracteristicas: a.caracteristicas, fala: a.fala, fotos: (a.fotos || []).length })), fala_geral: at.captacao?.fala_geral || "" }) });
+      const p = { ...mesclarDados(at, r.dados), titulo: r.titulo || at.titulo, subtitulo: r.subtitulo || at.subtitulo, descricao: r.descricao || at.descricao, diferenciais: (r.destaques || []).join("\n") || at.diferenciais, pendencias: r.pendencias || [] };
+      await salvar(p, "Anúncio gerado. Revise o texto.");
+      Object.entries(p).forEach(([k, v]) => { const el = document.querySelector(`[data-c="${k}"]`); if (el && typeof v === "string") el.value = v; }); desenharNums();
+      $("pend").innerHTML = (r.pendencias || []).length ? `<p class="note">Para completar: ${esc(r.pendencias.join(" · "))}</p>` : "";
+    } catch (e) { toast("Não foi possível gerar: " + e.message); }
+    b.disabled = false; b.textContent = "Gerar de novo"; medidor(); passos();
+  };
+  if ((o.pendencias || []).length) $("pend").innerHTML = `<p class="note">Para completar: ${esc(o.pendencias.join(" · "))}</p>`;
+
+  // próximos passos
+  const passos = () => {
+    const at = cur(); const an = anuncioDe(at); const pedAb = S.pedidos.filter((p) => p.oferta === at.id).sort((a, b) => (b.criado || "").localeCompare(a.criado || ""))[0];
+    const aut = at.autorizacao || at.autorizacao_manual; const nf = fotosDe(at);
+    const falta = [!at.titulo && "título", !at.descricao && "descrição", nf < 3 && "pelo menos 3 fotos", !(PC.parseBR(at.venda) || PC.parseBR(at.aluguel)) && "valor"].filter(Boolean);
+    const link = an ? `${location.origin}/i/${an.id}` : "";
+    $("fx").innerHTML = `<h2>Próximos passos</h2>
+    <div class="passo ${aut ? "ok" : ""}"><b>1 · Autorização de comercialização</b>
+      ${at.autorizacao ? `<p class="tag ok">Autorizado por ${esc(at.autorizacao.responsavel || at.autorizacao.razao)} em ${esc(fdt(at.autorizacao.em))}</p>` : at.autorizacao_manual ? `<p class="tag ok">Autorização por escrito fora do sistema, registrada por ${esc(at.autorizacao_manual.por)} em ${esc(fdt(at.autorizacao_manual.em))}</p>` : pedAb ? `<p class="hint">Enviada em ${esc(fdt(pedAb.criado))}: ${esc(STATUS_P[pedAb.status] || pedAb.status)}.</p><button class="sm" id="vped">Ver pedido</button>` : `<p class="hint">O proprietário recebe a ficha do imóvel e aceita a autorização pelo celular (link) ou no PDF.</p>`}
+      ${!aut ? `<button class="${pedAb ? "sm" : "p"}" id="paut">${pedAb ? "Novo pedido de autorização" : "Pedir autorização ao proprietário"}</button><label class="check"><input type="checkbox" id="amanual"> O proprietário já assinou autorização por escrito (fica registrado em meu nome)</label>` : ""}</div>
+    <div class="passo ${an && an.status === "ativo" ? "ok" : ""}"><b>2 · Anúncio (página para WhatsApp)</b>
+      ${falta.length ? `<p class="hint">Falta: ${esc(falta.join(", "))}.</p>` : ""}
+      ${an && an.status === "ativo" ? `<p class="linkbox">${esc(link)}</p><p class="hint">${an.visitas || 0} visita(s) · publicado em ${esc(fdt(an.publicado_em))}${an.atualizado_em ? " · atualizado " + esc(fdt(an.atualizado_em)) : ""}</p>
+        <div class="row"><a class="btn sm p" target="_blank" rel="noopener" href="${esc(waLink("", `${at.titulo}\n${link}`))}">Enviar no WhatsApp</a><button class="sm" id="cpl">Copiar link</button><a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">Ver página</a></div>
+        <div class="row"><button class="sm" id="pub">Atualizar página</button><button class="sm g" id="enc">Encerrar anúncio</button></div>`
+      : `<button class="p" id="pub" ${falta.length || !aut ? "disabled" : ""}>Publicar anúncio</button>${!aut ? '<p class="hint">Publica depois da autorização do proprietário.</p>' : ""}`}</div>
+    <div class="passo ${at.status !== "captacao" ? "ok" : ""}"><b>3 · Banco de ofertas</b>
+      ${at.status === "captacao" ? `<p class="hint">Entra no cruzamento com os briefings e no ranking.</p><button id="conc">Concluir captação e enviar ao banco</button>` : `<p class="tag ok">No banco de ofertas${at.codigo ? " como " + esc(at.codigo) : ""}.</p>`}
+      <div class="row"><button class="sm" id="pdfc">Ficha PDF</button><button class="sm" id="vof">Abrir como oferta</button></div></div>`;
+    const paut = $("paut"); if (paut) paut.onclick = async () => { parar(); clearTimeout(tSalvar); await salvar({ ...lerCampos(), anunciante_tipo: "Proprietário" }); editing = false; go({ v: "novopedido", o: at.id }); };
+    const am = $("amanual"); if (am) am.onchange = async () => { if (!am.checked) return; await salvar({ autorizacao_manual: { em: now(), por: EU.usuario || usuarioAtual?.email } }, "Autorização registrada."); passos(); };
+    const vp = $("vped"); if (vp) vp.onclick = () => { editing = false; go({ v: "pedido", id: pedAb.id }); };
+    const pub = $("pub"); if (pub) pub.onclick = publicar;
+    const cpl = $("cpl"); if (cpl) cpl.onclick = () => copiar(link);
+    const enc = $("enc"); if (enc) confirmar2(enc, "Toque de novo para encerrar", async () => { await store.save("anuncios", { ...an, status: "encerrado", encerrado_em: now() }); toast("Anúncio encerrado."); passos(); });
+    const cc = $("conc"); if (cc) cc.onclick = async () => { const cod = await garantirCodigo(cur()); await salvar({ status: "revisada", codigo: cod, captacao: { concluida: now() } }, "Captação no banco de ofertas como " + cod + "."); header("Captação " + cod); passos(); };
+    $("pdfc").onclick = async () => { clearTimeout(tSalvar); await salvar(lerCampos()); await gerarPDF(cur(), { semTermo: true }); };
+    $("vof").onclick = () => { parar(); editing = false; go({ v: "oferta", id: at.id }); };
+  };
+  const publicar = async () => {
+    clearTimeout(tSalvar); await salvar(lerCampos());
+    const at = cur(); const d = PC.num(at); const codigo = await garantirCodigo(at); const a2 = cur();
+    const res = PC.grupo(d.tipo) === "residencial";
+    const fatos = (res ? [[d.construida && PC.m2(d.construida), "Área útil"], [d.dormitorios && PC.nf(d.dormitorios) + (d.suites ? ` (${PC.nf(d.suites)} suíte${d.suites > 1 ? "s" : ""})` : ""), "Dormitórios"], [d.banheiros && PC.nf(d.banheiros), "Banheiros"], [d.vagas && PC.nf(d.vagas), "Vagas"], [d.terreno && PC.m2(d.terreno), "Terreno"]]
+      : [[d.construida && PC.m2(d.construida), "Área construída"], [d.fabril && PC.m2(d.fabril), "Galpão"], [d.terreno && PC.m2(d.terreno), "Terreno"], [d.pe_direito && PC.nf(d.pe_direito) + " m", "Pé-direito"], [d.docas && PC.nf(d.docas), "Docas"], [d.energia_kva && PC.nf(d.energia_kva) + " kVA", "Energia"]]).filter((x) => x[0]).map(([v, l]) => [l, v]);
+    const valores = [[d.venda && PC.brl(d.venda), "Venda"], [d.aluguel && PC.brl(d.aluguel) + "/mês", "Aluguel"], [d.condominio && PC.brl(d.condominio) + "/mês", "Condomínio"], [d.iptu && PC.brl(d.iptu) + (d.iptu_periodo === "anual" ? "/ano" : d.iptu_periodo === "mensal" ? "/mês" : ""), "IPTU"]].filter((x) => x[0]).map(([v, l]) => [l, v]);
+    const ambs = a2.captacao?.ambientes || []; let fotos = ambs.flatMap((a) => (a.fotos || []).map((f) => ({ k: f.k, ambiente: a.nome })));
+    const ci = fotos.findIndex((f) => f.k === a2.capa); if (ci > 0) fotos = [fotos[ci], ...fotos.slice(0, ci), ...fotos.slice(ci + 1)];
+    const ant = anuncioDe(a2); const token = ant ? ant.id : tokenAleatorio(22);
+    const reg = { ...(ant || {}), id: token, oferta: a2.id, status: "ativo", codigo, tipo: a2.tipo, operacao: a2.operacao, cidade: a2.cidade, regiao: a2.regiao, titulo: a2.titulo, subtitulo: a2.subtitulo || "", descricao: a2.descricao, destaques: PC.lines(a2.diferenciais).slice(0, 10), fatos, valores, fotos: fotos.slice(0, 60), ambientes: ambs.map((a) => ({ nome: a.nome, descricao: a.descricao || "" })), corretor: corretorDaOferta(a2), publicado_em: ant?.publicado_em || now(), atualizado_em: ant ? now() : null, visitas: ant?.visitas || 0 };
+    try {
+      await store.save("anuncios", reg);
+      await salvar({ anuncio_token: token, status: a2.status === "captacao" ? "revisada" : a2.status, codigo });
+      await emitir({ tipo: "anuncio_publicado", oferta_id: a2.id, destinatario: "Página pública", conteudo: `${location.origin}/i/${token}\n${a2.titulo} · ${fotos.length} foto(s) · ${corretorDaOferta(a2).nome}`, meta: { token, atualizacao: !!ant } });
+      toast(ant ? "Página atualizada." : "Anúncio publicado."); header("Captação " + codigo); passos();
+    } catch {}
+  };
+  medidor(); passos();
+};
+
+/* ---------- Anúncios publicados ---------- */
+VIEWS.anuncios = (recarregado) => {
+  header("Anúncios publicados");
+  if (recarregado !== true) store.carregar().then(() => { if (route.v === "anuncios") VIEWS.anuncios(true); }).catch(() => {});
+  const as = [...S.anuncios].sort((a, b) => (b.publicado_em || "").localeCompare(a.publicado_em || ""));
+  $("main").innerHTML = `<div class="card"><div class="list">${as.map((a) => `<div class="item"><span class="dot ${a.status === "ativo" ? "verde" : ""}"></span><span class="t"><b>${esc((a.codigo ? a.codigo + " · " : "") + a.titulo)}</b><span>${esc([a.status === "ativo" ? "No ar" : "Encerrado", (a.visitas || 0) + " visita(s)", (a.fotos || []).length + " foto(s)", a.corretor?.nome?.split(" ")[0], fdt(a.publicado_em)].filter(Boolean).join(" · "))}</span></span>${a.status === "ativo" ? `<a class="btn sm" target="_blank" rel="noopener" href="/i/${esc(a.id)}">Ver</a>` : ""}<button class="sm" data-oc="${esc(a.oferta)}">Abrir</button></div>`).join("") || '<p class="empty">Nenhum anúncio publicado. Publique a partir de uma captação.</p>'}</div></div>`;
+  document.querySelectorAll("[data-oc]").forEach((b) => (b.onclick = () => go({ v: "captacao", id: b.dataset.oc })));
 };
 
 iniciar();

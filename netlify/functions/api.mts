@@ -2,13 +2,16 @@ import type { Config, Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { verifyRequestOrigin } from "@netlify/identity";
 import {
-  COLECOES, db, json, erro, usuario, autorizado, env,
-  listarTudo, salvarRegistro, registrarEmissao, proximoCodigoPC,
-  chamarIA, PROMPT_UM, PROMPT_VARIOS,
+  COLECOES, db, json, erro, usuario, papelDe, perfilDe, env,
+  listarTudo, salvarRegistro, obterRegistro, registrarEmissao, proximoCodigoPC,
+  chamarIA, chamarIAImagem, PROMPT_UM, PROMPT_VARIOS, PROMPT_AMBIENTE, PROMPT_ANUNCIO,
 } from "../../shared/servidor.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_PDF = 4 * 1024 * 1024; // 4 MB
+const MAX_FOTO = 3 * 1024 * 1024; // 3 MB por foto já tratada no celular
+const SO_ADMIN_COL = ["config", "usuarios"];
+const FOTO_RE = /^fotos\/[A-Za-z0-9_-]{1,80}\/[\w-]{6,40}\.jpg$/;
 
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
@@ -18,7 +21,9 @@ export default async (req: Request, context: Context) => {
   // Toda rota daqui é privada (a Sala do Cliente tem function própria).
   const u = await usuario();
   if (!u) return erro("Faça login.", 401);
-  if (!autorizado(u)) return erro("Usuário sem permissão.", 403);
+  const papel = await papelDe(u);
+  if (!papel) return erro("Usuário sem permissão.", 403);
+  const admin = papel === "admin";
   if (req.method !== "GET") {
     try {
       verifyRequestOrigin(req);
@@ -41,12 +46,17 @@ export default async (req: Request, context: Context) => {
     if (rota === "dados" && a && b) {
       if (!COLECOES.includes(a)) return erro("Coleção inválida.");
       if (!ID_RE.test(b)) return erro("Identificador inválido.");
+      if (SO_ADMIN_COL.includes(a) && !admin) return erro("Somente o administrador altera esta área.", 403);
+      if (req.method === "DELETE" && !admin) return erro("Somente o administrador exclui registros.", 403);
       if (req.method === "PUT") {
         const body = await req.json().catch(() => null);
         if (!body || typeof body !== "object" || Array.isArray(body)) return erro("Corpo inválido.");
         const dados = { ...body };
         delete (dados as Record<string, unknown>).id;
         delete (dados as Record<string, unknown>)._atualizado;
+        const ant = await obterRegistro(a, b);
+        (dados as Record<string, unknown>).criado_por = (ant && ant.criado_por) || (dados as Record<string, unknown>).criado_por || u.email;
+        (dados as Record<string, unknown>).atualizado_por = u.email;
         const tam = JSON.stringify(dados).length;
         if (tam > 400_000) return erro("Registro grande demais.");
         const r = await salvarRegistro(a, b, dados);
@@ -106,7 +116,50 @@ export default async (req: Request, context: Context) => {
       return json(r);
     }
 
+    /* ---------- fotos da captação ---------- */
+    if (rota === "fotos" && req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      const of = String(body?.oferta || "");
+      if (!ID_RE.test(of)) return erro("Oferta inválida.");
+      const bin = Buffer.from(String(body?.jpeg_base64 || ""), "base64");
+      if (bin.length < 200 || bin[0] !== 0xff || bin[1] !== 0xd8) return erro("Foto inválida (JPEG).");
+      if (bin.length > MAX_FOTO) return erro("Foto grande demais.");
+      const k = `fotos/${of}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+      await getStore("fotos").set(k, new Blob([bin], { type: "image/jpeg" }), { metadata: { por: u.email, em: new Date().toISOString() } });
+      return json({ ok: true, k });
+    }
+    if (rota === "foto" && req.method === "GET") {
+      const k = url.searchParams.get("k") || "";
+      if (!FOTO_RE.test(k)) return erro("Foto inválida.");
+      const r = await getStore("fotos").get(k, { type: "arrayBuffer" });
+      if (!r) return erro("Foto não encontrada.", 404);
+      return new Response(r as ArrayBuffer, { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=86400" } });
+    }
+    if (rota === "fotos" && req.method === "DELETE") {
+      const k = url.searchParams.get("k") || "";
+      if (!FOTO_RE.test(k)) return erro("Foto inválida.");
+      await getStore("fotos").delete(k);
+      return json({ ok: true });
+    }
+
+    /* ---------- IA da captação ---------- */
+    if (rota === "ia" && a === "ambiente" && req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      const imgs = (Array.isArray(body?.imagens) ? body.imagens : []).map(String).filter((x: string) => x.length > 100 && x.length < 1_500_000).slice(0, 3);
+      const fala = String(body?.fala || "").slice(0, 4000);
+      if (!imgs.length && fala.length < 3) return erro("Envie ao menos uma foto ou a fala do ambiente.");
+      const r = await chamarIAImagem(PROMPT_AMBIENTE + `\nTipo de imóvel: ${String(body?.tipo || "não informado").slice(0, 60)}.`, fala, imgs, 1200);
+      return json(r);
+    }
+    if (rota === "ia" && a === "anuncio" && req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      const txt = JSON.stringify({ ficha: body?.ficha || {}, ambientes: body?.ambientes || [], fala_geral: body?.fala_geral || "" }).slice(0, 24000);
+      const r = await chamarIA(PROMPT_ANUNCIO, txt, 2500);
+      return json(r);
+    }
+
     /* ---------- backup ---------- */
+    if (["backup", "backups", "restaurar"].includes(rota) && !admin) return erro("Somente o administrador acessa o backup.", 403);
     if (rota === "backup" && req.method === "GET") {
       const registros = await listarTudo(true);
       const emissoes = await db().sql`SELECT * FROM emissoes ORDER BY id`;
@@ -146,6 +199,8 @@ export default async (req: Request, context: Context) => {
     if (rota === "status" && req.method === "GET") {
       return json({
         usuario: u.email,
+        papel,
+        perfil: await perfilDe(u),
         coleta_configurada: !!(env("ALERTAS_IMAP_USER") && env("ALERTAS_IMAP_SENHA")),
         caixa_alertas: env("ALERTAS_IMAP_USER") || null,
       });

@@ -6,6 +6,7 @@ process.env.NETLIFY_DB_URL = cs;
 const api = (await import("./out/api.mjs")).default;
 const sala = (await import("./out/sala.mjs")).default;
 const backup = (await import("./out/backup-diario.mjs")).default;
+const imovel = (await import("./out/imovel.mjs")).default;
 const ctx = (params = {}) => ({ params, ip: "200.1.2.3", site: { url: "https://pc.test" } });
 const R = (m, p, body, h = {}) => new Request("https://pc.test" + p, { method: m, headers: { "content-type": "application/json", origin: "https://pc.test", ...h }, body: body ? JSON.stringify(body) : undefined });
 const J = async (r) => ({ s: r.status, j: await r.json().catch(() => null) });
@@ -162,6 +163,66 @@ await t("acordo de divisão: 2 e 4 partes, recebedor e texto preenchido", async 
   const c4 = { base: "venda", valor_base: "7.500.000", pct: "6", recebe: 0, partes: [{ papel: "Imobiliária anunciante", pct: 40, nome: "Imob", creci: "J-1" }, { papel: "Corretor do anunciante", pct: 10, nome: "Ana", creci: "111" }, { papel: "Corretor parceiro", pct: 25, nome: "Marcos", creci: "222" }, { papel: "PrimeCorp (indicação)", pct: 25 }] };
   for (const c of [c2, c4]) { const doc = PC.pdfAcordo(jsPDF, { codigo: "PC-0009", titulo: "Galpão X", tipo: "Galpão", cliente: "Indústria X", comissao: c, texto: PC.preencher(ACORDO_PADRAO, PC.varsAcordo({ codigo: "PC-0009", titulo: "Galpão X", cliente: "Indústria X", comissao: c })), versao: "v1" });
     const out = doc.output(); assert.ok(out.startsWith("%PDF")); fsx.writeFileSync(`test/out/acordo_${c.partes.length}.pdf`, out, "binary"); }
+});
+
+/* ===== v4: equipe, permissões, fotos, IA da captação e landing ===== */
+const JOS = { email: "comercial@primecorpconsultoria.com.br" }, ADM = { email: "contato@primecorpconsultoria.com.br" };
+await t("equipe: sem cadastro, Joselia não acessa", async () => { globalThis.__user = JOS; assert.equal((await api(R("GET", "/api/dados"), ctx())).status, 403); globalThis.__user = ADM; });
+await t("equipe: só admin cadastra; corretora acessa com limites", async () => {
+  assert.equal((await api(R("PUT", "/api/dados/usuarios/u_jos", { email: "comercial@primecorpconsultoria.com.br", nome: "Joselia Junqueira Viana", creci: "CRECI-SP 300760", telefone: "(19) 99919-4447", papel: "corretor", ativo: true }), ctx())).status, 200);
+  globalThis.__user = JOS;
+  assert.equal((await api(R("GET", "/api/dados"), ctx())).status, 200);
+  const st = await J(await api(R("GET", "/api/status"), ctx())); assert.equal(st.j.papel, "corretor"); assert.equal(st.j.perfil.creci, "CRECI-SP 300760");
+  assert.equal((await api(R("PUT", "/api/dados/config/geral", { x: 1 }), ctx())).status, 403);
+  assert.equal((await api(R("PUT", "/api/dados/usuarios/u_x", { email: "x@y.com", papel: "admin" }), ctx())).status, 403);
+  assert.equal((await api(R("DELETE", "/api/dados/ofertas/o1"), ctx())).status, 403);
+  assert.equal((await api(R("GET", "/api/backup"), ctx())).status, 403);
+  assert.equal((await api(R("PUT", "/api/dados/ofertas/cap1", { id: "cap1", origem: "Captação própria", status: "captacao", tipo: "Casa", captador: JOS.email }), ctx())).status, 200);
+  globalThis.__user = ADM;
+  await api(R("PUT", "/api/dados/ofertas/cap1", { id: "cap1", origem: "Captação própria", status: "captacao", tipo: "Casa", captador: JOS.email, cidade: "Sumaré" }), ctx());
+  const d = await J(await api(R("GET", "/api/dados"), ctx())); const o = d.j.ofertas.find((x) => x.id === "cap1");
+  assert.equal(o.criado_por, JOS.email); assert.equal(o.atualizado_por, ADM.email);
+  await api(R("PUT", "/api/dados/usuarios/u_jos", { email: "comercial@primecorpconsultoria.com.br", nome: "Joselia", papel: "corretor", ativo: false }), ctx());
+  globalThis.__user = JOS; assert.equal((await api(R("GET", "/api/dados"), ctx())).status, 403); globalThis.__user = ADM;
+  await api(R("PUT", "/api/dados/usuarios/u_jos", { email: "comercial@primecorpconsultoria.com.br", nome: "Joselia Junqueira Viana", creci: "CRECI-SP 300760", telefone: "(19) 99919-4447", papel: "corretor", ativo: true }), ctx());
+});
+const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(400, 7), Buffer.from([0xff, 0xd9])]);
+let FK;
+await t("fotos: valida JPEG, guarda e serve com login", async () => {
+  assert.equal((await api(R("POST", "/api/fotos", { oferta: "cap1", jpeg_base64: Buffer.from("%PDF-1.4 xxxxx".repeat(30)).toString("base64") }), ctx())).status, 400);
+  const r = await J(await api(R("POST", "/api/fotos", { oferta: "cap1", jpeg_base64: JPG.toString("base64") }), ctx())); assert.equal(r.s, 200); FK = r.j.k; assert.match(FK, /^fotos\/cap1\/.+\.jpg$/);
+  const g = await api(R("GET", "/api/foto?k=" + encodeURIComponent(FK)), ctx()); assert.equal(g.headers.get("content-type"), "image/jpeg"); assert.equal(Buffer.from(await g.arrayBuffer()).length, JPG.length);
+  assert.equal((await api(R("GET", "/api/foto?k=../x"), ctx())).status, 400);
+  globalThis.__user = null; assert.equal((await api(R("GET", "/api/foto?k=" + encodeURIComponent(FK)), ctx())).status, 401); globalThis.__user = ADM;
+});
+await t("IA: ambiente com foto e fala; anúncio", async () => {
+  const r = await J(await api(R("POST", "/api/ia/ambiente", { imagens: [JPG.toString("base64")], fala: "suíte com armário, casa tem 3 dormitórios e 2 vagas", tipo: "Casa" }), ctx()));
+  assert.equal(r.s, 200); assert.equal(r.j.ambiente, "Suíte"); assert.equal(r.j.dados.dormitorios, 3);
+  assert.equal(globalThis.__iaReq.messages[0].content.filter((c) => c.type === "image").length, 1);
+  assert.equal((await api(R("POST", "/api/ia/ambiente", { imagens: [], fala: "" }), ctx())).status, 400);
+  const a = await J(await api(R("POST", "/api/ia/anuncio", { ficha: { tipo: "Casa" }, ambientes: [{ nome: "Suíte" }], fala_geral: "venda 850 mil" }), ctx()));
+  assert.equal(a.s, 200); assert.ok(a.j.titulo.length > 10); assert.equal(a.j.dados.venda, 850000);
+});
+await t("landing pública: só anúncio ativo, sem endereço, com foto e contador", async () => {
+  const L = (p) => imovel(new Request("https://pc.test" + p), {});
+  assert.equal((await L("/i/tokeninexistente123")).status, 404);
+  await api(R("PUT", "/api/dados/ofertas/cap1", { id: "cap1", origem: "Captação própria", tipo: "Casa", endereco: "Rua Secreta, 123", cidade: "Sumaré" }), ctx());
+  await api(R("PUT", "/api/dados/anuncios/TOKENLANDING1234567", { oferta: "cap1", status: "ativo", codigo: "PC-0100", titulo: "Casa com 3 dormitórios em Sumaré", descricao: "Casa ampla.\n\nQuintal.", destaques: ["2 vagas"], fatos: [["Dormitórios", "3"]], valores: [["Venda", "R$ 850.000"]], fotos: [{ k: FK, ambiente: "Fachada" }], ambientes: [{ nome: "Fachada", descricao: "Fachada térrea." }], corretor: { nome: "Joselia Junqueira Viana", creci: "CRECI-SP 300760", whatsapp: "(19) 99919-4447" } }), ctx());
+  const h = await L("/i/TOKENLANDING1234567"); const html = await h.text();
+  assert.equal(h.status, 200); assert.ok(html.includes("Casa com 3 dormitórios em Sumaré")); assert.ok(html.includes('og:image" content="https://pc.test/i/TOKENLANDING1234567/f/0.jpg"'));
+  assert.ok(html.includes("wa.me/5519999194447")); assert.ok(!html.includes("Rua Secreta")); assert.ok(html.includes("CRECI-SP 300760"));
+  const f = await L("/i/TOKENLANDING1234567/f/0.jpg"); assert.equal(f.headers.get("content-type"), "image/jpeg");
+  assert.equal((await L("/i/TOKENLANDING1234567/f/5.jpg")).status, 404);
+  await L("/i/TOKENLANDING1234567"); const d = await J(await api(R("GET", "/api/dados"), ctx())); assert.equal(d.j.anuncios.find((x) => x.id === "TOKENLANDING1234567").visitas, 2);
+  await api(R("PUT", "/api/dados/anuncios/TOKENLANDING1234567", { ...d.j.anuncios[0], status: "encerrado" }), ctx());
+  assert.equal((await L("/i/TOKENLANDING1234567")).status, 404);
+});
+await t("residencial: completude, título e ficha PDF", async () => {
+  const c = PC.completude({ tipo: "Casa", operacao: "Venda", cidade: "Sumaré", regiao: "Jardim X", construida: "140", dormitorios: "3", banheiros: "2", vagas: "2", venda: "850.000", iptu: "2.400", iptu_periodo: "anual", condominio: "0", disponibilidade: "Imediata", documentacao: "Ok" });
+  assert.equal(c.ok, true); assert.equal(c.grupo, "residencial");
+  assert.equal(PC.checks(PC.num({ tipo: "Casa", aluguel: "3000", construida: "100" }), []).sem, "verde");
+  const { jsPDF } = await import("jspdf"); const doc = PC.pdf(jsPDF, { ...PC.num({ tipo: "Casa", cidade: "Sumaré", dormitorios: "3", suites: "1", vagas: "2", construida: "140", venda: "850000" }), corretor: { nome: "Joselia Junqueira Viana", creci: "CRECI-SP 300760", email: "comercial@primecorpconsultoria.com.br" } }, { alerts: [], sem: "verde" }, null);
+  fsx.writeFileSync("test/out/ficha_casa.pdf", doc.output(), "binary");
 });
 console.log(`\n${ok} testes OK`);
 await db.stop(); process.exit(0);

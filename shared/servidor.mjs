@@ -3,7 +3,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser } from "@netlify/identity";
 import Anthropic from "@anthropic-ai/sdk";
 
-export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config"];
+export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios"];
 
 let _db = null;
 export function db() {
@@ -36,6 +36,25 @@ export function autorizado(u) {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   return !lista.length || lista.includes(String(u.email || "").toLowerCase());
+}
+
+
+/** Papel do usuário: "admin" (ADMIN_EMAILS ou equipe com papel admin), "corretor" (equipe ativa) ou null (sem acesso). */
+export async function papelDe(u) {
+  if (!u || !u.email) return null;
+  const email = String(u.email).toLowerCase();
+  const lista = (env("ADMIN_EMAILS") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (!lista.length || lista.includes(email)) return "admin";
+  const rows = await db().sql`SELECT dados FROM registros WHERE colecao = 'usuarios' AND excluido = FALSE`;
+  const m = rows.map((r) => r.dados).find((d) => String(d.email || "").toLowerCase() === email && d.ativo !== false);
+  if (!m) return null;
+  return m.papel === "admin" ? "admin" : "corretor";
+}
+export async function perfilDe(u) {
+  const email = String(u?.email || "").toLowerCase();
+  const rows = await db().sql`SELECT dados FROM registros WHERE colecao = 'usuarios' AND excluido = FALSE`;
+  const m = rows.map((r) => r.dados).find((d) => String(d.email || "").toLowerCase() === email);
+  return m ? { nome: m.nome || "", creci: m.creci || "", telefone: m.telefone || "", email } : { nome: "", creci: "", telefone: "", email };
 }
 
 export function env(nome) {
@@ -113,6 +132,29 @@ export function extrairJSON(txt) {
   }
   throw new Error("Resposta da IA sem JSON válido");
 }
+
+/** IA com imagens (JPEG em base64) + texto. */
+export async function chamarIAImagem(prompt, texto, imagens = [], maxTokens = 1500) {
+  const client = new Anthropic();
+  const model = env("MODELO_IA") || "claude-sonnet-4-5-20250929";
+  const content = [
+    ...imagens.slice(0, 4).map((b64) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } })),
+    { type: "text", text: `${prompt}\n\nFALA DO CORRETOR:\n"""\n${texto || "(sem fala)"}\n"""` },
+  ];
+  const r = await client.messages.create({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] });
+  const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  return extrairJSON(out);
+}
+
+export const PROMPT_AMBIENTE = `Você ajuda um corretor de imóveis brasileiro que está captando um imóvel no local. Recebe foto(s) de UM ambiente e o que o corretor falou sobre ele (transcrição de voz, pode ter erros).
+Responda SOMENTE um objeto JSON:
+{"ambiente":"nome curto do ambiente (ex.: 'Sala de estar', 'Cozinha', 'Suíte master', 'Fachada', 'Área de lazer', 'Galpão – área operacional', 'Docas')","descricao":"1 a 2 frases objetivas sobre o ambiente, 3ª pessoa, só o que se vê nas fotos ou o corretor disse","caracteristicas":["até 6 itens curtos, ex.: 'Piso porcelanato', 'Armários planejados'"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"pe_direito":número|null,"docas":número|null,"aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null},"foto":{"ok":true|false,"problemas":["ex.: 'escura', 'tremida', 'torta', 'objetos pessoais à vista', 'pessoa na foto', 'placa de carro visível'"]}}
+REGRAS: em "dados" só números DITOS pelo corretor (nunca estime pela foto); null quando não falou. Não invente materiais que não dá para ver. Não cite endereço.`;
+
+export const PROMPT_ANUNCIO = `Você redige o anúncio de um imóvel captado diretamente por um corretor de imóveis brasileiro (PrimeCorp Brokers), a partir dos dados da ficha, dos ambientes registrados no local e das falas do corretor.
+Responda SOMENTE um objeto JSON:
+{"titulo":"até 70 caracteres, ex.: 'Casa com 3 dormitórios e piscina no Jardim X, Sumaré'","subtitulo":"até 90 caracteres com o principal atrativo","descricao":"2 parágrafos, 500 a 800 caracteres no total, 3ª pessoa, tom profissional e acolhedor, só fatos fornecidos","destaques":["4 a 8 itens curtos"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null,"iptu_periodo":"mensal|anual|null","disponibilidade":"texto|null","documentacao":"texto|null"},"pendencias":["até 5 informações que faltam para um anúncio completo"]}
+REGRAS: NUNCA invente números, materiais ou itens de lazer. Não cite rua, número, nome do proprietário nem telefone. Bairro e cidade podem aparecer. Em "dados", só números informados nas falas ou na ficha.`;
 
 export async function chamarIA(prompt, texto, maxTokens = 4000) {
   const client = new Anthropic(); // credenciais do AI Gateway da Netlify ou ANTHROPIC_API_KEY própria

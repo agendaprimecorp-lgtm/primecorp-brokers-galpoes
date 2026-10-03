@@ -2,7 +2,7 @@ import type { Config } from "@netlify/functions";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { timingSafeEqual } from "node:crypto";
-import { env, usuario, autorizado, db, salvarRegistro, registrarEmissao, chamarIA, PROMPT_VARIOS } from "../../shared/servidor.mjs";
+import { env, usuario, papelDe, db, salvarRegistro, registrarEmissao, chamarIA, PROMPT_VARIOS } from "../../shared/servidor.mjs";
 
 // Lê os e-mails de alerta NÃO LIDOS da caixa dedicada, extrai as ofertas com IA e cria cada uma como "a revisar".
 // Roda em segundo plano (até 15 min). Acionada pela coleta agendada (com segredo) ou pelo botão no app (usuário logado).
@@ -20,7 +20,7 @@ const fmt = (k: string, v: unknown) => (typeof v === "number" ? (["aluguel", "ve
 export default async (req: Request) => {
   if (!segredoOk(req)) {
     const u = await usuario();
-    if (!u || !autorizado(u)) { console.log("Coleta recusada: sem autorização."); return; }
+    if (!u || !(await papelDe(u))) { console.log("Coleta recusada: sem autorização."); return; }
   }
   const user = env("ALERTAS_IMAP_USER"), pass = env("ALERTAS_IMAP_SENHA");
   if (!user || !pass) { console.log("Coleta não configurada."); return; }

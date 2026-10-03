@@ -5,3 +5,4 @@ public/sala.js
 public/anunciante.js
 test/out/
 test/www/
+node_modules

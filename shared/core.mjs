@@ -22,7 +22,7 @@ PC.m2 = n => (n ? PC.nf(Math.round(n), 0) + ' m²' : null);
 PC.brl = n => (n ? 'R$ ' + PC.nf(Math.round(n), 0) : null);
 PC.brl2 = n => (n ? 'R$ ' + PC.nf(n, 2) : null);
 PC.num = d => {
-  const k = ['terreno', 'construida', 'fabril', 'administrativo', 'apoio', 'pe_direito', 'piso_carga', 'docas', 'energia_kva', 'aluguel', 'venda', 'condominio', 'iptu', 'frente'];
+  const k = ['terreno', 'construida', 'fabril', 'administrativo', 'apoio', 'pe_direito', 'piso_carga', 'docas', 'energia_kva', 'aluguel', 'venda', 'condominio', 'iptu', 'frente', 'dormitorios', 'suites', 'banheiros', 'vagas'];
   const o = Object.assign({}, d);
   k.forEach(f => (o[f] = PC.parseBR(d[f])));
   o.diferenciais = PC.lines(d.diferenciais);
@@ -32,9 +32,14 @@ PC.num = d => {
 PC.lines = v => (Array.isArray(v) ? v : String(v || '').split('\n')).map(s => String(s).replace(/^[\s•\-–*·]+/, '').trim()).filter(Boolean);
 PC.areaRef = d => d.fabril || d.construida || d.terreno || null;
 
+PC.RESID_RE = /casa|apartamento|sobrado|cobertura|kitnet|studio|chácara|chacara|flat/i;
 PC.autoTitle = function (d) {
   const tipo = d.tipo || 'Galpão';
   const cid = d.cidade ? ' em ' + d.cidade : '';
+  if (PC.RESID_RE.test(tipo)) {
+    const q = d.dormitorios ? ` com ${PC.nf(d.dormitorios)} dormitório${d.dormitorios > 1 ? 's' : ''}` : d.construida ? ` de ${PC.m2(d.construida)}` : '';
+    return `${tipo}${q}${cid}`;
+  }
   if (d.fabril) return `${tipo} com ${PC.m2(d.fabril)} de área fabril${cid}`;
   if (d.construida) return `${tipo} de ${PC.m2(d.construida)} construídos${cid}`;
   return tipo + cid;
@@ -57,7 +62,8 @@ PC.checks = function (d, history) {
     if (Math.abs(s - d.construida) / d.construida > 0.1)
       add('a', `Soma das áreas (${PC.m2(s)}) não fecha com a construída (${PC.m2(d.construida)}).`, 'Quadro de áreas: soma não fecha com a área construída');
   }
-  if (d.aluguel && (d.construida || d.fabril)) {
+  const galp = PC.grupo(d.tipo) === 'galpao';
+  if (galp && d.aluguel && (d.construida || d.fabril)) {
     const base = d.construida || d.fabril;
     const v = d.aluguel / base;
     if (v < 12) add('v', `Aluguel de ${PC.brl2(v)}/m² abaixo da faixa (R$ 13 a 30): área pode estar inflada (terreno?).`, 'Área locável efetiva (preço por m² fora da faixa de mercado)');
@@ -65,13 +71,13 @@ PC.checks = function (d, history) {
   }
   if (d.iptu && d.aluguel && d.iptu > 0.3 * d.aluguel && d.iptu_periodo !== 'anual')
     add('a', 'IPTU maior que 30% do aluguel: provável valor anual.', 'IPTU: periodicidade a confirmar (valor sugere anual)');
-  if (ref && ref > 3000 && (!d.energia_kva || d.energia_kva < 300))
+  if (galp && ref && ref > 3000 && (!d.energia_kva || d.energia_kva < 300))
     add('a', d.energia_kva ? `Energia de ${PC.nf(d.energia_kva)} kVA baixa para ${PC.m2(ref)}.` : 'Energia (kVA) não informada.',
       d.energia_kva ? `Energia: ${PC.nf(d.energia_kva)} kVA – verificar capacidade para uso industrial` : 'Energia: potência (kVA) e cabine primária a confirmar');
-  if (!d.pe_direito) add('a', 'Pé-direito não informado.', 'Pé-direito livre a confirmar');
+  if (!galp) {} else if (!d.pe_direito) add('a', 'Pé-direito não informado.', 'Pé-direito livre a confirmar');
   else if (d.pe_direito < 8) add('a', `Pé-direito de ${PC.nf(d.pe_direito)} m limita armazenagem verticalizada.`, `Pé-direito de ${PC.nf(d.pe_direito)} m: verificar aderência à operação`);
-  if (!d.piso_carga) add('a', 'Capacidade do piso não informada.', 'Capacidade do piso (t/m²) a confirmar');
-  if (!d.avcb) add('a', 'AVCB / incêndio não informado.', 'AVCB e sistema de combate a incêndio a confirmar');
+  if (galp && !d.piso_carga) add('a', 'Capacidade do piso não informada.', 'Capacidade do piso (t/m²) a confirmar');
+  if (galp && !d.avcb) add('a', 'AVCB / incêndio não informado.', 'AVCB e sistema de combate a incêndio a confirmar');
   if (d.data_anuncio) {
     const t = Date.parse(d.data_anuncio);
     if (t && Date.now() - t > 365 * 864e5) add('a', 'Material com mais de 12 meses.', 'Disponibilidade atual a confirmar (material antigo)');
@@ -87,7 +93,8 @@ PC.checks = function (d, history) {
   }
   const forb = /\b(rua|r\.|avenida|av\.|alameda|travessa|n[ºo°]\s?\d|bairro|jardim|jd\.|vila|condom[ií]nio\s+[A-Z]|imobili[áa]ria|creci|c[óo]d(igo|\.)|ref\.?\s?\d|zap|viva ?real|imovelweb|olx|quintoandar)\b/i;
   const txt = [d.titulo, d.subtitulo, d.descricao].concat(d.diferenciais || []).join(' \n ');
-  const hit = txt.match(forb);
+  const forb2 = /\b(rua|r\.|avenida|av\.|alameda|travessa|n[ºo°]\s?\d|imobili[áa]ria|c[óo]d(igo|\.)|zap|viva ?real|imovelweb|olx|quintoandar)\b/i;
+  const hit = txt.match(d.origem === 'Captação própria' ? forb2 : forb);
   const privacy = hit ? `Texto contém "${hit[0]}": revise (sem endereço, bairro, condomínio, imobiliária ou portal).` : null;
 
   let sem = 'verde';
@@ -180,7 +187,14 @@ PC.pdf = function (jsPDF, d, chk, logos) {
   // KPIs
   y += 12;
   // cartões: primeiro o que é conhecido, depois o que falta
-  const cand = [
+  const resid = PC.RESID_RE.test(d.tipo || '');
+  const cand = resid ? [
+    [d.construida && PC.m2(d.construida), 'Área útil / construída'],
+    [d.dormitorios && PC.nf(d.dormitorios), d.suites ? `Dormitórios (${PC.nf(d.suites)} suíte${d.suites > 1 ? 's' : ''})` : 'Dormitórios'],
+    [d.vagas && PC.nf(d.vagas), 'Vagas'],
+    [d.terreno && PC.m2(d.terreno), 'Terreno'],
+    [d.banheiros && PC.nf(d.banheiros), 'Banheiros'],
+  ] : [
     [d.fabril && PC.m2(d.fabril), 'Área fabril / galpão'],
     [d.construida && PC.m2(d.construida), 'Área construída'],
     [d.terreno && PC.m2(d.terreno), 'Terreno'],
@@ -226,7 +240,11 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     return yy;
   };
   const tw = (IW - 12) / 2;
-  const areas = [
+  const areas = resid ? [
+    ['Área útil / construída', d.construida ? PC.m2(d.construida) : AC],
+    ['Terreno', d.terreno ? PC.m2(d.terreno) : /apart|cobertura|flat|studio|kitnet/i.test(d.tipo || '') ? 'Não se aplica' : AC],
+    ['Tipologia', d.tipologia || AC],
+  ] : [
     ['Terreno', d.terreno ? PC.m2(d.terreno) : AC],
     ['Área construída', d.construida ? PC.m2(d.construida) : AC],
     ['Galpão / área fabril', d.fabril ? PC.m2(d.fabril) : AC],
@@ -234,7 +252,11 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     ['Apoio / outros', d.apoio ? PC.m2(d.apoio) : (d.apoio_txt || AC)],
     ['Tipologia', d.tipologia || AC],
   ];
-  const estr = [
+  const estr = resid ? [
+    ['Dormitórios', d.dormitorios ? PC.nf(d.dormitorios) : AC],
+    ['Suítes', d.suites != null ? PC.nf(d.suites) || '0' : AC],
+    ['Banheiros', d.banheiros ? PC.nf(d.banheiros) : AC],
+  ] : [
     ['Pé-direito', d.pe_direito ? PC.nf(d.pe_direito) + ' m' : AC],
     ['Piso (carga)', d.piso_carga ? PC.nf(d.piso_carga) + ' t/m²' : AC],
     ['Docas', d.docas ? PC.nf(d.docas) : AC],
@@ -243,7 +265,7 @@ PC.pdf = function (jsPDF, d, chk, logos) {
     ['AVCB / incêndio', d.avcb || AC],
   ];
   const y1 = table(M, y, tw, 'ÁREAS', areas, [90]);
-  const y2 = table(M + tw + 12, y, tw, 'ESTRUTURA', estr, [90]);
+  const y2 = table(M + tw + 12, y, tw, resid ? 'AMBIENTES' : 'ESTRUTURA', resid ? [...estr, ['Vagas', d.vagas ? PC.nf(d.vagas) : AC]] : estr, [90]);
   y = Math.max(y1, y2) + 14;
 
   // condições
@@ -302,7 +324,8 @@ PC.pdf = function (jsPDF, d, chk, logos) {
   // rodapé
   pen(C.ln); doc.setLineWidth(0.6); doc.line(M, H - 40, W - M, H - 40);
   F(7.6, false); ink(C.t2);
-  T('Rodrigo França Viana · Corretor de Imóveis · CRECI-SP 297692 · contato@primecorpconsultoria.com.br', M, H - 27);
+  const cor = d.corretor || {};
+  T(`${cor.nome || 'Rodrigo França Viana'} · Corretor de Imóveis · ${cor.creci || 'CRECI-SP 297692'} · ${cor.email || 'contato@primecorpconsultoria.com.br'}`, M, H - 27);
   T((d.codigo ? 'Ref. ' + d.codigo + ' · ' : '') + '1/1', W - M, H - 27, { align: 'right' });
   return doc;
 };
@@ -412,7 +435,7 @@ PC.teaser = function (oRaw, chk, rotulo) {
 };
 
 /* ===== v3: ficha mínima, completude, comissão e documento ao anunciante ===== */
-PC.grupo = tipo => (/área|area|terreno|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja/i.test(tipo || '') ? 'comercial' : 'galpao');
+PC.grupo = tipo => (PC.RESID_RE.test(tipo || '') ? 'residencial' : /área|area|terreno|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja/i.test(tipo || '') ? 'comercial' : 'galpao');
 // campo: [rótulo, pergunta objetiva, tipo de resposta]
 PC.CAMPOS = {
   cidade: ['Cidade', 'Em qual cidade fica o imóvel?', 'text'],
@@ -434,12 +457,17 @@ PC.CAMPOS = {
   frente: ['Frente', 'Qual a medida de frente do terreno?', 'm'],
   disponibilidade: ['Disponibilidade', 'O imóvel está disponível? A partir de quando?', 'text'],
   documentacao: ['Documentação', 'A matrícula está regular e com a construção averbada?', 'text'],
+  dormitorios: ['Dormitórios', 'Quantos dormitórios o imóvel tem?', 'nº'],
+  suites: ['Suítes', 'Quantos dos dormitórios são suítes?', 'nº'],
+  banheiros: ['Banheiros', 'Quantos banheiros no total?', 'nº'],
+  vagas: ['Vagas', 'Quantas vagas de garagem?', 'nº'],
 };
-PC.CAMPOS_NUM = ['construida', 'terreno', 'fabril', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'aluguel', 'venda', 'iptu', 'condominio', 'frente'];
+PC.CAMPOS_NUM = ['dormitorios', 'suites', 'banheiros', 'vagas', 'construida', 'terreno', 'fabril', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'aluguel', 'venda', 'iptu', 'condominio', 'frente'];
 PC.OBRIG = {
   galpao: ['cidade', 'regiao', 'construida', 'terreno', 'pe_direito', 'docas', 'energia_kva', 'piso_carga', 'avcb', 'VALOR', 'iptu', 'disponibilidade', 'documentacao'],
   area: ['cidade', 'regiao', 'terreno', 'zoneamento', 'VALOR', 'iptu', 'disponibilidade', 'documentacao'],
   comercial: ['cidade', 'regiao', 'construida', 'VALOR', 'iptu', 'condominio', 'disponibilidade', 'documentacao'],
+  residencial: ['cidade', 'regiao', 'construida', 'dormitorios', 'banheiros', 'vagas', 'VALOR', 'iptu', 'condominio', 'disponibilidade', 'documentacao'],
 };
 PC.completude = function (oRaw) {
   const d = PC.num(oRaw); const g = PC.grupo(d.tipo); const op = PC.norm(d.operacao || 'Locação');

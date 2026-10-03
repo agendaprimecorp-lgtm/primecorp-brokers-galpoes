@@ -1,11 +1,11 @@
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import { build } from 'esbuild'; import { NetlifyDB } from "@netlify/database-dev";
 const db = new NetlifyDB(); process.env.NETLIFY_DB_URL = await db.start(); await db.applyMigrations("./netlify/database/migrations");
-globalThis.__user = { email: 'contato@primecorpconsultoria.com.br' };
+globalThis.__user = { email: 'contato@primecorpconsultoria.com.br' }; process.env.ADMIN_EMAILS = process.env.ADMIN_EMAILS || 'contato@primecorpconsultoria.com.br';
 fs.rmSync('test/www', { recursive: true, force: true }); fs.cpSync('public', 'test/www', { recursive: true });
 await build({ entryPoints: ['src/app.js', 'src/sala.js', 'src/anunciante.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
-const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default; const anun = (await import('./out/anunciante.mjs')).default;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/json' };
+const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default; const anun = (await import('./out/anunciante.mjs')).default; const imov = (await import('./out/imovel.mjs')).default;
+const MIME = { '.jpg': 'image/jpeg', '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/json' };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost:8899');
   const chunks = []; for await (const c of req) chunks.push(c); const body = chunks.length ? Buffer.concat(chunks) : undefined;
@@ -13,6 +13,8 @@ http.createServer(async (req, res) => {
   if (url.pathname.startsWith('/api/')) fn = api;
   const m = url.pathname.match(/^\/publico\/sala\/([^/]+)$/); if (m) { fn = sala; params = { token: m[1] }; }
   const m2 = url.pathname.match(/^\/publico\/anunciante\/([^/]+)$/); if (m2) { fn = anun; params = { token: m2[1] }; }
+  if (url.pathname.startsWith('/i/')) fn = imov;
+  const tu = /(?:^|; )tu=([^;]+)/.exec(req.headers.cookie || ''); globalThis.__user = { email: tu ? decodeURIComponent(tu[1]) : 'contato@primecorpconsultoria.com.br' };
   if (fn) {
     const h = { ...req.headers }; if (h.origin) h.origin = 'https://pc.test';
     const r = await fn(new Request('https://pc.test' + url.pathname + url.search, { method: req.method, headers: h, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), { params, ip: '127.0.0.1', site: { url: 'http://localhost:8899' } });
