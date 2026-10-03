@@ -20,11 +20,17 @@ await p.goto(HOST + '/'); await W(900);
 
 // 1) nova captação → visita guiada
 await p.click('[data-tab="captar"]'); await W(400); ok(/Iniciar registro fotográfico/.test(await txt()), 'botão Iniciar registro fotográfico'); await p.click('#nc'); await W(500);
-await p.click('[data-ti="Casa"]'); await W(250); ok(/Fachada · Sala · Cozinha/.test(await txt()), 'roteiro da casa mostrado antes de começar'); await sh('00_iniciar_tipo');
+await p.click('[data-gp="res"]'); await p.click('[data-ti="Casa"]'); await W(250); ok((await p.$$eval('.rch', (xs) => xs.map((x) => x.textContent.trim()))).slice(0, 3).join(' · ') === 'Fachada · Sala · Cozinha', 'roteiro da casa mostrado antes de começar (com ícones)'); await sh('00_iniciar_tipo');
 await p.click('#ini'); await W(800);
 ok(await esperar(async () => p.$eval('#vid', (v) => v.videoWidth > 0 && !v.paused)), 'câmera ao vivo aberta dentro do app');
 ok(/1 de \d+/.test(await txt('#vpos')) && (await txt('#vnome')) === 'Fachada', 'começa pelo primeiro ambiente do roteiro: Fachada');
 await sh('01_visita_fachada');
+// cabe numa tela de iPhone com as barras do Safari (390×664): foto, descrever e seguir sem rolar
+await p.setViewportSize({ width: 390, height: 664 }); await W(400);
+const cabe = await p.evaluate(() => ['#bk', '#vnome', '#obt', '#vmic', '#vprox', '#vant', '#vfala'].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return [q, r.top >= 0 && r.bottom <= innerHeight + 0.5]; }));
+ok(cabe.every(([, v]) => v) && (await p.evaluate(() => scrollY)) === 0, 'visita cabe na tela sem rolar: ' + cabe.filter(([, v]) => !v).map(([q]) => q).join(' ') );
+ok(await p.$eval('.tabs', (x) => getComputedStyle(x).display === 'none'), 'abas escondidas durante a visita (tela inteira para a câmera)');
+await sh('01b_visita_664'); await p.setViewportSize({ width: 390, height: 844 }); await W(300);
 ok(/Tire a foto/.test(await txt('#vguia')), 'guia: tire a foto'); await p.click('#obt'); ok(await esperar(async () => (await p.$$('#vthumbs img')).length === 1), 'disparo registra a foto'); ok(await esperar(async () => /descreva os detalhes/.test(await txt('#vguia')) && (await p.$eval('#vmic', (b) => b.classList.contains('pulse')))), 'guia: agora descreva os detalhes (microfone em destaque)');
 ok(await esperar(async () => !(await p.$eval('#vdesc', (x) => x.hidden))), 'IA descreve o ambiente depois da foto');
 await p.evaluate(() => (window.__fala = 'fachada com portão eletrônico, a casa tem 3 dormitórios e 2 vagas'));
@@ -59,7 +65,7 @@ const descs = await p.$$eval('#ambs .desc', (xs) => xs.length); ok(descs >= 5, `
 // 3) câmera bloqueada: alternativa da câmera nativa
 const c2 = await novoCtx(); await c2.addInitScript(() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new Error('negado'), { name: 'NotAllowedError' })); });
 const p2 = await c2.newPage(); p2.on('pageerror', (e) => errs.push(e.message));
-await p2.goto(HOST + '/'); await p2.waitForTimeout(900); await p2.click('[data-tab="captar"]'); await p2.waitForTimeout(400); await p2.click('#nc'); await p2.waitForTimeout(500); await p2.click('[data-ti="Galpão"]'); await p2.waitForTimeout(200); await p2.click('#ini'); await p2.waitForTimeout(900);
+await p2.goto(HOST + '/'); await p2.waitForTimeout(900); await p2.click('[data-tab="captar"]'); await p2.waitForTimeout(400); await p2.click('#nc'); await p2.waitForTimeout(500); await p2.click('[data-gp="gal"]'); await p2.click('[data-ti="Galpão"]'); await p2.waitForTimeout(200); await p2.click('#ini'); await p2.waitForTimeout(900);
 ok(/bloqueada/.test(await p2.textContent('#vmsg')) && !(await p2.$eval('#vfb', (x) => x.hidden)), 'câmera bloqueada: oferece a câmera do celular');
 await p2.setInputFiles('#vfile', [FOT + 'f1.jpg']); ok(await (async () => { for (let i = 0; i < 40; i++) { if ((await p2.$$('#vthumbs img')).length === 1) return true; await p2.waitForTimeout(250); } return false; })(), 'foto pela câmera nativa registrada no ambiente');
 await sh('06_camera_bloqueada', p2); await c2.close();

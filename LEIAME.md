@@ -126,3 +126,10 @@ Ela entra no mesmo sistema (base de imóveis, briefings e clientes compartilhada
 
 ## Registro fotográfico
 Captar → **Iniciar registro fotográfico** → escolha o tipo (casa, galpão, barracão, terreno, rural…) → a câmera guia ambiente por ambiente: foto, descrever detalhes por voz, salvar e seguir. No fim, a IA escreve o anúncio e o fluxo continua (autorização, página, pacote).
+
+## Navegação, tipos de imóvel e anúncio pelo computador (out/2026)
+- **Voltar**: toda subtela tem o botão "‹ Voltar" no topo. O gesto de voltar do iPhone e o botão voltar do Android seguem a navegação do app (não saem do sistema).
+- **Painel de tipos com ícones**: Residencial, Galpões, Comerciais, Terrenos e áreas, Rurais. Novos tipos: Ponto comercial, Lote em condomínio, Área industrial, Área comercial, Haras. O roteiro de fotos se ajusta (ex.: galpão pede prevenção de incêndio e cobertura como opcionais; prédio comercial pede recepção e andar tipo; área industrial pede acesso rodoviário; sítio e chácara pedem lazer; haras pede baias e picadeiro).
+- **Visita guiada em uma tela**: no celular, nome do ambiente, câmera, Descrever e Salvar e seguir ficam visíveis sem rolar; as abas somem durante a visita. Botão de galeria na câmera para fotos recebidas.
+- **Computador**: "Novo anúncio com fotos recebidas" — mesmo roteiro guiado, mas arrastando as fotos de cada ambiente (do celular, do parceiro, do proprietário). A IA trata luz, cor e nitidez, descreve o ambiente, e a ficha passa pela mesma validação antes de publicar. O que foi feito no celular chega sozinho ao computador; dali sai Ficha PDF e Pacote (XML, planilha, fotos).
+- **Próximos passos**: linha do tempo 1-2-3 com ações em ícones (Pedir autorização, Publicar, WhatsApp, Copiar link, Ficha PDF, Pacote, Abrir oferta).

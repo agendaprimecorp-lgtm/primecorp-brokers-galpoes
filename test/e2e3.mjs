@@ -29,7 +29,7 @@ await sh('01_equipe');
 await p.click('[data-u="u_comercial_primecorpconsultoria_com_br"]'); await W(400); await p.evaluate(() => document.querySelector('#fu').scrollIntoView()); await sh('02_equipe_joselia');
 // 2) captação
 await p.click('[data-tab="painel"]'); await W(500); await sh('03_painel_captar');
-await p.click('#qcap'); await W(500); await p.click('#nc'); await W(500); await p.click('[data-ti="Casa"]'); await W(200); await p.click('#iniManual'); await W(800);
+await p.click('#qcap'); await W(500); await p.click('#nc'); await W(500); await p.click('[data-gp="res"]'); await p.click('[data-ti="Casa"]'); await W(200); await p.click('#iniManual'); await W(800);
 await p.selectOption('[data-c="tipo"]', 'Casa'); await W(300);
 await p.fill('[data-c="cidade"]', 'Sumaré'); await p.fill('[data-c="regiao"]', 'Jardim Exemplo'); await p.fill('[data-c="endereco"]', 'Rua Secreta, 123'); await p.fill('[data-c="proprietario_nome"]', 'Carlos Proprietário'); await p.fill('[data-c="proprietario_tel"]', '(19) 98888-1111');
 await W(900); await sh('04_captacao_inicio');
@@ -81,7 +81,7 @@ await p.click('[data-tab="mais"]'); await W(400);
 const menu = await p.textContent('main'); ok(!/Configurações|Backup|Equipe/.test(menu) && /corretor\(a\)/.test(menu), 'corretora não vê configurações, backup nem equipe');
 await sh('15_joselia_mais');
 await p.click('[data-tab="captar"]'); await W(400); ok(/Nenhuma captação/.test(await p.textContent('main')), 'filtro "Minhas" vazio para Joselia');
-await p.click('#nc'); await W(500); await p.click('[data-ti="Casa"]'); await W(200); await p.click('#iniManual'); await W(800);
+await p.click('#nc'); await W(500); await p.click('[data-gp="res"]'); await p.click('[data-ti="Casa"]'); await W(200); await p.click('#iniManual'); await W(800);
 const cap = await p.$eval('[data-c="captador"]', x => x.options[x.selectedIndex].text); ok(/Joselia/.test(cap) && await p.$eval('[data-c="captador"]', x => x.disabled), 'captação da Joselia em nome dela: ' + cap);
 await p.fill('[data-c="cidade"]', 'Hortolândia'); await W(900);
 await p.setInputFiles('#camN', [FOT + 'f1.jpg']); await esperar(async () => (await p.$$('.th img')).length === 1);

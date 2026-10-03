@@ -518,7 +518,7 @@ PC.teaser = function (oRaw, chk, rotulo, corretor) {
 };
 
 /* ===== v3: ficha mínima, completude, comissão e documento ao anunciante ===== */
-PC.grupo = tipo => (PC.RURAL_RE.test(tipo || '') ? 'rural' : PC.RESID_RE.test(tipo || '') ? 'residencial' : /área|area|terreno|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja/i.test(tipo || '') ? 'comercial' : 'galpao');
+PC.grupo = tipo => (PC.RURAL_RE.test(tipo || '') ? 'rural' : PC.RESID_RE.test(tipo || '') ? 'residencial' : /área|area|terreno|lote|fazenda/i.test(tipo || '') ? 'area' : /comercial|pr[ée]dio|sala|loja|ponto/i.test(tipo || '') ? 'comercial' : 'galpao');
 // campo: [rótulo, pergunta objetiva, tipo de resposta]
 PC.CAMPOS = {
   cidade: ['Cidade', 'Em qual cidade fica o imóvel?', 'text'],

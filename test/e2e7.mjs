@@ -21,7 +21,7 @@ ok((await d.$eval('main', (x) => x.getBoundingClientRect().width)) > 1000, 'áre
 ok(/Chegando do campo/.test(await d.textContent('main')), 'painel mostra o que chega do campo');
 await sh(d, '01_computador_painel');
 await d.click('[data-tab="captar"]'); await d.waitForTimeout(500);
-ok(/Registro fotográfico é feito no celular/.test(await d.textContent('main')) && !!(await d.$('.qr svg')), 'Captar no computador: QR para abrir no celular');
+ok(/No imóvel, use o celular/.test(await d.textContent('main')) && !!(await d.$('.qr svg')), 'Captar no computador: QR para abrir no celular');
 await sh(d, '02_computador_captar_qr');
 await d.click('[data-tab="painel"]'); await d.waitForTimeout(400);
 
@@ -31,7 +31,7 @@ await m.goto(HOST + '/'); await m.waitForTimeout(1200);
 ok((await m.evaluate(() => document.documentElement.dataset.modo)) === 'campo', 'celular abre em modo campo');
 ok((await m.$eval('.tabs', (x) => x.getBoundingClientRect().top)) > 700, 'celular com abas embaixo');
 await m.click('[data-tab="captar"]'); await m.waitForTimeout(400); await m.click('#nc'); await m.waitForTimeout(400);
-await m.click('[data-ti="Galpão"]'); await m.fill('#icid', 'Hortolândia'); await m.click('#ini'); await m.waitForTimeout(800);
+await m.click('[data-gp="gal"]'); await m.click('[data-ti="Galpão"]'); await m.fill('#icid', 'Hortolândia'); await m.click('#ini'); await m.waitForTimeout(800);
 await esperar(m, async () => m.$eval('#vid', (v) => v.videoWidth > 0)); await m.click('#obt');
 ok(await esperar(m, async () => (await m.$$('#vthumbs img')).length === 1), 'celular: foto registrada na visita');
 await sh(m, '03_celular_visita');
@@ -42,9 +42,24 @@ ok(/Sincronizado/.test(await d.textContent('#sync')), 'indicador de sincronizaç
 await sh(d, '04_computador_recebeu');
 await d.click('.campo-it'); await d.waitForTimeout(700); ok(/Captação/.test(await d.textContent('#hdr')), 'computador abre a captação para revisar');
 await sh(d, '05_computador_captacao');
-await d.click('#vguiada'); await d.waitForTimeout(500); ok(/Continue a visita no celular/.test(await d.textContent('main')), 'visita guiada no computador indica o celular');
+await d.click('#vguiada'); await d.waitForTimeout(500); ok(!!(await d.$('#vdrop')) && !(await d.$('#vid')), 'no computador o registro guiado é por envio de fotos');
 await d.click('#wc'); await d.waitForTimeout(800); ok(!!(await d.$('#vid')), 'webcam opcional no computador');
 await d.click('#bk'); await d.waitForTimeout(500);
+
+// computador: anúncio novo com fotos recebidas do parceiro, guiado ambiente por ambiente
+const FOT = '/tmp/claude-0/fotos_teste/';
+await d.click('[data-tab="captar"]'); await d.waitForTimeout(400); ok(/Novo anúncio com fotos recebidas/.test(await d.textContent('#nc')), 'Captar no computador: novo anúncio com fotos recebidas');
+await d.click('#nc'); await d.waitForTimeout(400); await d.click('[data-gp="gal"]'); await d.click('[data-ti="Galpão"]'); await d.fill('#icid', 'Sumaré');
+ok(/fotos guiadas/.test(await d.textContent('#ini')), 'botão Começar: fotos guiadas'); await d.click('#ini'); await d.waitForTimeout(800);
+ok((await d.textContent('#vnome')).startsWith('Fachada') && /Envie as fotos/.test(await d.textContent('#vguia')), 'roteiro guiado pede as fotos da fachada');
+await d.setInputFiles('#vup', [FOT + 'f1.jpg', FOT + 'f2.jpg']);
+ok(await esperar(d, async () => (await d.$$('#vthumbs img')).length === 2), 'duas fotos enviadas e tratadas no ambiente');
+ok(await esperar(d, async () => !(await d.$eval('#vdesc', (x) => x.hidden))), 'IA descreve o ambiente das fotos enviadas');
+await d.fill('#vfala', 'portaria com guarita e acesso para carretas'); await d.click('#vprox'); await d.waitForTimeout(500);
+ok(/Área operacional/.test(await d.textContent('#vnome')), 'segue para o próximo ambiente do roteiro');
+await sh(d, '05b_computador_fotos_guiadas');
+await d.click('#vfim'); await d.waitForTimeout(1200); ok(/Captação/.test(await d.textContent('#hdr')) && !!(await d.$('.rt.ok img')), 'volta à captação com a foto no mosaico e a validação');
+await d.click('[data-tab="painel"]'); await d.waitForTimeout(400);
 
 // troca manual de modo
 await d.click('[data-tab="mais"]'); await d.waitForTimeout(400); await d.click('#modo [data-modo="campo"]'); await d.waitForTimeout(400);

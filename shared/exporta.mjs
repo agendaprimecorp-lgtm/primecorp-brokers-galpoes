@@ -9,6 +9,7 @@ const TIPO_VRSYNC = {
   "Cobertura": "Residential / Penthouse", "Kitnet / studio": "Residential / Kitnet", "Sala comercial": "Commercial / Office", "Loja": "Commercial / Business",
   "Prédio comercial": "Commercial / Building", "Galpão": "Commercial / Industrial", "Galpão em condomínio": "Commercial / Industrial", "Barracão": "Commercial / Industrial",
   "Terreno": "Residential / Land Lot", "Área / terreno": "Commercial / Land Lot", "Fazenda": "Residential / Farm Ranch", "Sítio": "Residential / Farm Ranch", "Chácara": "Residential / Farm Ranch",
+  "Haras": "Residential / Farm Ranch", "Ponto comercial": "Commercial / Business", "Imóvel comercial": "Commercial / Building", "Lote em condomínio": "Residential / Land Lot", "Área industrial": "Commercial / Land Lot", "Área comercial": "Commercial / Land Lot",
 };
 export const tipoVRSync = (t) => TIPO_VRSYNC[t] || (grupo(t) === "residencial" ? "Residential / Home" : "Commercial / Building");
 const transacao = (op) => (/venda/i.test(op || "") && /loca/i.test(op || "") ? "Sale/Rent" : /loca/i.test(op || "") ? "For Rent" : "For Sale");

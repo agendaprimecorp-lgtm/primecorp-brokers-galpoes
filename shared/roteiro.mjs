@@ -1,10 +1,11 @@
 // Roteiro guiado de visita: fotos e dados obrigatórios por tipo de imóvel.
 
-export const TIPOS = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Sala comercial", "Loja", "Prédio comercial", "Galpão", "Galpão em condomínio", "Barracão", "Terreno", "Área / terreno", "Fazenda", "Sítio", "Chácara"];
+export const TIPOS = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Sala comercial", "Loja", "Ponto comercial", "Prédio comercial", "Imóvel comercial", "Galpão", "Galpão em condomínio", "Barracão", "Terreno", "Lote em condomínio", "Área / terreno", "Área industrial", "Área comercial", "Fazenda", "Sítio", "Chácara", "Haras"];
 
 export function grupo(tipo) {
   const t = String(tipo || "").toLowerCase();
   if (/fazenda|s[ií]tio|ch[áa]cara|rancho|haras|rural/.test(t)) return "rural";
+  if (/^(terreno|[áa]rea|lote)/.test(t)) return "area";
   if (/galp|barrac|armaz|dep[óo]sito|log[ií]st|industr/.test(t)) return "galpao";
   if (/terreno|área|area|lote/.test(t)) return "area";
   if (/sala|loja|pr[ée]dio|comercial|ponto/.test(t)) return "comercial";
@@ -40,32 +41,50 @@ export function roteiroFotos(tipo, d = {}) {
     F("energia", "Cabine primária / quadro de energia", "Cabine, transformador ou quadro geral."),
     F("escritorios", "Escritórios", "Mezanino ou bloco administrativo."),
     F("apoio", "Vestiários e refeitório", "Banheiros, vestiários, copa.", false),
-    F("patio", "Pátio de manobra", "Mostre a área para carretas."),
+    F("patio", "Pátio de manobra", "Mostre a área para carretas.", !/barrac/i.test(tipo)),
+    F("cobertura", "Cobertura e iluminação", "Estrutura do telhado, telhas translúcidas, iluminação.", false),
+    F("incendio", "Prevenção de incêndio", "Sprinklers, hidrantes, reservatório. Pergunte pelo AVCB.", false),
+    F("estac", "Estacionamento", "Vagas de carros e motos para funcionários.", false),
     F("acesso", "Acesso e entorno", "Rua de acesso e distância até a rodovia.", false),
   ];
-  if (g === "comercial") return [
-    F("fachada", "Fachada / vitrine", "De frente, mostrando a visibilidade para a rua."),
-    F("salao", "Salão principal", "Do fundo para a porta e da porta para o fundo."),
-    F("banho", "Banheiros", "Inclua o banheiro acessível, se houver."),
-    F("copa", "Copa / apoio", "Copa, depósito ou cozinha.", false),
-    F("vaga", "Estacionamento / vagas", "Vagas privativas ou de clientes.", false),
-    F("entorno", "Entorno", "Movimento da rua e comércio vizinho.", false),
-  ];
-  if (g === "area") return [
-    F("geral", "Vista geral", "Do ponto mais alto, mostrando o terreno inteiro."),
-    F("frente", "Frente / testada", "Toda a frente, de um lado ao outro."),
-    F("acesso", "Rua de acesso", "Asfalto, guia, calçada."),
-    F("topografia", "Topografia", "Mostre se é plano, aclive ou declive."),
-    F("vizinhanca", "Vizinhança", "Construções ao lado e em frente.", false),
-    F("infra", "Infraestrutura", "Poste de energia, rede de água e esgoto.", false),
-  ];
+  if (g === "comercial") {
+    const predio = /pr[ée]dio/i.test(tipo); const sala = /sala/i.test(tipo);
+    return [
+      F("fachada", sala ? "Fachada do edifício" : "Fachada / vitrine", sala ? "Entrada do prédio, de frente." : "De frente, mostrando a visibilidade para a rua."),
+      ...(predio || sala ? [F("recepcao", "Recepção / hall", "Portaria e hall de entrada.", predio)] : []),
+      F("salao", predio ? "Andar tipo" : sala ? "Sala principal" : "Salão principal", predio ? "Planta livre de um andar, do canto." : "Do fundo para a porta e da porta para o fundo."),
+      ...(predio ? [F("elevador", "Elevadores e escadas", "Elevadores, escadas e acessibilidade.", false)] : []),
+      F("banho", "Banheiros", "Inclua o banheiro acessível, se houver."),
+      F("copa", "Copa / apoio", "Copa, depósito ou cozinha.", false),
+      ...(sala ? [F("vista", "Vista da janela", "A melhor vista da sala.", false)] : []),
+      F("vaga", "Estacionamento / vagas", "Vagas privativas ou de clientes.", predio),
+      F("entorno", "Entorno", "Movimento da rua e comércio vizinho.", false),
+    ];
+  }
+  if (g === "area") {
+    const neg = /industr|comercial/i.test(tipo);
+    return [
+      F("geral", "Vista geral", "Do ponto mais alto, mostrando o terreno inteiro."),
+      F("frente", "Frente / testada", "Toda a frente, de um lado ao outro."),
+      F("acesso", "Rua de acesso", "Asfalto, guia, calçada."),
+      ...(/condom/i.test(tipo) ? [F("condominio", "Portaria e áreas comuns", "Portaria, lazer e ruas internas do condomínio.")] : []),
+      ...(neg ? [F("acesso_rod", "Acesso rodoviário", "Saída para a rodovia mais próxima e distância em km.")] : []),
+      F("topografia", "Topografia", "Mostre se é plano, aclive ou declive."),
+      F("divisas", "Divisas e marcos", "Cercas, muros ou marcos de divisa.", false),
+      F("vizinhanca", "Vizinhança", "Construções ao lado e em frente.", false),
+      F("infra", "Infraestrutura", neg ? "Rede de energia (média tensão), água, esgoto, gás." : "Poste de energia, rede de água e esgoto.", false),
+    ];
+  }
+  const lazer = /s[ií]tio|ch[áa]cara|rancho/i.test(tipo); const haras = /haras/i.test(tipo);
   return [
     F("porteira", "Porteira e acesso", "Entrada e estrada até a sede."),
     F("sede", "Sede", "Fachada da casa principal."),
-    F("sede_int", "Interior da sede", "Sala e cozinha da sede.", false),
-    F("producao", "Pastagem / lavoura", "Área produtiva principal."),
+    F("sede_int", "Interior da sede", "Sala e cozinha da sede.", lazer),
+    ...(lazer ? [F("lazer", "Lazer", "Piscina, churrasqueira, área gourmet, campo.")] : []),
+    ...(haras ? [F("baias", "Baias e picadeiro", "Cocheiras, baias, picadeiro e redondel.")] : []),
+    F("producao", lazer ? "Pomar / horta / pasto" : "Pastagem / lavoura", lazer ? "Árvores frutíferas, horta ou pasto." : "Área produtiva principal.", !lazer),
     F("agua", "Água", "Represa, rio, nascente ou poço."),
-    F("benfeitorias", "Benfeitorias", "Curral, barracão, casa de caseiro, galpão de máquinas."),
+    F("benfeitorias", "Benfeitorias", lazer ? "Casa de caseiro, galpão, canil, depósito." : "Curral, barracão, casa de caseiro, galpão de máquinas.", !lazer),
     F("estradas", "Estradas internas", "Condição das estradas na propriedade.", false),
     F("geral", "Vista geral / drone", "Panorama da propriedade.", false),
   ];

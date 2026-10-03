@@ -5,7 +5,7 @@ import { tratarFoto, blobB64 } from "./foto.js";
 import { ditar, vozDisponivel } from "./voz.js";
 import { zipSync, strToU8 } from "fflate";
 import qrcode from "qrcode-generator";
-import { roteiroFotos } from "../shared/roteiro.mjs";
+import { roteiroFotos, TIPOS as TIPOS_IMOVEL } from "../shared/roteiro.mjs";
 import { xmlVRSync, csvImovel, textoImovel, nomeFoto } from "../shared/exporta.mjs";
 import { TERMO_PADRAO, TERMO_VERSAO, AUT_PARCERIA, AUT_PROPRIETARIO, AUT_VERSAO, ACORDO_PADRAO, ACORDO_VERSAO, VISITA_PADRAO, RECIBO_PADRAO, CLAUSULA_SPLIT, MANDATO_PADRAO, VERSAO_DOCS, PRAZOS, CORRETOR_PADRAO, varsPrazos, pendencias, extenso, reaisExtenso } from "./termo.js";
 
@@ -152,8 +152,11 @@ document.addEventListener("visibilitychange", async () => {
 
 /* ================= Navegação ================= */
 let route = { v: "painel" }; const stack = []; let editing = false;
-function go(r, push = true) { editing = false; if (push) stack.push(route); route = r; render(); window.scrollTo(0, 0); }
-function back() { editing = false; route = stack.pop() || { v: "painel" }; render(); window.scrollTo(0, 0); }
+// Histórico do navegador: o gesto de voltar do iPhone e o botão voltar do Android seguem a navegação do app.
+let ignorarPop = 0;
+function go(r, push = true) { editing = false; if (push) { stack.push(route); try { history.pushState({ pc: 1 }, ""); } catch {} } route = r; render(); window.scrollTo(0, 0); }
+function back(doNavegador) { if (!doNavegador && history.state?.pc) { ignorarPop++; try { history.back(); } catch { ignorarPop--; } } editing = false; route = stack.pop() || { v: "painel" }; render(); window.scrollTo(0, 0); }
+window.addEventListener("popstate", () => { if (ignorarPop) { ignorarPop--; return; } if (!usuarioAtual) return; if (stack.length || !TOP.includes(route.v)) back(true); });
 const TOP = ["painel", "briefings", "captar", "ofertas", "contatos", "mais"];
 const TABS = [
   ["painel", "Painel", '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>'],
@@ -175,13 +178,14 @@ function header(title) {
   const top = TOP.includes(route.v);
   $("hdr").innerHTML = top
     ? `<img class="logo d" src="/logo-escuro.png" alt="PrimeCorp Brokers"><img class="logo w" src="/logo-claro.png" alt="PrimeCorp Brokers"><div class="ttl" style="text-align:right;font-size:15px;color:var(--ink2)">${esc(title)}</div>`
-    : `<button class="back" id="bk">‹ Voltar</button><div class="ttl">${esc(title)}</div>`;
-  const bk = $("bk"); if (bk) bk.onclick = back;
+    : `<button class="back" id="bk" aria-label="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><span>Voltar</span></button><div class="ttl">${esc(title)}</div>`;
+  const bk = $("bk"); if (bk) bk.onclick = () => back();
 }
 const VIEWS = {};
 function render() {
   if (!usuarioAtual) return;
   if (route.v !== "visita") pararCamera();
+  document.documentElement.classList.toggle("foco", route.v === "visita");
   renderTabs();
   if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe", "visita"].includes(route.v)) return;
   try { (VIEWS[route.v] || VIEWS.painel)(); }
@@ -209,7 +213,7 @@ const OF_FIELDS = ["dormitorios", "suites", "banheiros", "vagas", "area_ha", "di
 function fromAI(o) { const r = {}; OF_FIELDS.forEach((f) => { if (o[f] !== undefined && o[f] !== null) r[f] = fmtIn(f, o[f]); }); return r; }
 function ranking(b) { return S.ofertas.filter((o) => o.status !== "descartada" && o.status !== "captacao").map((o) => { const c = chkOf(o); return Object.assign({ o, c }, PC.score(o, b, c)); }).sort((x, y) => y.score - x.score); }
 function faixaArea(b) { const n = PC.numB(b); if (n.haMin || n.haMax) return n.haMin && n.haMax ? PC.nf(n.haMin) + " a " + PC.nf(n.haMax) + " ha" : n.haMin ? "a partir de " + PC.nf(n.haMin) + " ha" : "até " + PC.nf(n.haMax) + " ha"; if (n.areaMin && n.areaMax) return PC.nf(n.areaMin) + " a " + PC.nf(n.areaMax) + " m²"; if (n.areaMin) return "a partir de " + PC.nf(n.areaMin) + " m²"; if (n.areaMax) return "até " + PC.nf(n.areaMax) + " m²"; return ""; }
-function confirmar2(btn, txt, fn) { let armed = false; btn.onclick = async () => { if (!armed) { armed = true; btn.dataset.orig = btn.textContent; btn.textContent = txt; setTimeout(() => { armed = false; if (btn.isConnected) btn.textContent = btn.dataset.orig; }, 4000); return; } btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } }; }
+function confirmar2(btn, txt, fn) { let armed = false; btn.onclick = async () => { if (!armed) { armed = true; const orig = btn.innerHTML; const sp = btn.querySelector("span"); if (sp) sp.textContent = txt; else btn.textContent = txt; btn.classList.add("armado"); setTimeout(() => { armed = false; if (btn.isConnected) { btn.innerHTML = orig; btn.classList.remove("armado"); } }, 4000); return; } btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } }; }
 
 /* ================= PAINEL ================= */
 VIEWS.painel = () => {
@@ -346,7 +350,7 @@ VIEWS.briefings = () => {
 const BF = [
   ["nome", "Nome do briefing (interno)", "text", "full"],
   ["cliente", "Cliente (CRM)", "ref:Cliente|Proprietário|Outro", ""], ["parceiro_id", "Parceiro que trouxe (CRM)", "ref:Corretor|Imobiliária|Outro", ""],
-  ["tipo", "Tipo", "sel:Casa|Casa em condomínio|Apartamento|Sobrado|Cobertura|Kitnet / studio|Sala comercial|Loja|Prédio comercial|Imóvel comercial|Galpão|Galpão em condomínio|Barracão|Terreno|Área / terreno|Fazenda|Sítio|Chácara", ""], ["operacao", "Operação", "sel:Locação|Venda", ""],
+  ["tipo", "Tipo", "sel:" + TIPOS_IMOVEL.join("|"), ""], ["operacao", "Operação", "sel:Locação|Venda", ""],
   ["cidades", "Cidades aceitas (separe por vírgula)", "text", "full"], ["regiao", "Região / eixo", "text", "full"],
   ["areaMin", "Área mínima", "u:m²", "", "galpao comercial area residencial"], ["areaMax", "Área máxima", "u:m²", "", "galpao comercial area residencial"],
   ["haMin", "Área mínima", "u:ha", "", "rural"], ["haMax", "Área máxima", "u:ha", "", "rural"],
@@ -614,7 +618,7 @@ const OFORM = `
 <label>Anunciante é<select data-f="anunciante_tipo"><option>Imobiliária</option><option>Corretor</option><option>Proprietário</option></select></label><label>Anunciante<input data-f="anunciante"></label><label>Contato do anunciante<input data-f="anunciante_contato" type="tel"></label><label>CRECI do anunciante<input data-f="anunciante_creci"></label>
 </div></fieldset>
 <fieldset><legend>Identificação</legend><div class="grid">
-<label>Tipo<select data-f="tipo"><option>Casa</option><option>Casa em condomínio</option><option>Apartamento</option><option>Sobrado</option><option>Cobertura</option><option>Kitnet / studio</option><option>Sala comercial</option><option>Loja</option><option>Prédio comercial</option><option>Imóvel comercial</option><option>Galpão</option><option>Galpão em condomínio</option><option>Barracão</option><option>Terreno</option><option>Área / terreno</option><option>Fazenda</option><option>Sítio</option><option>Chácara</option></select></label>
+<label>Tipo<select data-f="tipo">${TIPOS_IMOVEL.map((t) => `<option>${t}</option>`).join("")}</select></label>
 <label>Operação<select data-f="operacao"><option>Locação</option><option>Venda</option><option>Locação / Venda</option></select></label>
 <label>Cidade<input data-f="cidade"></label><label>UF<input data-f="uf" maxlength="2" style="text-transform:uppercase"></label>
 <label class="full">Região / bairro / eixo (vai no teaser e na sala)<input data-f="regiao" placeholder="Eixo Anhanguera (RMC) · Jardim X · zona rural"></label>
@@ -1154,7 +1158,7 @@ VIEWS.equipe = () => {
 };
 
 /* ---------- Lista de captações ---------- */
-const TIPOS_CAP = ["Casa", "Casa em condomínio", "Apartamento", "Sobrado", "Cobertura", "Kitnet / studio", "Terreno", "Área / terreno", "Galpão", "Galpão em condomínio", "Barracão", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial", "Fazenda", "Sítio", "Chácara"];
+const TIPOS_CAP = TIPOS_IMOVEL;
 const baseAnuncios = () => String(CFG().anuncio_dominio || "").trim().replace(/\/+$/, "") || location.origin;
 const fotosDe = (o) => (o.captacao?.ambientes || []).reduce((a, x) => a + (x.fotos || []).length, 0);
 const anuncioDe = (o) => o.anuncio_token ? S.anuncios.find((a) => a.id === o.anuncio_token) : null;
@@ -1169,7 +1173,7 @@ function etapaCap(o) {
 VIEWS.captar = () => {
   header("Captação no local"); const f = route.f || (ehAdmin() ? "todas" : "minhas");
   const caps = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada" && (f === "todas" || o.captador === EU.usuario)).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
-  $("main").innerHTML = `${MODO() === "escritorio" ? cartaoCelular("Registro fotográfico é feito no celular", "No computador você revisa as captações, ajusta textos, publica e acompanha. A visita com a câmera guiada acontece no celular.") : ""}<button class="captar-cta ${MODO() === "escritorio" ? "sec" : ""}" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Iniciar registro fotográfico</b><small>Escolha o tipo: o app pede cada foto, você descreve e a IA organiza</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
+  $("main").innerHTML = `${MODO() === "escritorio" ? cartaoCelular("No imóvel, use o celular", "A câmera guiada roda no celular e o registro chega aqui sozinho. No computador você também pode montar o anúncio com fotos recebidas (parceiro, proprietário): o app guia ambiente por ambiente, a IA trata as fotos e descreve, e a validação confere tudo antes de publicar.") : ""}<button class="captar-cta ${MODO() === "escritorio" ? "sec" : ""}" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>${MODO() === "escritorio" ? "Novo anúncio com fotos recebidas" : "Iniciar registro fotográfico"}</b><small>${MODO() === "escritorio" ? "Escolha o tipo, envie as fotos de cada ambiente e a IA monta o anúncio" : "Escolha o tipo: o app pede cada foto, você descreve e a IA organiza"}</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
   <div class="seg">${[["minhas", "Minhas"], ["todas", "Todas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <div class="card"><div class="list">${caps.map((o) => { const [cor, et] = etapaCap(o); const an = anuncioDe(o); return `<button class="item" data-c="${o.id}"><span class="dot ${cor}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação sem título"))}</b><span>${esc([et, fotosDe(o) + " foto(s)", perfilPorEmail(o.captador).nome.split(" ")[0], an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhuma captação ainda.</p>'}</div></div>`;
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));
@@ -1178,16 +1182,23 @@ VIEWS.captar = () => {
 };;
 
 /* ---------- Iniciar registro fotográfico: tipo → visita guiada ---------- */
-const GRUPOS_CAP = [["Residencial", ["Casa", "Casa em condomínio", "Sobrado", "Apartamento", "Cobertura", "Kitnet / studio"]], ["Galpões e comerciais", ["Galpão", "Galpão em condomínio", "Barracão", "Sala comercial", "Loja", "Prédio comercial", "Imóvel comercial"]], ["Terrenos e áreas", ["Terreno", "Área / terreno"]], ["Rurais", ["Fazenda", "Sítio", "Chácara"]]];
+const GRUPOS_CAP = [["res", "Residencial", "Casa", ["Casa", "Casa em condomínio", "Sobrado", "Apartamento", "Cobertura", "Kitnet / studio"]], ["gal", "Galpões", "Galpão", ["Galpão", "Galpão em condomínio", "Barracão"]], ["com", "Comerciais", "Loja", ["Sala comercial", "Loja", "Ponto comercial", "Prédio comercial", "Imóvel comercial"]], ["are", "Terrenos e áreas", "Área / terreno", ["Terreno", "Lote em condomínio", "Área / terreno", "Área industrial", "Área comercial"]], ["rur", "Rurais", "Fazenda", ["Fazenda", "Sítio", "Chácara", "Haras"]]];
 VIEWS.iniciar = () => {
   header("Registro fotográfico"); let tipo = ""; let op = eu().foco === "residencial" ? "Venda" : "Locação"; let cid = "", reg = "";
+  let gp = eu().foco === "residencial" ? "res" : "gal";
   const desenhar = () => {
-    $("main").innerHTML = `<div class="card"><span class="k">Passo 1 de 2</span><h2>Que imóvel você vai fotografar?</h2><p class="hint">O roteiro de fotos e as perguntas mudam conforme o tipo.</p>
-    ${GRUPOS_CAP.map(([g, ts]) => `<h3 class="gtit">${g}</h3><div class="tiposel">${ts.map((t) => `<button data-ti="${esc(t)}" class="${tipo === t ? "on" : ""}">${esc(t)}</button>`).join("")}</div>`).join("")}
+    const G = GRUPOS_CAP.find((x) => x[0] === gp) || GRUPOS_CAP[0]; const rot = tipo ? roteiroFotos(tipo, {}) : [];
+    $("main").innerHTML = `<div class="card ini"><div class="ini-h"><span class="k">1 · Tipo de imóvel</span><small class="hint">O roteiro de fotos muda conforme o tipo.</small></div>
+    <div class="gtabs" role="tablist">${GRUPOS_CAP.map(([k, l, ic]) => `<button data-gp="${k}" role="tab" class="${k === gp ? "on" : ""}">${icTipo(ic)}<span>${l}</span></button>`).join("")}</div>
+    <div class="tipogrid">${G[3].map((t) => `<button data-ti="${esc(t)}" class="${tipo === t ? "on" : ""}">${icTipo(t)}<span>${esc(t)}</span></button>`).join("")}</div></div>
+    <div class="card ini"><div class="ini-h"><span class="k">2 · Negócio e local</span></div>
     <div class="grid"><label>Operação<select id="iop">${["Venda", "Locação", "Locação / Venda"].map((x) => `<option ${x === op ? "selected" : ""}>${x}</option>`).join("")}</select></label><label>Cidade<input id="icid" value="${esc(cid)}"></label><label class="full">Bairro / região (aparece no anúncio)<input id="ireg" value="${esc(reg)}"></label></div></div>
-    <div class="card"><span class="k">Passo 2 de 2</span>${tipo ? `<p>Roteiro de <b>${esc(tipo)}</b>: ${roteiroFotos(tipo, {}).filter((x) => x.obrigatorio).map((x) => esc(x.nome)).join(" · ")}.</p>` : '<p class="hint">Escolha o tipo acima.</p>'}
-    ${MODO() === "escritorio" ? '<p class="hint">No computador a ficha abre sem câmera. Para a visita guiada, abra o sistema no celular.</p><button class="g" id="ini" hidden></button>' : `<button class="p" id="ini" ${tipo ? "" : "disabled"}>📷 Começar: câmera guiada</button>`}<button class="g" id="iniManual" ${tipo ? "" : "disabled"}>Abrir a ficha sem câmera</button></div>`;
-    document.querySelectorAll("[data-ti]").forEach((b) => (b.onclick = () => { tipo = b.dataset.ti; op = $("iop").value; cid = $("icid").value; reg = $("ireg").value; desenhar(); }));
+    ${tipo ? `<div class="card ini"><div class="ini-h"><span class="k">3 · Roteiro de ${esc(tipo)}</span><small class="hint">${rot.filter((x) => x.obrigatorio).length} fotos obrigatórias · ${rot.filter((x) => !x.obrigatorio).length} opcionais</small></div>
+    <div class="rchips">${rot.map((x) => `<span class="rch ${x.obrigatorio ? "" : "opc"}">${icAmb(x.id)}${esc(x.nome)}</span>`).join("")}</div></div>` : ""}
+    <div class="acao-fixa"><button class="cta-cam" id="ini" ${tipo ? "" : "disabled"}><span class="ccam">${MODO() === "escritorio" ? icAc("upload") : icAmb("camera")}</span><span class="t"><b>${!tipo ? "Escolha o tipo de imóvel" : MODO() === "escritorio" ? "Começar: fotos guiadas" : "Começar: câmera guiada"}</b><small>${tipo ? esc(tipo) + " · " + rot.filter((x) => x.obrigatorio).length + (MODO() === "escritorio" ? " fotos no roteiro · envie ambiente por ambiente" : " fotos no roteiro") : MODO() === "escritorio" ? "Depois envie as fotos ambiente por ambiente" : "Depois toque aqui para abrir a câmera"}</small></span><span class="seta">›</span></button><button class="lnk" id="iniManual" ${tipo ? "" : "disabled"}>ou abrir a ficha ${MODO() === "escritorio" ? "e preencher livremente" : "sem câmera"}</button></div>`;
+    const guardar = () => { op = $("iop").value; cid = $("icid").value; reg = $("ireg").value; };
+    document.querySelectorAll("[data-gp]").forEach((b) => (b.onclick = () => { guardar(); gp = b.dataset.gp; desenhar(); }));
+    document.querySelectorAll("[data-ti]").forEach((b) => (b.onclick = () => { guardar(); tipo = b.dataset.ti; desenhar(); }));
     $("iop").onchange = () => (op = $("iop").value);
     const criar = async (visita) => {
       const o = { id: uid("o"), origem: "Captação própria", status: "captacao", captador: EU.usuario || usuarioAtual?.email, tipo, operacao: $("iop").value, cidade: $("icid").value.trim(), regiao: $("ireg").value.trim(), uf: "SP", anunciante_tipo: "Proprietário", captacao: { iniciada: now(), ambientes: [], fala_geral: "" }, criado: now(), atualizado: now() };
@@ -1264,10 +1275,64 @@ const IC_AMB = {
   agua: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
   benfeitorias: '<path d="M3 21V10l9-6 9 6v11z"/><path d="M8 21v-7h8v7M8 14l8 7M16 14l-8 7"/>',
   estradas: '<path d="M4 21 9 3M20 21 15 3M12 6v2M12 11v2M12 16v2"/>',
+  cobertura: '<path d="M2 12 12 5l10 7M5 10v9h14v-9M8 12l4 4 4-4"/>',
+  incendio: '<path d="M12 21c-4 0-7-3-7-7 0-4 4-6 4-10 3 2 4 4 4 6 1-1 2-2 2-3 2 2 4 4 4 7 0 4-3 7-7 7z"/>',
+  estac: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M10 17V7h3a3 3 0 0 1 0 6h-3"/>',
+  recepcao: '<path d="M4 18h16M6 18a6 6 0 0 1 12 0M12 10V8M10 8h4"/><path d="M3 21h18"/>',
+  elevador: '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M12 3v18M7.5 10 9 8l1.5 2M13.5 14l1.5 2 1.5-2"/>',
+  acesso_rod: '<path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 10h6M12 10v6"/>',
+  divisas: '<path d="M5 21V6l2-2 2 2v15M15 21V6l2-2 2 2v15M3 10h18M3 16h18"/>',
+  lazer: '<path d="M12 4a8 8 0 0 1 8 8H4a8 8 0 0 1 8-8zM12 12v9M8 21h8"/>',
+  baias: '<path d="M7 20H5v-9a7 7 0 0 1 14 0v9h-2"/><path d="M5 15h2M17 15h2M5.5 9.5 7.5 10M18.5 9.5l-2 .5"/>',
 };
+/* Ícones das ações (próximos passos) */
+const IC_AC = {
+  doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  enviar: '<path d="M21 3 3 10l7 3 3 7z"/><path d="M10 13l5-5"/>',
+  zap: '<path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-2-2l.8-1-1-2z"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7L11.5 6.8"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5"/>',
+  olho: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  atualizar: '<path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4"/>',
+  fechar: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  megafone: '<path d="M3 10v4h4l8 5V5L7 10z"/><path d="M18 9a4 4 0 0 1 0 6"/>',
+  banco: '<path d="M3 9l9-5 9 5M5 9v9M9.5 9v9M14.5 9v9M19 9v9M3 20h18"/>',
+  pdf: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M8.5 17v-4h1.2a1.2 1.2 0 0 1 0 2.4H8.5M12.5 13v4h.8a2 2 0 0 0 0-4zM16 17v-4h1.8M16 15h1.4"/>',
+  pacote: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10M7.5 5l9 4"/>',
+  oferta: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h6M7 13h10M7 17h4"/><circle cx="17" cy="9" r="1.5"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/>',
+  galeria: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/>',
+};
+const icAc = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC_AC[k] || ""}</svg>`;
+/* Ícones dos tipos de imóvel (painel de escolha) */
+const IC_TIPO = {
+  "Casa": IC_AMB.fachada,
+  "Casa em condomínio": '<path d="M2 21V11l5-4 5 4v10M12 21V8l5-4 5 4v13M2 21h20"/>',
+  "Sobrado": '<path d="M4 10l8-6 8 6"/><path d="M6 9v12h12V9M6 15h12M10 21v-3h4v3M9 11h2M13 11h2"/>',
+  "Apartamento": '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M11 21v-3h2v3"/>',
+  "Cobertura": '<path d="M6 21V9h12v12M4 9h16M8 9V5h8v4M9 13h1M14 13h1M9 17h1M14 17h1"/>',
+  "Kitnet / studio": '<rect x="4" y="5" width="16" height="15" rx="1"/><path d="M7 17v-4h10v4M7 15h10M8 13v-2h4"/>',
+  "Galpão": IC_AMB.interna,
+  "Galpão em condomínio": '<path d="M1 21V12l5-3 5 3v9M13 21V12l5-3 5 3v9M1 21h22M4 21v-4h4v4M16 21v-4h4v4"/>',
+  "Barracão": '<path d="M3 21V11a9 6 0 0 1 18 0v10"/><path d="M8 21v-6h8v6M3 21h18"/>',
+  "Sala comercial": '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 7h3v3H8zM13 7h3v3h-3zM8 13h3v3H8zM13 13h3v3h-3z"/>',
+  "Loja": IC_AMB.salao,
+  "Ponto comercial": '<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><path d="M9 9h6l-.6 3H9.6zM9 9l-.5-1.5"/>',
+  "Prédio comercial": '<path d="M3 21h18M5 21V4h8v17M13 9h6v12M8 8h2M8 12h2M8 16h2M16 13h1M16 17h1"/>',
+  "Imóvel comercial": IC_AMB.escritorios,
+  "Terreno": '<path d="M3 19l4-11h10l4 11z"/><path d="M7 8V5M17 8V5M5 14h14"/>',
+  "Lote em condomínio": '<path d="M3 20l3-8h12l3 8z"/><path d="M10 12V4l4 1.5L10 7"/>',
+  "Área / terreno": IC_AMB.topografia,
+  "Área industrial": '<path d="M3 21V10l5 3v-3l5 3V9l5 3V4h3v17zM3 21h18"/>',
+  "Área comercial": '<path d="M3 20l3-8h12l3 8z"/><path d="M8 12V8l1-3h6l1 3v4M8 8h8"/>',
+  "Fazenda": '<path d="M3 21V10l4-5h10l4 5v11z"/><path d="M9 21v-7h6v7M9 14l6 7M15 14l-6 7"/>',
+  "Sítio": '<path d="M3 21h18M5 21v-7l4-3 4 3v7"/><path d="M17 21v-5M17 16c-2 0-3-1.5-3-3.5S15.5 9 17 9s3 1.5 3 3.5-1 3.5-3 3.5z"/>',
+  "Chácara": '<path d="M12 21v-6M12 15c-3 0-5-2-5-5s2-6 5-6 5 3 5 6-2 5-5 5z"/><path d="M3 21h18M3 18h4M17 18h4"/>',
+  "Haras": '<path d="M7 20H5v-9a7 7 0 0 1 14 0v9h-2"/><path d="M5 15h2M17 15h2M5.5 9.5 7.5 10M18.5 9.5l-2 .5"/>',
+};
+const icTipo = (t) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC_TIPO[t] || IC_AMB.fachada}</svg>`;
 const icAmb = (id) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC_AMB[id] || IC_AMB[String(id).replace(/\d+$/, "")] || IC_AMB[String(id).replace(/C$/, "")] || IC_AMB.camera}</svg>`;
 /** Roteiro guiado: casa cada item obrigatório com um ambiente fotografado (pelo vínculo ou pelo nome). */
-const KW_ROT = { fachada: /fachada|frente|portaria/, condominio: /condom|piscina|lazer|academia|sal[ãa]o de festa|playground/, sala: /sala/, cozinha: /cozinha/, dorm: /dormit|quarto|su[ií]te/, banho: /banheiro|lavabo|wc/, servico: /servi[cç]o|lavanderia/, externa: /quintal|externa|jardim|churrasq|piscina/, vaga: /garagem|vaga/, vista: /vista|varanda|sacada/, interna: /operacional|interna|galp[ãa]o/, pe_direito: /p[ée].?direito/, docas: /doca/, piso: /piso/, energia: /cabine|energia|transformador|quadro/, escritorios: /escrit|mezanino|administ/, apoio: /vesti|refeit|copa/, patio: /p[áa]tio|manobra/, acesso: /acesso|entorno|rua/, salao: /sal[ãa]o|loja|vitrine/, banhoC: /banheiro/, copa: /copa|dep[óo]sito/, entorno: /entorno|vizinh/, geral: /geral|drone|panor|vista/, frente: /frente|testada/, topografia: /topogra|declive|aclive|plano/, vizinhanca: /vizinh/, infra: /poste|infra|rede/, porteira: /porteira|entrada|acesso/, sede: /sede|casa principal/, sede_int: /sede.*(sala|cozinha|interior)/, producao: /pasto|pastagem|lavoura|planta[çc]/, agua: /represa|rio|nascente|po[çc]o|lago|a[çc]ude|[áa]gua/, benfeitorias: /curral|barrac|benfeit|caseiro|m[áa]quinas/, estradas: /estrada/ };
+const KW_ROT = { fachada: /fachada|frente|portaria/, condominio: /condom|piscina|lazer|academia|sal[ãa]o de festa|playground/, sala: /sala/, cozinha: /cozinha/, dorm: /dormit|quarto|su[ií]te/, banho: /banheiro|lavabo|wc/, servico: /servi[cç]o|lavanderia/, externa: /quintal|externa|jardim|churrasq|piscina/, vaga: /garagem|vaga/, vista: /vista|varanda|sacada/, interna: /operacional|interna|galp[ãa]o/, pe_direito: /p[ée].?direito/, docas: /doca/, piso: /piso/, energia: /cabine|energia|transformador|quadro/, escritorios: /escrit|mezanino|administ/, apoio: /vesti|refeit|copa/, patio: /p[áa]tio|manobra/, acesso: /acesso|entorno|rua/, salao: /sal[ãa]o|loja|vitrine/, banhoC: /banheiro/, copa: /copa|dep[óo]sito/, entorno: /entorno|vizinh/, geral: /geral|drone|panor|vista/, frente: /frente|testada/, topografia: /topogra|declive|aclive|plano/, vizinhanca: /vizinh/, infra: /poste|infra|rede/, porteira: /porteira|entrada|acesso/, sede: /sede|casa principal/, sede_int: /sede.*(sala|cozinha|interior)/, producao: /pasto|pastagem|lavoura|planta[çc]/, agua: /represa|rio|nascente|po[çc]o|lago|a[çc]ude|[áa]gua/, benfeitorias: /curral|barrac|benfeit|caseiro|m[áa]quinas/, estradas: /estrada/, cobertura: /cobertura|telhad|telha/, incendio: /inc[êe]ndio|sprinkler|hidrante/, estac: /estacionamento/, recepcao: /recep|hall|portaria/, elevador: /elevador|escada/, acesso_rod: /rodovi|estrada/, divisas: /divisa|cerca|muro|marco/, lazer: /lazer|piscina|churrasq|gourmet/, baias: /baia|picadeiro|cocheira/ };
 function casarRoteiro(o) {
   const itens = roteiroFotos(o.tipo, { dormitorios: PC.parseBR(o.dormitorios), banheiros: PC.parseBR(o.banheiros), vagas: PC.parseBR(o.vagas), docas: o.docas === undefined || o.docas === "" ? undefined : PC.parseBR(o.docas) });
   const ambs = (o.captacao?.ambientes || []).filter((a) => (a.fotos || []).length); const usados = new Set();
@@ -1434,19 +1499,22 @@ VIEWS.captacao = () => {
     const aut = at.autorizacao || at.autorizacao_manual; const nf = fotosDe(at);
     const falta = [!at.titulo && "título", !at.descricao && "descrição", nf < 3 && "pelo menos 3 fotos", !(PC.parseBR(at.venda) || PC.parseBR(at.aluguel)) && "valor"].filter(Boolean);
     const link = an ? `${baseAnuncios()}/i/${an.id}` : ""; const rot = casarRoteiro(at);
-    $("fx").innerHTML = `<h2>Próximos passos</h2>
-    <div class="passo ${aut ? "ok" : ""}"><b>1 · Autorização de comercialização</b>
-      ${at.autorizacao ? `<p class="tag ok">Autorizado por ${esc(at.autorizacao.responsavel || at.autorizacao.razao)} em ${esc(fdt(at.autorizacao.em))}</p>` : at.autorizacao_manual ? `<p class="tag ok">Autorização por escrito fora do sistema, registrada por ${esc(at.autorizacao_manual.por)} em ${esc(fdt(at.autorizacao_manual.em))}</p>` : pedAb ? `<p class="hint">Enviada em ${esc(fdt(pedAb.criado))}: ${esc(STATUS_P[pedAb.status] || pedAb.status)}.</p><button class="sm" id="vped">Ver pedido</button>` : `<p class="hint">O proprietário recebe a ficha do imóvel e aceita a autorização pelo celular (link) ou no PDF.</p>`}
-      ${!aut ? `<button class="${pedAb ? "sm" : "p"}" id="paut">${pedAb ? "Novo pedido de autorização" : "Pedir autorização ao proprietário"}</button><label class="check"><input type="checkbox" id="amanual"> O proprietário já assinou autorização por escrito (fica registrado em meu nome)</label>` : ""}</div>
-    <div class="passo ${an && an.status === "ativo" ? "ok" : ""}"><b>2 · Anúncio (página para WhatsApp)</b>
+    const st1 = !!aut, st2 = !!(an && an.status === "ativo"), st3 = at.status !== "captacao";
+    const num = (n, ok) => `<span class="pnum ${ok ? "ok" : ""}">${ok ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>' : n}</span>`;
+    const ac = (id, ic, l, extra = "", tag = "button") => tag === "a" ? `<a class="acao" ${extra}>${icAc(ic)}<span>${l}</span></a>` : `<button class="acao" id="${id}" ${extra}>${icAc(ic)}<span>${l}</span></button>`;
+    $("fx").innerHTML = `<h2>Próximos passos</h2><div class="passos">
+    <div class="passo ${st1 ? "ok" : ""}">${num(1, st1)}<div class="pc"><b>Autorização de comercialização</b>
+      ${at.autorizacao ? `<p class="tag ok">Autorizado por ${esc(at.autorizacao.responsavel || at.autorizacao.razao)} em ${esc(fdt(at.autorizacao.em))}</p>` : at.autorizacao_manual ? `<p class="tag ok">Autorização por escrito fora do sistema, registrada por ${esc(at.autorizacao_manual.por)} em ${esc(fdt(at.autorizacao_manual.em))}</p>` : pedAb ? `<p class="hint">Enviada em ${esc(fdt(pedAb.criado))}: ${esc(STATUS_P[pedAb.status] || pedAb.status)}.</p>` : `<p class="hint">O proprietário recebe a ficha e aceita a autorização pelo celular (link) ou no PDF.</p>`}
+      ${!aut ? `<div class="acoes">${pedAb ? ac("vped", "doc", "Ver pedido") : ""}${ac("paut", "enviar", pedAb ? "Novo pedido" : "Pedir autorização", pedAb ? "" : 'data-p="1"')}</div><label class="check"><input type="checkbox" id="amanual"> O proprietário já assinou autorização por escrito (fica registrado em meu nome)</label>` : ""}</div></div>
+    <div class="passo ${st2 ? "ok" : ""}">${num(2, st2)}<div class="pc"><b>Anúncio (página para WhatsApp)</b>
       ${falta.length ? `<p class="hint">Falta: ${esc(falta.join(", "))}.</p>` : ""}${rot.faltam.length ? `<p class="hint">Roteiro: falta foto de ${esc(rot.faltam.map((x) => x.nome).join(", "))}.</p>` : ""}
-      ${an && an.status === "ativo" ? `<p class="linkbox">${esc(link)}</p><p class="hint">${an.visitas || 0} visita(s) · publicado em ${esc(fdt(an.publicado_em))}${an.atualizado_em ? " · atualizado " + esc(fdt(an.atualizado_em)) : ""}</p>
-        <div class="row"><a class="btn sm p" target="_blank" rel="noopener" href="${esc(waLink("", `${at.titulo}\n${link}`))}">Enviar no WhatsApp</a><button class="sm" id="cpl">Copiar link</button><a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">Ver página</a></div>
-        <div class="row"><button class="sm" id="pub">Atualizar página</button><button class="sm g" id="enc">Encerrar anúncio</button></div>`
-      : `<button class="p" id="pub" ${falta.length || !aut ? "disabled" : ""}>Publicar anúncio</button>${!aut ? '<p class="hint">Publica depois da autorização do proprietário.</p>' : ""}`}</div>
-    <div class="passo ${at.status !== "captacao" ? "ok" : ""}"><b>3 · Banco de ofertas</b>
-      ${at.status === "captacao" ? `<p class="hint">Entra no cruzamento com os briefings e no ranking.</p><button id="conc">Concluir captação e enviar ao banco</button>` : `<p class="tag ok">No banco de ofertas${at.codigo ? " como " + esc(at.codigo) : ""}.</p>`}
-      <div class="row"><button class="sm" id="pdfc">Ficha PDF</button><button class="sm" id="zipc">Pacote p/ sistema (XML, planilha, fotos)</button><button class="sm" id="vof">Abrir como oferta</button></div></div>`;
+      ${st2 ? `<p class="linkbox">${esc(link)}</p><p class="hint">${an.visitas || 0} visita(s) · publicado em ${esc(fdt(an.publicado_em))}${an.atualizado_em ? " · atualizado " + esc(fdt(an.atualizado_em)) : ""}</p>
+        <div class="acoes">${ac("", "zap", "WhatsApp", `data-p="1" target="_blank" rel="noopener" href="${esc(waLink("", `${at.titulo}\n${link}`))}"`, "a")}${ac("cpl", "link", "Copiar link")}${ac("", "olho", "Ver página", `target="_blank" rel="noopener" href="${esc(link)}"`, "a")}${ac("pub", "atualizar", "Atualizar")}${ac("enc", "fechar", "Encerrar", 'data-g="1"')}</div>`
+      : `<div class="acoes">${ac("pub", "megafone", "Publicar anúncio", `data-p="1" ${falta.length || !aut ? "disabled" : ""}`)}</div>${!aut ? '<p class="hint">Publica depois da autorização do proprietário.</p>' : ""}`}</div></div>
+    <div class="passo ${st3 ? "ok" : ""}">${num(3, st3)}<div class="pc"><b>Banco de ofertas</b>
+      ${st3 ? `<p class="tag ok">No banco de ofertas${at.codigo ? " como " + esc(at.codigo) : ""}.</p>` : `<p class="hint">Entra no cruzamento com os briefings e no ranking.</p><button class="cta-banco" id="conc">${icAc("banco")}<span><b>Concluir captação</b><small>Enviar ao banco de ofertas</small></span><span class="seta">›</span></button>`}
+      <div class="acoes">${ac("pdfc", "pdf", "Ficha PDF")}${ac("zipc", "pacote", "Pacote p/ sistema")}${ac("vof", "oferta", "Abrir oferta")}</div><p class="hint mini">Pacote: XML (VRSync), planilha e fotos nomeadas por ambiente.</p></div></div></div>`;
+    $("fx").querySelectorAll(".acoes").forEach((x) => x.classList.add("n" + Math.min(3, x.children.length)));
     const paut = $("paut"); if (paut) paut.onclick = async () => { parar(); clearTimeout(tSalvar); await salvar({ ...lerCampos(), anunciante_tipo: "Proprietário" }); editing = false; go({ v: "novopedido", o: at.id }); };
     const am = $("amanual"); if (am) am.onchange = async () => { if (!am.checked) return; await salvar({ autorizacao_manual: { em: now(), por: EU.usuario || usuarioAtual?.email } }, "Autorização registrada."); passos(); };
     const vp = $("vped"); if (vp) vp.onclick = () => { editing = false; go({ v: "pedido", id: pedAb.id }); };
@@ -1497,29 +1565,33 @@ async function descreverAmbiente(oid, aid) {
 VIEWS.visita = () => {
   const o0 = O(route.id); if (!o0) return back();
   header("Visita guiada" + (o0.codigo ? " · " + o0.codigo : ""));
-  if (MODO() === "escritorio" && !route.webcam) { $("main").innerHTML = cartaoCelular("Continue a visita no celular", "A câmera guiada foi feita para o celular, no local do imóvel. Abra este imóvel em Captar no celular e toque em Visita guiada.") + `<div class="card"><button id="wc">Usar a webcam deste computador mesmo assim</button></div>`; $("wc").onclick = () => { route.webcam = true; VIEWS.visita(); }; return; }
+  const envio = MODO() === "escritorio" && !route.webcam; // computador: fotos enviadas (do celular, do parceiro), mesmo roteiro guiado
   const itens = () => { const r = casarRoteiro(O(route.id)); return [...r.itens.filter((x) => x.obrigatorio), ...r.itens.filter((x) => !x.obrigatorio)]; };
   let idx = Math.max(0, itens().findIndex((x) => x.obrigatorio && !x.amb)); if (route.idx != null) idx = route.idx; else if (route.item) { const i = itens().findIndex((x) => x.id === route.item); if (i >= 0) idx = i; route.item = null; route.idx = idx; }
   let extraId = null; // ambiente extra em andamento
   $("main").innerHTML = `<div class="visita">
-    <div class="vtop"><span id="vpos"></span><b id="vnome"></b><small id="vdica"></small><em class="vguia" id="vguia"></em></div>
+    <div class="vtop"><div class="vt1"><span id="vpos"></span><button class="lnk" id="vfim">Concluir visita</button></div><b id="vnome"></b><small id="vdica" title="Toque para ver a dica inteira"></small></div>
     <div class="vstrip" id="vstrip"></div>
-    <div class="visor"><video id="vid" playsinline muted autoplay></video><div class="vflash" id="vflash"></div><p class="vmsg" id="vmsg">Abrindo a câmera…</p>
-      <button class="obt" id="obt" aria-label="Tirar foto"></button><span class="vcont" id="vcont"></span></div>
+    ${envio ? `<label class="visor drop" id="vdrop"><input type="file" id="vup" accept="image/*" multiple hidden><span class="dz">${icAc("upload")}<b>Arraste aqui as fotos deste ambiente</b><small>ou clique para escolher · fotos do celular, do parceiro ou do proprietário · a IA trata luz, cor e nitidez</small></span>
+      <em class="vguia" id="vguia"></em><span class="vcont" id="vcont"></span><div class="vthumbs" id="vthumbs"></div></label>
+      <p class="hint mini">Está no imóvel com o celular? Use a câmera guiada no celular. <button class="lnk" id="wc">Usar a webcam deste computador</button></p>`
+    : `<div class="visor"><video id="vid" playsinline muted autoplay></video><div class="vflash" id="vflash"></div><p class="vmsg" id="vmsg">Abrindo a câmera…</p>
+      <em class="vguia" id="vguia"></em><span class="vcont" id="vcont"></span><div class="vthumbs" id="vthumbs"></div>
+      <label class="vgal" title="Enviar fotos da galeria (ex.: recebidas do parceiro)" aria-label="Enviar fotos da galeria"><input type="file" id="vgal" accept="image/*" multiple hidden>${icAc("galeria")}</label>
+      <button class="obt" id="obt" aria-label="Tirar foto"></button></div>`}
     <label class="btn sm" id="vfb" hidden><input type="file" id="vfile" accept="image/*" capture="environment" multiple hidden>📷 Usar a câmera do celular</label>
-    <div class="thumbs" id="vthumbs"></div>
-    <div class="card vcard"><div class="row"><button class="mic grow" id="vmic">🎙 Descrever detalhes</button></div>
-      <textarea id="vfala" rows="2" placeholder="O que tem neste ambiente? Acabamento, tamanho, estado, diferenciais…"></textarea>
+    <div class="vcard"><textarea id="vfala" rows="2" placeholder="Fale ou escreva: acabamento, tamanho, estado, diferenciais…"></textarea>
       <p class="desc" id="vdesc" hidden></p><p class="note" id="vprob" hidden></p><p class="status" id="vst"></p></div>
-    <div class="row vnav"><button id="vant">‹ Anterior</button><button class="grow p" id="vprox">Próximo ambiente ›</button></div>
-    <div class="row"><button class="sm" id="vextra">+ Ambiente extra</button><button class="sm g" id="vfim">Concluir registro</button></div></div>`;
+    <div class="vbar"><button id="vant" aria-label="Ambiente anterior">‹</button><button class="mic" id="vmic">🎙 Descrever</button><button class="p" id="vprox">Salvar e seguir ›</button></div></div>`;
+  $("vdica").onclick = () => $("vdica").classList.toggle("aberta");
   const amb = () => { const it = itens()[idx]; const at = O(route.id); if (extraId) return (at.captacao?.ambientes || []).find((a) => a.id === extraId) || null; return it && it.amb ? (at.captacao?.ambientes || []).find((a) => a.id === it.amb.id) : null; };
   const desenhar = () => {
     const L = itens(); const it = L[idx]; const a = amb(); const falt = L.filter((x) => x.obrigatorio && !x.amb).length;
-    $("vpos").textContent = extraId ? "Ambiente extra" : `${idx + 1} de ${L.length} · ${falt ? falt + " obrigatória(s) faltando" : "obrigatórias completas ✓"}`;
+    $("vpos").textContent = extraId ? "Ambiente extra" : `${idx + 1} de ${L.length} · ${falt ? "faltam " + falt : "obrigatórias completas ✓"}`;
     $("vnome").textContent = extraId ? (a?.nome || "Ambiente extra") : it ? it.nome + (it.obrigatorio ? "" : " (opcional)") : "Roteiro concluído";
     $("vdica").textContent = extraId ? "Fotografe e fale: a IA dá o nome do ambiente." : it ? it.dica : "Toque em Concluir visita para gerar o anúncio.";
-    $("vstrip").innerHTML = L.map((x, i) => `<button class="vs ${x.amb ? "ok" : x.obrigatorio ? "obr" : ""} ${i === idx && !extraId ? "on" : ""}" data-vi="${i}" title="${esc(x.nome)}">${icAmb(x.id)}</button>`).join("");
+    $("vstrip").innerHTML = L.map((x, i) => `<button class="vs ${x.amb ? "ok" : x.obrigatorio ? "obr" : ""} ${i === idx && !extraId ? "on" : ""}" data-vi="${i}" title="${esc(x.nome)}" aria-label="${esc(x.nome)}">${icAmb(x.id)}</button>`).join("") + `<button class="vs mais ${extraId ? "on" : ""}" id="vextra" title="Ambiente extra" aria-label="Ambiente extra">+</button>`;
+    $("vextra").onclick = novoExtra;
     $("vstrip").querySelectorAll("[data-vi]").forEach((b) => (b.onclick = () => irPara(Number(b.dataset.vi))));
     const on = $("vstrip").querySelector(".on"); if (on) on.scrollIntoView({ block: "nearest", inline: "center" });
     const fotos = a?.fotos || []; $("vcont").textContent = fotos.length ? fotos.length + " foto(s)" : "";
@@ -1527,8 +1599,8 @@ VIEWS.visita = () => {
     const fa = $("vfala"); if (document.activeElement !== fa) fa.value = a?.fala || "";
     $("vdesc").hidden = !a?.descricao; $("vdesc").textContent = a?.descricao || "";
     $("vprob").hidden = !(a?.avisos || []).length; $("vprob").textContent = (a?.avisos || []).length ? "⚠ " + a.avisos.join(" · ") : "";
-    $("vant").disabled = idx === 0 && !extraId; $("vprox").textContent = idx >= L.length - 1 && !extraId ? "Concluir registro ✓" : fotos.length || !it?.obrigatorio || extraId ? "Salvar e seguir ›" : "Pular por enquanto ›";
-    const passo = !fotos.length ? "1 · Tire a foto deste ambiente" : !(a?.fala || "").trim() ? "2 · Agora descreva os detalhes (toque em Descrever)" : "3 · Pronto: salve e siga para o próximo";
+    $("vant").disabled = idx === 0 && !extraId; $("vprox").textContent = idx >= L.length - 1 && !extraId ? "Concluir ✓" : fotos.length || !it?.obrigatorio || extraId ? "Salvar e seguir ›" : "Pular ›";
+    const passo = !fotos.length ? (envio ? "1 · Envie as fotos deste ambiente" : "1 · Tire a foto deste ambiente") : !(a?.fala || "").trim() ? "2 · Agora descreva os detalhes" : "3 · Pronto: salve e siga";
     $("vguia").textContent = passo; $("vmic").classList.toggle("pulse", !!fotos.length && !(a?.fala || "").trim() && !window.__vozVisita);
   };
   const garantirAmb = async () => {
@@ -1544,7 +1616,7 @@ VIEWS.visita = () => {
     descrevendo = false; if ($("vdesc")) desenhar(); if (deNovo) { deNovo = false; descrever(); } };
   const registrar = async (files) => {
     const aid = await garantirAmb(); let n = 0;
-    for (const f of files) { st("Tratando e enviando a foto…");
+    for (const [i, f] of files.entries()) { st(files.length > 1 ? `Tratando e enviando a foto ${i + 1} de ${files.length}…` : "Tratando e enviando a foto…");
       try { const r = await tratarFoto(f); const up = await api("fotos", { method: "POST", body: JSON.stringify({ oferta: route.id, jpeg_base64: await blobB64(r.blob) }) }); MINI[up.k] = r.mini; await ambientesSalvar(route.id, (ambs) => { const x = ambs.find((y) => y.id === aid); if (x) x.fotos = [...(x.fotos || []), { k: up.k, w: r.w, h: r.h, avisos: r.avisos, em: now() }]; }); n++; if (r.avisos.length) toast(r.avisos.join(" ")); }
       catch (e) { st("Foto não enviada: " + e.message, true); } }
     desenhar(); if (n) descrever();
@@ -1558,6 +1630,13 @@ VIEWS.visita = () => {
       const v = $("vid"); if (!v) return pararCamera(); v.srcObject = CAM; await v.play().catch(() => {}); $("vmsg").hidden = true; $("obt").disabled = false;
     } catch (e) { $("vmsg").textContent = e && e.name === "NotAllowedError" ? "Câmera bloqueada: libere nas configurações do navegador ou use a câmera do celular abaixo." : "Câmera ao vivo indisponível: use a câmera do celular abaixo."; $("vfb").hidden = false; $("obt").disabled = true; }
   };
+  if (envio) {
+    const dz = $("vdrop"); $("vup").onchange = () => { registrar([...$("vup").files]); $("vup").value = ""; };
+    dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("on"); }); dz.addEventListener("dragleave", () => dz.classList.remove("on"));
+    dz.addEventListener("drop", (e) => { e.preventDefault(); dz.classList.remove("on"); const fs = [...(e.dataTransfer?.files || [])].filter((f) => /^image\//.test(f.type)); if (fs.length) registrar(fs); });
+    $("wc").onclick = (e) => { e.preventDefault(); route.webcam = true; editing = false; VIEWS.visita(); };
+  } else {
+  $("vgal").onchange = () => { registrar([...$("vgal").files]); $("vgal").value = ""; };
   $("obt").onclick = async () => {
     const v = $("vid"); if (!CAM || !v.videoWidth) return;
     const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
@@ -1565,6 +1644,7 @@ VIEWS.visita = () => {
     const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.92)); await registrar([new File([b], "foto.jpg", { type: "image/jpeg" })]);
   };
   $("vfile").onchange = () => registrar([...$("vfile").files]);
+  }
   // fala
   const salvarFala = async (txt) => { const aid = await garantirAmb(); await ambientesSalvar(route.id, (ambs) => { const x = ambs.find((y) => y.id === aid); if (x) x.fala = txt; }); };
   $("vfala").addEventListener("input", () => { clearTimeout($("vfala")._t); $("vfala")._t = setTimeout(() => salvarFala($("vfala").value), 700); });
@@ -1573,20 +1653,20 @@ VIEWS.visita = () => {
     const b = $("vmic");
     if (window.__vozVisita) { window.__vozVisita.parar(); return; }
     if (!vozDisponivel()) { $("vfala").focus(); toast("Use o microfone do teclado para ditar."); return; }
-    b.classList.add("on"); b.textContent = "■ Parar e descrever";
+    b.classList.add("on"); b.textContent = "■ Parar";
     window.__vozVisita = ditar({ aoTexto: (t) => { const fa = $("vfala"); if (!fa) return; fa.value = (fa.value ? fa.value.replace(/\s+$/, "") + " " : "") + t; },
-      aoFim: async () => { window.__vozVisita = null; const bb = $("vmic"); if (!bb) return; bb.classList.remove("on"); bb.textContent = "🎙 Descrever detalhes"; await salvarFala($("vfala").value); descrever(); },
-      aoErro: (e) => { window.__vozVisita = null; const bb = $("vmic"); if (bb) { bb.classList.remove("on"); bb.textContent = "🎙 Descrever detalhes"; } toast(e === "not-allowed" ? "Libere o microfone para este site." : "Ditado indisponível: use o microfone do teclado."); } });
+      aoFim: async () => { window.__vozVisita = null; const bb = $("vmic"); if (!bb) return; bb.classList.remove("on"); bb.textContent = "🎙 Descrever"; await salvarFala($("vfala").value); descrever(); },
+      aoErro: (e) => { window.__vozVisita = null; const bb = $("vmic"); if (bb) { bb.classList.remove("on"); bb.textContent = "🎙 Descrever"; } toast(e === "not-allowed" ? "Libere o microfone para este site." : "Ditado indisponível: use o microfone do teclado."); } });
   };
   const mudar = async (d) => { if (window.__vozVisita) window.__vozVisita.parar(); const fa = $("vfala"); if (fa && fa.value !== (amb()?.fala || "")) await salvarFala(fa.value);
     const L = itens(); if (extraId) { extraId = null; desenhar(); return; } if (d > 0 && idx >= L.length - 1) return concluir(); idx = Math.max(0, Math.min(L.length - 1, idx + d)); route.idx = idx; st(""); desenhar(); };
   $("vprox").onclick = () => mudar(1); $("vant").onclick = () => mudar(-1);
   const irPara = async (i) => { if (window.__vozVisita) window.__vozVisita.parar(); const fa = $("vfala"); if (fa && fa.value !== (amb()?.fala || "")) await salvarFala(fa.value); extraId = null; idx = i; route.idx = i; st(""); desenhar(); };
-  $("vextra").onclick = async () => { const id = uid("a"); await ambientesSalvar(route.id, (ambs) => ambs.push({ id, nome: "Ambiente extra", fotos: [], fala: "", criado: now() })); extraId = id; st(""); desenhar(); };
+  const novoExtra = async () => { const id = uid("a"); await ambientesSalvar(route.id, (ambs) => ambs.push({ id, nome: "Ambiente extra", fotos: [], fala: "", criado: now() })); extraId = id; st(""); desenhar(); };
   const concluir = () => { pararCamera(); const falt = itens().filter((x) => x.obrigatorio && !x.amb); if (falt.length) toast("Faltaram: " + falt.map((x) => x.nome).join(", ") + ". Você pode completar depois."); route.idx = null; const prev = stack[stack.length - 1]; const temFotos = (O(route.id)?.captacao?.ambientes || []).some((x) => (x.fotos || []).length); if (prev && prev.v === "captacao" && temFotos) prev.gerar = true; back(); };
   $("vfim").onclick = concluir;
   editing = true; // salvar não redesenha a tela (a câmera continua aberta)
-  desenhar(); abrir();
+  desenhar(); if (!envio) abrir();
 };
 
 /* ---------- Anúncios publicados ---------- */
