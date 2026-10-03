@@ -173,7 +173,14 @@ Custos: mensagens dentro da janela de 24 h após o cliente escrever não são co
 Testes: `npm test` (57 testes, incluindo 17 de verificação e Zoe) e `node test/e2e9.mjs` com o servidor de teste.
 
 
-### Usar o número atual do WhatsApp Business (+55 87 98131-5053) — coexistência
+### Número da Zoe: (19) 98110-5192
+DDD 19, da região de atuação. Dois caminhos, conforme a situação do chip:
+- **Chip sem WhatsApp instalado (recomendado, mais rápido):** registre direto na Cloud API da Meta (passos 1 a 5 acima, modo padrão `meta`). Não precisa de parceiro; o atendimento humano é feito pelo app PrimeCorp (Mais → Zoe → Conversas).
+- **Chip já em uso no WhatsApp Business do celular:** coexistência pelo parceiro (seção abaixo). Para usar o caminho direto, apague a conta do WhatsApp nesse chip antes de registrar na Meta.
+- `WHATSAPP_NUMERO` = `(19) 98110-5192`. Com ele preenchido, o botão "Tenho interesse" das páginas de anúncio (`/i/…`) abre o WhatsApp da Zoe, e o lead já entra no CRM (desligável em Mais → Zoe → Conhecimento).
+- `ZOE_EQUIPE` = `19998051985` (Rodrigo) e o WhatsApp da Joselia. O número da Zoe não entra aqui.
+
+### Coexistência (número continua no app do celular)
 O número continua no app WhatsApp Business do celular **e** passa a ser atendido pela Zoe ao mesmo tempo (recurso oficial da Meta, "coexistência"). Requisitos: app WhatsApp Business 2.24.17 ou mais novo, número em uso há mais de 7 dias, Página do Facebook e Meta Business da PrimeCorp com acesso de administrador.
 - A Meta só libera a coexistência por um **parceiro oficial** (Tech Provider/BSP). O sistema já fala com a **360dialog** (`WHATSAPP_PROVEDOR=360dialog`); com outro parceiro que entregue acesso direto à Cloud API da Meta, use o modo padrão (`meta`).
 - Conexão: no painel do parceiro escolha "conectar número do WhatsApp Business app", faça login no Facebook, escaneie o QR code pelo app do celular e aceite compartilhar o histórico (até 6 meses de conversas individuais; grupos não sincronizam). Mantenha o app aberto até terminar.
@@ -188,7 +195,7 @@ Variáveis no modo 360dialog:
 | `WHATSAPP_PROVEDOR` | `360dialog` |
 | `WHATSAPP_TOKEN` | API key do número no painel da 360dialog |
 | `WHATSAPP_WEBHOOK_CHAVE` | Frase aleatória com 32+ caracteres |
-| `WHATSAPP_NUMERO` | `(87) 98131-5053` |
+| `WHATSAPP_NUMERO` | `(19) 98110-5192` |
 | `ZOE_EQUIPE` | WhatsApp pessoais de Rodrigo e Joselia (não o número da empresa) |
 
-Webhook a cadastrar na 360dialog: `https://SEU-SITE/whatsapp/webhook?chave=<WHATSAPP_WEBHOOK_CHAVE>`.
+Depois do deploy: app → Mais → Zoe → **Conectar WhatsApp ao sistema** (o sistema aponta o webhook do número na 360dialog, com a chave num cabeçalho privado). Teste mandando "oi" do seu celular para o número da Zoe.
