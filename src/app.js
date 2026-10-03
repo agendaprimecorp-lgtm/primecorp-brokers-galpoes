@@ -1,4 +1,6 @@
 import PC from "../shared/core.mjs";
+import V from "../shared/verif.mjs";
+import { ZOE_PADRAO as ZOE_BASE } from "../shared/zoe-base.mjs";
 import { jsPDF } from "jspdf";
 import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, requestPasswordRecovery } from "@netlify/identity";
 import { tratarFoto, blobB64 } from "./foto.js";
@@ -43,7 +45,7 @@ async function api(path, opts = {}) {
   if (!r.ok) throw new ErroAPI(j.erro || "Erro " + r.status, r.status);
   return j;
 }
-const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [] };
+const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [], conversas: [], agenda: [] };
 const store = {
   async carregar() { const d = await api("dados"); Object.keys(S).forEach((k) => (S[k] = d[k] || [])); },
   async save(n, o) {
@@ -138,7 +140,7 @@ function qrSVG(txt, tam = 168) { const q = qrcode(0, "M"); q.addData(txt); q.mak
 const cartaoCelular = (titulo, texto) => `<div class="card celular"><div class="qr">${qrSVG(location.origin)}</div><div><span class="k">Use o celular</span><h2>${esc(titulo)}</h2><p class="hint">${esc(texto)}</p><p class="hint">Aponte a câmera do celular para o código ou abra <b>${esc(location.host)}</b>. O que for registrado no celular aparece aqui em segundos.</p></div></div>`;
 // No computador, o painel acompanha o que chega do celular (sincroniza a cada 20 s).
 let ultimaSync = null, assinaturaDados = "";
-const assinatura = () => S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
+const assinatura = () => (S.conversas || []).map((c) => c.id + (c.ultima_em || "") + (c.modo || "")).join("|") + (S.agenda || []).map((a) => a.id + a.status).join("|") + S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
 async function sincronizar(forcar) {
   if (!usuarioAtual || document.visibilityState !== "visible") return;
   if (editing && !forcar) return;
@@ -209,7 +211,7 @@ function fmtIn(f, v) {
   if (typeof v === "number") { const money = ["aluguel", "venda", "condominio", "iptu", "valor_base"].includes(f); return PC.nf(v, money ? (Number.isInteger(v) ? 0 : 2) : undefined); }
   return String(v);
 }
-const OF_FIELDS = ["dormitorios", "suites", "banheiros", "vagas", "area_ha", "distancia_asfalto", "aptidao", "agua", "benfeitorias", "topografia", "car", "ccir", "georref", "tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "frente", "zoneamento", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "disponibilidade", "documentacao", "titulo", "descricao", "diferenciais", "itens"];
+const OF_FIELDS = ["matricula", "cartorio", "inscricao", "cep", "nirf", "dormitorios", "suites", "banheiros", "vagas", "area_ha", "distancia_asfalto", "aptidao", "agua", "benfeitorias", "topografia", "car", "ccir", "georref", "tipo", "operacao", "cidade", "uf", "regiao", "subtitulo", "tipologia", "fabril", "construida", "terreno", "administrativo", "apoio", "frente", "zoneamento", "pe_direito", "piso_carga", "docas", "energia_kva", "pontes", "avcb", "data_anuncio", "aluguel", "venda", "condominio", "iptu", "iptu_periodo", "disponibilidade", "documentacao", "titulo", "descricao", "diferenciais", "itens"];
 function fromAI(o) { const r = {}; OF_FIELDS.forEach((f) => { if (o[f] !== undefined && o[f] !== null) r[f] = fmtIn(f, o[f]); }); return r; }
 function ranking(b) { return S.ofertas.filter((o) => o.status !== "descartada" && o.status !== "captacao").map((o) => { const c = chkOf(o); return Object.assign({ o, c }, PC.score(o, b, c)); }).sort((x, y) => y.score - x.score); }
 function faixaArea(b) { const n = PC.numB(b); if (n.haMin || n.haMax) return n.haMin && n.haMax ? PC.nf(n.haMin) + " a " + PC.nf(n.haMax) + " ha" : n.haMin ? "a partir de " + PC.nf(n.haMin) + " ha" : "até " + PC.nf(n.haMax) + " ha"; if (n.areaMin && n.areaMax) return PC.nf(n.areaMin) + " a " + PC.nf(n.areaMax) + " m²"; if (n.areaMin) return "a partir de " + PC.nf(n.areaMin) + " m²"; if (n.areaMax) return "até " + PC.nf(n.areaMax) + " m²"; return ""; }
@@ -238,6 +240,7 @@ VIEWS.painel = () => {
   <div class="bv-passos"><button data-bv="captar"><b>1</b><span>Captar um imóvel</span></button><button data-bv="nova"><b>2</b><span>Ler um anúncio por link</span></button><button data-bv="editb"><b>3</b><span>Cadastrar a demanda de um cliente</span></button></div>
   <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
   <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>Tecnologia Propto</em></span><span>›</span></button>
+  ${cardZoePainel()}
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
   ${MODO() === "escritorio" ? (() => { const cs = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada").sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || "")).slice(0, 6);
     return `<div class="card campo"><div class="row" style="justify-content:space-between"><h2>Chegando do campo</h2><span class="hint">registros feitos no celular</span></div>${cs.length ? `<div class="campo-grid">${cs.map((o) => { const ambs = o.captacao?.ambientes || []; const k = o.capa || ambs.flatMap((a) => (a.fotos || []).map((f) => f.k))[0]; return `<button class="campo-it" data-cap="${o.id}">${k ? `<img loading="lazy" src="${fotoURL(k)}" alt="">` : '<span class="semfoto">sem foto</span>'}<span class="t"><b>${esc(o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação")}</b><small>${esc([perfilPorEmail(o.captador).nome.split(" ")[0], fotosDe(o) + " foto(s)", ambs.filter((a) => a.descricao).length + " ambiente(s) descrito(s)", fdt(o.atualizado)].join(" · "))}</small></span></button>`; }).join("")}</div>` : '<p class="hint">Nenhum registro ainda. As visitas feitas no celular aparecem aqui automaticamente.</p>'}</div>`; })() : ""}
@@ -262,6 +265,8 @@ VIEWS.painel = () => {
   const bx = $("bvx"); if (bx) bx.onclick = () => { try { localStorage.setItem(chaveBV, "1"); } catch {} render(); };
   $("qnova").onclick = () => go({ v: "nova" }); $("qcap").onclick = () => go({ v: "captar" }, false);
   $("qbrief").onclick = () => go({ v: "editb", id: null });
+  document.querySelectorAll("[data-zc]").forEach((b) => (b.onclick = () => go({ v: "conversa", id: b.dataset.zc })));
+  const za = $("goagenda"); if (za) za.onclick = () => go({ v: "agenda" }); const zz = $("gozoe"); if (zz) zz.onclick = () => go({ v: "zoe" });
 };
 async function exportCSV() {
   const q = (s) => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
@@ -676,6 +681,7 @@ VIEWS.oferta = () => {
   ${o.anunciante_contato || o.anunciante_email ? `<p class="hint">Contato do anúncio: ${esc([o.anunciante_contato, o.anunciante_email].filter(Boolean).join(" · "))}</p>` : ""}
   ${!au && o.origem !== "Captação própria" ? `<button class="p" id="verde">🟢 Sinal verde: pedir dados e autorização</button><p class="hint">Gera o link para o anunciante com as perguntas que faltam, o termo de parceria e a comissão padrão, e abre o WhatsApp do anunciante com a mensagem pronta.</p>` : ""}
   <button class="${au || o.origem !== "Captação própria" ? "" : "p"}" id="solic">${au ? "Novo pedido ao anunciante" : "Pedido personalizado ao anunciante"}</button></div>
+  ${cardVerif(o)}
   <div class="card"><div class="row" style="justify-content:space-between"><h2>Para despertar interesse</h2><button class="sm" id="tz">Copiar teaser</button></div>
   <p class="hint">Texto curto para cliente ou parceiro: faixas de área e valor, sem endereço e sem o nome do anunciante.</p><pre class="teaserbox" id="tzt"></pre></div>
   ${(o.imagens_ref || []).length || (o.fotos_aut || []).length || o.link ? `<div class="card"><div class="row" style="justify-content:space-between"><h2>Fotos do anúncio</h2>${o.link ? '<button class="sm" id="reler">Reler anúncio</button>' : ""}</div>
@@ -686,7 +692,7 @@ VIEWS.oferta = () => {
   <div class="card"><h2>Checagem</h2><div class="sem" id="sem"><i></i><div><span id="semT"></span><small id="semS"></small></div></div><div class="priv" id="priv" hidden></div><ul class="alerts" id="al"></ul><p class="hint">O semáforo fica só aqui. Na ficha, os alertas viram “itens a confirmar”.</p></div>
   <div class="card"><div class="row"><button class="p grow" id="sv">Salvar</button><button class="grow" id="pdf">Ficha PDF</button></div><div id="pdfnote"></div>
   ${o.link ? `<a class="btn sm" href="${esc(o.link)}" target="_blank" rel="noopener">Abrir anúncio original</a>` : ""}<button class="g" id="del">Excluir oferta</button></div>`;
-  const root = $("fo"); fillForm(root, o); editing = true;
+  const root = $("main"); fillForm(root, o); editing = true; fillCert(o);
   fontes.forEach((k) => { const el = root.querySelector(`[data-f="${k}"]`); if (el) { el.classList.add("doanunciante"); el.title = "Informado pelo anunciante"; } });
   document.querySelectorAll("[data-p]").forEach((x) => (x.onclick = () => go({ v: "pedido", id: x.dataset.p })));
   $("tzt").textContent = PC.teaser({ ...o, ...readForm(root) }, chkOf(o), o.codigo || "", corretorDaOferta(o));
@@ -702,12 +708,14 @@ VIEWS.oferta = () => {
     $("sem").className = "sem " + c.sem; $("semT").textContent = SEM[c.sem][0]; $("semS").textContent = SEM[c.sem][1];
     $("al").innerHTML = c.alerts.map((a) => `<li class="${a.lvl}">${esc(a.msg)}</li>`).join("") || '<li class="ok">Dados completos e coerentes.</li>';
     $("priv").hidden = !c.privacy; $("priv").textContent = c.privacy || ""; root.querySelector('[data-f="titulo"]').placeholder = PC.autoTitle(PC.num(cur));
+    cur.certidoes = readCert(); pintarVerif(cur);
     const cp = PC.completude(cur); $("cbar").style.width = cp.pct + "%"; $("cbar").className = cp.ok ? "ok" : cp.pct >= 60 ? "mid" : "";
     $("ctxt").textContent = cp.ok ? "Completa: pode gerar a ficha e a autorização." : `${cp.pct}% preenchida · ${cp.faltam.filter((f) => !f.extra).length} informação(ões) básica(s) faltando.`;
     $("cfal").innerHTML = cp.faltam.filter((f) => !f.extra).map((f) => `<li class="a">${esc(f.pergunta)}</li>`).join("");
     return cur; };
   upd(); root.addEventListener("input", () => { clearTimeout(upd._t); upd._t = setTimeout(upd, 200); }); root.addEventListener("change", upd);
-  $("sv").onclick = async () => { const cur = upd(); const st = cur.status === "nova" ? "revisada" : cur.status; editing = false; try { await store.save("ofertas", { ...cur, status: st, revisar_anunciante: false, atualizado: now() }); toast("Oferta salva" + (o.status === "nova" ? " e marcada como revisada." : ".")); back(); } catch { editing = true; } };
+  $("sv").onclick = async () => { const cur = upd(); const st = cur.status === "nova" ? "revisada" : cur.status; editing = false; try { await store.save("ofertas", { ...cur, status: st, revisar_anunciante: false, atualizado: now() }); toast("Oferta salva" + (o.status === "nova" ? " e marcada como revisada." : ".")); varrerSeMudou(o, cur); back(); } catch { editing = true; } };
+  ligarVerif(o, root, upd);
   let armed = false;
   $("pdf").onclick = async () => {
     const neg = S.negocios.find((n) => n.oferta === o.id && PC.etapaIdx(n.etapa) >= PC.etapaIdx("termo"));
@@ -773,6 +781,7 @@ VIEWS.nova = () => {
 VIEWS.mais = () => {
   header("Mais");
   $("main").innerHTML = `<div class="card"><div class="menu">
+  <button id="m10">Zoe · atendimento no WhatsApp <span>›</span></button><button id="m11">Agenda <span>›</span></button>
   <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button>' : ""}
   <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
   <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
@@ -781,12 +790,12 @@ VIEWS.mais = () => {
   <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
   if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
-  $("m8").onclick = () => go({ v: "anuncios" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
+  $("m8").onclick = () => go({ v: "anuncios" }); $("m10").onclick = () => go({ v: "zoe" }); $("m11").onclick = () => go({ v: "agenda" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
   $("sacc").onclick = () => copiar(PC.SAC);
   document.querySelectorAll("#modo [data-modo]").forEach((b) => (b.onclick = () => { gravarPref("pc_modo", b.dataset.modo === "auto" ? null : b.dataset.modo); aplicarModo(); render(); }));
 };
-const TIPOS_E = { pacote_exportado: "Pacote exportado", teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
+const TIPOS_E = { matricula_lida: "Matrícula lida (IA)", verificacao_pdf: "Relatório de verificação", zoe_aviso: "Zoe · avisos", pacote_exportado: "Pacote exportado", teaser: "Teaser", ficha_pdf: "Ficha PDF", sala: "Sala criada", aceite: "Aceite de termo", interesse: "Interesse", pedido_anunciante: "Pedido ao anunciante", anunciante_dados: "Dados do anunciante", autorizacao: "Autorização do anunciante", comissao: "Comissão", acordo_comissao: "Acordo de divisão", ficha_visita: "Ficha de visita", recibo: "Recibo", mandato: "Mandato de busca", anuncio_publicado: "Anúncio publicado", coleta: "Coleta de alertas", restauracao: "Restauração" };
 VIEWS.relatorios = async () => {
   header("Relatórios emitidos"); $("main").innerHTML = `<div class="card"><p class="hint">Carregando…</p></div>`;
   let em = []; try { em = (await api("emissoes?limite=500")).emissoes; } catch (e) { $("main").innerHTML = `<div class="card"><p class="status err">${esc(e.message)}</p></div>`; return; }
@@ -1676,6 +1685,182 @@ VIEWS.anuncios = (recarregado) => {
   const as = [...S.anuncios].sort((a, b) => (b.publicado_em || "").localeCompare(a.publicado_em || ""));
   $("main").innerHTML = `<div class="card"><div class="list">${as.map((a) => `<div class="item"><span class="dot ${a.status === "ativo" ? "verde" : ""}"></span><span class="t"><b>${esc((a.codigo ? a.codigo + " · " : "") + a.titulo)}</b><span>${esc([a.status === "ativo" ? "No ar" : "Encerrado", (a.visitas || 0) + " visita(s)", (a.fotos || []).length + " foto(s)", a.corretor?.nome?.split(" ")[0], fdt(a.publicado_em)].filter(Boolean).join(" · "))}</span></span>${a.status === "ativo" ? `<a class="btn sm" target="_blank" rel="noopener" href="/i/${esc(a.id)}">Ver</a>` : ""}<button class="sm" data-oc="${esc(a.oferta)}">Abrir</button></div>`).join("") || '<p class="empty">Nenhum anúncio publicado. Publique a partir de uma captação.</p>'}</div></div>`;
   document.querySelectorAll("[data-oc]").forEach((b) => (b.onclick = () => go({ v: "captacao", id: b.dataset.oc })));
+};
+
+/* ================= VERIFICAÇÃO DO IMÓVEL ================= */
+const ST_V = { ok: "ok", a: "", v: "v", pend: "p" };
+function cardVerif(o) {
+  const rural = V.ehRural(o.tipo); const m = o.verificacao?.matricula; const lei = o.verificacao?.leitura;
+  const campos = V.CAMPOS.map(([k, l, ph, g]) => `<label class="${["endereco", "proprietario", "cartorio", "complemento"].includes(k) ? "full" : ""}" data-vg="${g}"${(g === "rural" && !rural) || (g === "urbano" && rural) ? " hidden" : ""}>${l}<input data-f="${k}" placeholder="${esc(ph)}"${k === "cep" ? ' inputmode="numeric"' : ""}></label>`).join("");
+  const onus = (m?.onus || []);
+  return `<div class="card" id="vcard"><div class="row" style="justify-content:space-between"><h2>Verificação do imóvel</h2><span class="tag">privado · não sai no anúncio</span></div>
+  <div class="sem" id="vsem"><i></i><div><span id="vsemT"></span><small id="vsemS"></small></div></div>
+  <div class="meter"><i id="vbar"></i></div><p class="hint" id="vtxt"></p><ul class="alerts verif" id="vit"></ul>
+  <div class="row wrap"><button class="p" id="vvar">Varrer agora</button><label class="btn" for="vmat">Enviar matrícula (PDF ou foto)</label><input type="file" id="vmat" accept="application/pdf,image/jpeg,image/png,image/webp" hidden><button id="vpdf">Relatório PDF</button></div>
+  <div class="status" id="vst">${lei?.status === "lendo" ? "Lendo a matrícula com IA… (até 1 minuto)" : lei?.status === "erro" ? "Leitura da matrícula falhou: " + esc(lei.msg || "") : o.verificacao?.varrido_em ? "Última varredura: " + esc(fdt(o.verificacao.varrido_em)) : "A varredura roda sozinha ao salvar com CEP, endereço ou CPF/CNPJ."}</div>
+  ${m ? `<details class="mat"><summary><b>Matrícula ${esc(m.numero || "")}</b> · ${esc(m.cartorio || "")}${m.data_certidao ? " · certidão de " + esc(m.data_certidao.split("-").reverse().join("/")) : ""}</summary>
+    ${m.descricao ? `<p class="hint">${esc(m.descricao)}</p>` : ""}
+    <p><b>Proprietário(s):</b> ${esc((m.proprietarios || []).map((p) => [p.nome, p.documento, p.fracao].filter(Boolean).join(" · ")).join("; ") || "não identificado")}</p>
+    <p><b>Áreas:</b> ${esc([m.area_terreno && PC.m2(m.area_terreno) + " de terreno", m.area_ha && PC.ha(m.area_ha), m.construcao_averbada === true ? "construção averbada" + (m.area_construida_averbada ? " (" + PC.m2(m.area_construida_averbada) + ")" : "") : m.construcao_averbada === false ? "construção NÃO averbada" : ""].filter(Boolean).join(" · ") || "—")}</p>
+    ${onus.length ? `<ul class="alerts">${onus.map((x) => `<li class="${x.cancelado ? "ok" : V.gravidadeOnus(x.tipo + " " + x.descricao)}">${esc(`${x.ato ? x.ato + " · " : ""}${x.tipo}${x.descricao ? ": " + x.descricao : ""}${x.cancelado ? " — cancelado" + (x.cancelado_por ? " (" + x.cancelado_por + ")" : "") : " — ATIVO"}`)}</li>`).join("")}</ul>` : '<p class="hint">Nenhum ônus encontrado na certidão.</p>'}
+    ${(m.alertas || []).length ? `<p class="note">${m.alertas.map(esc).join("<br>")}</p>` : ""}
+    ${(m.ultimos_atos || []).length ? `<p class="hint">Últimos atos: ${m.ultimos_atos.map(esc).join(" · ")}</p>` : ""}
+    ${(m.preencheu || []).length ? `<p class="hint">Campos completados pela leitura: ${esc(m.preencheu.join(", "))}.</p>` : ""}
+    ${m.arquivo ? `<a class="btn sm" href="/api/arquivo?k=${encodeURIComponent(m.arquivo)}">Baixar matrícula enviada</a>` : ""}</details>` : ""}
+  <details><summary>Dados do registro e do proprietário</summary><div class="grid">${campos}</div><p class="hint">Rural: CAR, CCIR e georreferenciamento ficam na ficha (bloco Rural).</p></details>
+  <details><summary>Certidões do vendedor/locador <span id="vcn"></span></summary><div class="certs">${V.CERTIDOES.map(([k, l]) => `<label class="cert"><input type="checkbox" data-cert="${k}"><span>${esc(l)}</span><input type="date" data-certd="${k}"></label>`).join("")}</div><p class="hint">Marque quando tiver a certidão em mãos (negativa ou com ressalva analisada). Guarde as cópias no negócio.</p></details>
+  <details><summary>Fontes oficiais (consulta em 1 toque)</summary><div class="list">${V.fontes(o).map((f) => `<a class="item" href="${esc(f.url)}" target="_blank" rel="noopener"><span class="t"><b>${esc(f.nome)}</b><span>${esc(f.obs)}</span></span><span>›</span></a>`).join("")}</div>
+  <p class="hint">Automático: CEP (Correios via BrasilAPI/ViaCEP), mapa (OpenStreetMap) e CNPJ (Receita via BrasilAPI). Matrícula e certidões exigem login e emolumentos nos portais oficiais: gere o PDF e envie aqui — a IA lê proprietários, áreas, ônus e cancelamentos e cruza com a oferta.</p></details></div>`;
+}
+function fillCert(o) { const c = o.certidoes || {}; document.querySelectorAll("[data-cert]").forEach((el) => { el.checked = !!c[el.dataset.cert]; }); document.querySelectorAll("[data-certd]").forEach((el) => { el.value = c[el.dataset.certd] || ""; }); }
+function readCert() { const o = {}; document.querySelectorAll("[data-cert]").forEach((el) => { if (el.checked) { const d = document.querySelector(`[data-certd="${el.dataset.cert}"]`); o[el.dataset.cert] = (d && d.value) || new Date().toISOString().slice(0, 10); } }); return o; }
+function pintarVerif(cur) {
+  if (!$("vsem")) return; const a = V.avaliar(cur); const N = V.NIVEL[a.nivel];
+  $("vsem").className = "sem " + (a.nivel === "cinza" ? "" : a.nivel); $("vsemT").textContent = N[0]; $("vsemS").textContent = N[1];
+  $("vbar").style.width = a.pct + "%"; $("vbar").className = a.nivel === "verde" ? "ok" : a.nivel === "vermelho" ? "" : a.pct >= 60 ? "mid" : "";
+  $("vtxt").textContent = `Índice de verificação ${a.pct}% · certidões ${a.certidoes}/${a.total_certidoes}` + (a.pendentes ? ` · ${a.pendentes} item(ns) aguardando dados` : "");
+  $("vit").innerHTML = a.itens.map((x) => `<li class="${ST_V[x.st]}"><span><b>${esc(x.rotulo)}</b> · ${esc(x.msg)}</span></li>`).join("");
+  const cn = $("vcn"); if (cn) cn.textContent = `(${a.certidoes}/${a.total_certidoes})`;
+  document.querySelectorAll("[data-vg]").forEach((el) => { const g = el.dataset.vg; const r = V.ehRural(cur.tipo); el.hidden = (g === "rural" && !r) || (g === "urbano" && r); });
+}
+const CHAVES_VARRER = ["cep", "endereco", "numero", "cidade", "proprietario_doc"];
+function varrerSeMudou(antes, depois) {
+  const mudou = CHAVES_VARRER.some((k) => String(antes[k] || "") !== String(depois[k] || ""));
+  if (!mudou || !(depois.cep || depois.endereco || depois.proprietario_doc)) return;
+  api(`verificar/${antes.id}`, { method: "POST" }).then((r) => { toast(`Varredura concluída · índice ${r.avaliacao.pct}%`); sincronizar(true); }).catch(() => {});
+}
+function ligarVerif(o, root, upd) {
+  const salvarAtual = async () => { const cur = upd(); editing = false; await store.save("ofertas", { ...cur, atualizado: now() }); editing = true; return cur; };
+  $("vvar").onclick = async () => { const b = $("vvar"); b.disabled = true; $("vst").textContent = "Consultando CEP, mapa e Receita…";
+    try { await salvarAtual(); const r = await api(`verificar/${o.id}`, { method: "POST" }); editing = false; await store.carregar(); toast(`Varredura concluída · índice ${r.avaliacao.pct}%`); render(); } catch (e) { $("vst").className = "status err"; $("vst").textContent = e.message; b.disabled = false; editing = true; } };
+  $("vmat").onchange = async (ev) => {
+    const f = ev.target.files[0]; if (!f) return; const st = $("vst");
+    try {
+      st.className = "status"; st.textContent = "Preparando o arquivo…";
+      let blob = f, tipo = f.type || "application/pdf";
+      if (/^image\//.test(tipo)) { const t = await tratarFoto(f, { lado: 2400, tratar: false }); blob = t.blob; tipo = "image/jpeg"; }
+      if (blob.size > 4_300_000) throw new Error("Arquivo acima de 4 MB. Envie só as páginas da certidão ou fotos de cada página.");
+      await salvarAtual();
+      st.textContent = "Enviando…"; await api(`matricula/${o.id}`, { method: "POST", body: JSON.stringify({ tipo, base64: await blobB64(blob) }) });
+      st.textContent = "Lendo a matrícula com IA… (até 1 minuto)";
+      for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 4000)); await store.carregar(); const at = O(o.id); const l = at?.verificacao?.leitura; if (l && l.status !== "lendo") { editing = false; toast(l.status === "ok" ? "Matrícula lida e cruzada com a oferta." : "Leitura falhou: " + (l.msg || "")); if (route.v === "oferta" && route.id === o.id) render(); return; } if (route.v !== "oferta") return; }
+      st.textContent = "A leitura está demorando. Volte a esta oferta em alguns minutos.";
+    } catch (e) { st.className = "status err"; st.textContent = e.message; }
+  };
+  $("vpdf").onclick = async () => { try { const cur = await salvarAtual(); await pdfVerificacao(O(o.id) || cur); } catch (e) { toast("Falhou: " + e.message); } };
+  document.querySelectorAll("[data-cert],[data-certd]").forEach((el) => el.addEventListener("change", () => { if (el.dataset.certd && el.value) { const c = document.querySelector(`[data-cert="${el.dataset.certd}"]`); if (c) c.checked = true; } upd(); }));
+}
+async function pdfVerificacao(o) {
+  const codigo = await garantirCodigo(o); const at = O(o.id) || { ...o, codigo }; const a = V.avaliar(at); const m = at.verificacao?.matricula; const f = at.verificacao?.fontes || {};
+  const SIT = { ok: "CONFERIDO", a: "ATENÇÃO", v: "DIVERGÊNCIA", pend: "PENDENTE" };
+  const doc = PC.pdfDoc(jsPDF, { kicker: "VERIFICAÇÃO DO IMÓVEL · DOCUMENTO RESERVADO", ref: `${codigo} · emitido em ${fdt(now())}`, titulo: `${tituloO(at)} · ${V.NIVEL[a.nivel][0]} (${a.pct}%)`, codigo, corretor: corretorDaOferta(at), logos: LOGOS.dark ? LOGOS : null,
+    tituloDados: "RESULTADO POR ITEM",
+    dados: [...a.itens.map((x) => [`${x.rotulo} · ${SIT[x.st]}`, x.msg]),
+      ["Certidões do vendedor", V.CERTIDOES.map(([k, l]) => `${(at.certidoes || {})[k] ? "✔ " + at.certidoes[k].split("-").reverse().join("/") : "pendente"} · ${l}`).join("\n")],
+      ["Fontes consultadas", [f.cep && `CEP: ${f.cep.fonte || ""} em ${fdt(f.cep.em)}`, f.geo && `Mapa: ${f.geo.fonte || ""} em ${fdt(f.geo.em)}`, f.cnpj && `CNPJ: ${f.cnpj.fonte || ""} em ${fdt(f.cnpj.em)}`, m && `Matrícula: leitura por IA do documento enviado em ${fdt(m.lida_em)}`].filter(Boolean).join("\n") || "—"]],
+    tituloTexto: "ALCANCE",
+    texto: `Este relatório reúne as consultas automáticas a bases públicas (CEP, mapa e cadastro de CNPJ) e a leitura assistida por inteligência artificial da matrícula fornecida, cruzadas com os dados da oferta, na data de emissão.\n\nNão substitui a certidão de inteiro teor com ônus reais atualizada, as certidões pessoais do vendedor nem a análise jurídica antes de proposta, contrato ou escritura. Ônus ou divergências apontados devem ser resolvidos ou ressalvados por escrito.${m && (m.onus || []).length ? "\n\nÔNUS E OCORRÊNCIAS NA MATRÍCULA\n\n" + m.onus.map((x) => `${x.ato || "—"} · ${x.tipo}: ${x.descricao || ""} (${x.cancelado ? "cancelado" + (x.cancelado_por ? " por " + x.cancelado_por : "") : "ATIVO"})`).join("\n") : ""}` });
+  const blob = doc.output("blob"); const nome = `Verificacao_${codigo}.pdf`;
+  await emitir({ tipo: "verificacao_pdf", oferta_id: at.id, nome_arquivo: nome, pdf_base64: await blobToBase64(blob), conteudo: `${tituloO(at)} · ${V.NIVEL[a.nivel][0]} ${a.pct}%`, meta: { codigo, pct: a.pct, nivel: a.nivel } });
+  await compartilharOuBaixar(blob, nome);
+}
+
+/* ================= ZOE · WHATSAPP E AGENDA ================= */
+const CFGZ = () => S.config.find((c) => c.id === "zoe") || {};
+const quandoAg = (iso) => { try { const d = new Date(iso); return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
+const convReais = () => (S.conversas || []).filter((c) => !c.simulacao).sort((a, b) => (b.ultima_em || "").localeCompare(a.ultima_em || ""));
+const hojeAg = () => { const h = new Date().toDateString(); return (S.agenda || []).filter((a) => a.status !== "cancelado" && new Date(a.inicio).toDateString() === h).sort((a, b) => a.inicio.localeCompare(b.inicio)); };
+function cardZoePainel() {
+  const pend = convReais().filter((c) => c.precisa_humano); const hj = hojeAg(); const novas = convReais().filter((c) => c.ultima_de === "cliente" && c.modo === "humano");
+  if (!pend.length && !hj.length && !novas.length) return "";
+  return `<div class="card zoe-p"><div class="row" style="justify-content:space-between"><h3>🤖 Zoe</h3><button class="sm" id="gozoe">Conversas</button></div>
+  ${pend.length ? `<div class="list">${pend.slice(0, 5).map((c) => `<button class="item" data-zc="${c.id}"><span class="dot ${c.precisa_humano?.urgente ? "vermelho" : "amarelo"}"></span><span class="t"><b>${esc(c.nome || "+" + c.id)}</b><span>${esc(c.precisa_humano?.motivo || "")}</span></span><span>›</span></button>`).join("")}</div>` : ""}
+  ${novas.filter((c) => !c.precisa_humano).length ? `<p class="hint">${novas.filter((c) => !c.precisa_humano).length} conversa(s) com você aguardando resposta.</p>` : ""}
+  ${hj.length ? `<button class="item" id="goagenda" style="width:100%"><span class="t"><b>Hoje: ${hj.length} compromisso(s)</b><span>${esc(hj.map((a) => quandoAg(a.inicio).split(" ").pop() + " " + a.tipo + " · " + a.nome).join(" | "))}</span></span><span>›</span></button>` : ""}</div>`;
+}
+VIEWS.zoe = () => {
+  header("Zoe · WhatsApp"); const aba = route.aba || "conversas"; const cfg = CFGZ();
+  $("main").innerHTML = `<div class="seg">${[["conversas", "Conversas"], ["testar", "Testar a Zoe"], ["config", "Conhecimento"]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
+  document.querySelectorAll("[data-aba]").forEach((b) => (b.onclick = () => { route = { v: "zoe", aba: b.dataset.aba }; render(); }));
+  const zb = $("zb");
+  if (aba === "conversas") {
+    const cs = convReais();
+    zb.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><h2>Atendimento</h2><span class="tag ${EU.whatsapp_configurado ? "ok" : "r"}">${EU.whatsapp_configurado ? "WhatsApp conectado" + (EU.whatsapp_numero ? " · " + esc(EU.whatsapp_numero) : "") : "WhatsApp não conectado"}</span></div>
+    ${cfg.ativa === false ? '<p class="note">A Zoe está desligada: as mensagens chegam aqui e esperam resposta humana.</p>' : ""}
+    ${!EU.whatsapp_configurado ? `<p class="hint">Para ligar: cadastre o número na Meta (WhatsApp Business Platform) e as variáveis WHATSAPP_* no Netlify (veja o LEIAME). Endereço do webhook: <b>${esc(EU.webhook || location.origin + "/whatsapp/webhook")}</b></p>` : ""}
+    <div class="list">${cs.map((c) => { const u = (c.msgs || []).slice(-1)[0]; return `<button class="item" data-zc="${c.id}"><span class="dot ${c.precisa_humano ? (c.precisa_humano.urgente ? "vermelho" : "amarelo") : c.modo === "humano" ? "" : "verde"}"></span><span class="t"><b>${esc(c.nome || "+" + c.id)}${c.equipe ? " · equipe" : ""}</b><span>${esc((u ? (u.de === "cliente" ? "" : u.de === "zoe" ? "Zoe: " : "Você: ") + u.texto : "").slice(0, 90))}</span></span><span class="chip">${esc(c.modo === "humano" ? "humano" : "Zoe")}</span></button>`; }).join("") || '<p class="empty">Nenhuma conversa ainda.</p>'}</div></div>`;
+    zb.querySelectorAll("[data-zc]").forEach((b) => (b.onclick = () => go({ v: "conversa", id: b.dataset.zc })));
+  } else if (aba === "testar") {
+    const eq = !!route.eq; const sid = "sim_" + String(EU.usuario || "").toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60) + (eq ? "_eq" : ""); const conv = (S.conversas || []).find((c) => c.id === sid);
+    zb.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><h2>Testar a Zoe</h2><div class="seg sm">${[[0, "Como cliente"], [1, "Como equipe"]].map(([k, l]) => `<button data-eq="${k}" class="${+eq === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
+    <p class="hint">Converse como ${eq ? "Rodrigo/Joselia (resumo, agenda, pendências)" : "um cliente, proprietário ou corretor"}. Nada é gravado de verdade: o que a Zoe faria aparece em cinza.</p>
+    <div class="chat" id="chat">${(conv?.msgs || []).map(bolha).join("") || '<p class="empty">Escreva como se fosse pelo WhatsApp. Ex.: "Boa tarde, procuro um galpão de 5 mil m² para alugar em Sumaré".</p>'}</div>
+    <div class="row"><input id="ztx" class="grow" placeholder="Mensagem" autocomplete="off"><button class="p" id="zgo">Enviar</button></div><button class="g sm" id="zre">Recomeçar conversa</button><div class="status" id="zst"></div></div>`;
+    zb.querySelectorAll("[data-eq]").forEach((b) => (b.onclick = () => { route = { v: "zoe", aba: "testar", eq: b.dataset.eq === "1" }; render(); }));
+    const ch = $("chat"); ch.scrollTop = ch.scrollHeight;
+    const env = async (reiniciar) => { const tx = $("ztx").value.trim(); if (!tx && !reiniciar) return; $("zgo").disabled = true; $("zst").textContent = reiniciar ? "" : "Zoe digitando…";
+      if (tx) ch.insertAdjacentHTML("beforeend", bolha({ de: "cliente", texto: tx, t: now() })); $("ztx").value = ""; ch.scrollTop = ch.scrollHeight;
+      try { const r = await api("zoe/simular", { method: "POST", body: JSON.stringify({ texto: tx, equipe: eq, reiniciar }) }); await store.carregar();
+        if (reiniciar) { render(); return; }
+        ch.insertAdjacentHTML("beforeend", bolha({ de: "zoe", texto: r.resposta + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), t: now(), acoes: r.acoes }) + ((r.simulado || []).length || (r.avisos || []).length ? `<p class="sim">Simulação: ${esc([...(r.simulado || []).map((x) => "gravaria " + x.split("/")[0]), ...(r.avisos || []).map((x) => "avisaria a equipe: " + x)].join(" · "))}</p>` : "")); ch.scrollTop = ch.scrollHeight; $("zst").textContent = "";
+      } catch (e) { $("zst").className = "status err"; $("zst").textContent = e.message; } $("zgo").disabled = false; $("ztx").focus(); };
+    $("zgo").onclick = () => env(false); $("ztx").onkeydown = (e) => { if (e.key === "Enter") env(false); }; $("zre").onclick = () => env(true);
+  } else {
+    const z = { ...ZOE_BASE, ...cfg }; const H = { ...ZOE_BASE.horario, ...(cfg.horario || {}) }; const so = !ehAdmin();
+    zb.innerHTML = `<div class="card" id="zc"><h2>Conhecimento e regras da Zoe</h2><p class="hint">Tudo o que a Zoe sabe sobre a PrimeCorp vem daqui. Escreva fatos objetivos; ela não inventa o que não estiver aqui ou no sistema. As regras de segurança (sem endereço, sem negociar, LGPD, transbordo) são fixas.</p>
+    <label class="cert"><input type="checkbox" data-z="ativa" ${z.ativa !== false ? "checked" : ""}><span>Zoe responde automaticamente no WhatsApp</span></label>
+    <label>Quem somos<textarea data-z="quem_somos" rows="5">${esc(z.quem_somos)}</textarea></label>
+    <label>O que oferecemos (use {{COMISSAO_VENDA}} e {{COMISSAO_LOCACAO}} para puxar a comissão padrão)<textarea data-z="servicos" rows="9">${esc(z.servicos)}</textarea></label>
+    <label>Perguntas frequentes<textarea data-z="faq" rows="7">${esc(z.faq)}</textarea></label>
+    <label>Orientações extras da equipe (ex.: campanha do mês, imóvel em destaque, regiões que não atendemos)<textarea data-z="regras_extra" rows="3">${esc(z.regras_extra || "")}</textarea></label>
+    <label>Local das reuniões<input data-z="local_reuniao" value="${esc(z.local_reuniao)}"></label>
+    <h3>Agenda</h3><div class="grid"><label>Início<input data-h="inicio" type="time" value="${esc(H.inicio)}"></label><label>Fim<input data-h="fim" type="time" value="${esc(H.fim)}"></label>
+    <label>Duração (min)<input data-h="duracao" inputmode="numeric" value="${esc(H.duracao)}"></label><label>Antecedência mínima (h)<input data-h="antecedencia_h" inputmode="numeric" value="${esc(H.antecedencia_h)}"></label>
+    <label>Sábado até (vazio = não atende)<input data-h="sabado_ate" type="time" value="${esc(H.sabado_ate || "")}"></label>
+    <label class="full">Dias sem agenda (AAAA-MM-DD, separados por vírgula)<input data-z="bloqueios" value="${esc((cfg.bloqueios || []).join(", "))}"></label></div>
+    <p class="hint">Dias de atendimento: segunda a sexta${H.sabado_ate ? " e sábado até " + esc(H.sabado_ate) : ""}. Compromissos marcados na Agenda bloqueiam o horário.</p>
+    ${so ? '<p class="note">Somente o administrador altera o conhecimento da Zoe.</p>' : '<button class="p" id="zsv">Salvar</button>'}<div class="status" id="zst"></div></div>`;
+    editing = !so;
+    const sv = $("zsv"); if (sv) sv.onclick = async () => { const o = { ...cfg, id: "zoe" }; document.querySelectorAll("[data-z]").forEach((el) => { o[el.dataset.z] = el.type === "checkbox" ? el.checked : el.value.trim(); });
+      o.bloqueios = String(o.bloqueios || "").split(/[,;\s]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)); o.horario = { ...H, dias: [1, 2, 3, 4, 5] }; document.querySelectorAll("[data-h]").forEach((el) => { o.horario[el.dataset.h] = ["duracao", "antecedencia_h"].includes(el.dataset.h) ? Number(el.value) || 0 : el.value; });
+      editing = false; try { await store.save("config", o); toast("Zoe atualizada."); } catch { editing = true; } };
+  }
+};
+function bolha(m) { return `<div class="msg ${m.de}"><div>${esc(m.texto || (m.midia ? "[" + m.midia + "]" : "")).replace(/\n/g, "<br>")}</div><small>${esc((m.de === "humano" ? (m.por || "Equipe") + " · " : m.de === "zoe" ? "Zoe · " : "") + fdt(m.t))}${(m.acoes || []).length ? " · " + esc(m.acoes.join(", ")) : ""}${m.falha ? " · ⚠ " + esc(m.falha) : ""}</small></div>`; }
+VIEWS.conversa = () => {
+  const c = (S.conversas || []).find((x) => x.id === route.id); if (!c) return back(); header(c.nome || "+" + c.id);
+  const ct = c.contato ? C(c.contato) : null; const bs = (c.briefings || []).map(B).filter(Boolean); const ags = (S.agenda || []).filter((a) => a.wa === c.id && a.status !== "cancelado");
+  const janela = (() => { const u = [...(c.msgs || [])].reverse().find((m) => m.de === "cliente"); return u && Date.now() - Date.parse(u.t) < 24 * 3600e3; })();
+  $("main").innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><span class="k">+${esc(c.id)}${c.equipe ? " · equipe" : ""}${c.optout ? " · pediu para não receber" : ""}</span><span class="tag ${c.modo === "humano" ? "r" : "ok"}">${c.modo === "humano" ? "Você está atendendo" : "Zoe atendendo"}</span></div>
+  ${c.precisa_humano ? `<p class="note">Zoe pediu você${c.precisa_humano.urgente ? " (urgente)" : ""}: ${esc(c.precisa_humano.motivo || "")}</p>` : ""}
+  <div class="row wrap">${ct ? `<button class="sm" data-c="${ct.id}">Contato: ${esc(nomeC(ct))}</button>` : ""}${bs.map((b) => `<button class="sm" data-b="${b.id}">Briefing: ${esc(nomeB(b))}</button>`).join("")}<a class="btn sm" href="https://wa.me/${esc(c.id)}" target="_blank" rel="noopener">Abrir no WhatsApp</a></div>
+  ${ags.length ? `<p class="hint">Agenda: ${esc(ags.map((a) => quandoAg(a.inicio) + " · " + a.tipo).join(" | "))}</p>` : ""}</div>
+  <div class="card"><div class="chat" id="chat">${(c.msgs || []).map(bolha).join("")}</div>
+  ${janela ? `<div class="row"><input id="htx" class="grow" placeholder="Responder como ${esc(eu().nome.split(" ")[0] || "equipe")}" autocomplete="off"><button class="p" id="hgo">Enviar</button></div><p class="hint">Ao responder, a Zoe pausa nesta conversa até você devolver.</p>` : '<p class="note">Mais de 24 h desde a última mensagem do cliente: o WhatsApp só aceita modelo aprovado. Use "Abrir no WhatsApp" ou ligue.</p>'}
+  <div class="row">${c.modo === "humano" ? '<button class="grow" id="dev">Devolver para a Zoe</button>' : '<button class="grow" id="ass">Assumir conversa</button>'}${c.precisa_humano ? '<button class="grow" id="res">Marcar resolvido</button>' : ""}</div><div class="status" id="hst"></div></div>`;
+  const ch = $("chat"); ch.scrollTop = ch.scrollHeight;
+  document.querySelectorAll("[data-c]").forEach((b) => (b.onclick = () => go({ v: "contato", id: b.dataset.c })));
+  document.querySelectorAll("[data-b]").forEach((b) => (b.onclick = () => go({ v: "briefing", id: b.dataset.b })));
+  const modo = async (m, extra = {}) => { try { await api("zoe/modo", { method: "POST", body: JSON.stringify({ conversa: c.id, modo: m, ...extra }) }); await store.carregar(); render(); } catch (e) { toast(e.message); } };
+  const dv = $("dev"); if (dv) dv.onclick = () => modo("zoe"); const as = $("ass"); if (as) as.onclick = () => modo("humano"); const rs = $("res"); if (rs) rs.onclick = () => modo(c.modo, { resolvido: true });
+  const hg = $("hgo"); if (hg) { const enviar = async () => { const tx = $("htx").value.trim(); if (!tx) return; hg.disabled = true; try { await api("zoe/enviar", { method: "POST", body: JSON.stringify({ conversa: c.id, texto: tx }) }); await store.carregar(); render(); } catch (e) { $("hst").className = "status err"; $("hst").textContent = e.message; hg.disabled = false; } }; hg.onclick = enviar; $("htx").onkeydown = (e) => { if (e.key === "Enter") enviar(); }; }
+};
+VIEWS.agenda = () => {
+  header("Agenda"); const futuros = (S.agenda || []).filter((a) => a.status !== "cancelado" && Date.parse(a.inicio) >= Date.now() - 3 * 3600e3).sort((a, b) => a.inicio.localeCompare(b.inicio));
+  const passados = (S.agenda || []).filter((a) => !futuros.includes(a)).sort((a, b) => b.inicio.localeCompare(a.inicio)).slice(0, 20);
+  const linha = (a) => `<div class="item" style="cursor:default"><span class="dot ${a.status === "cancelado" ? "vermelho" : a.status === "realizado" ? "" : "verde"}"></span><span class="t"><b>${esc(quandoAg(a.inicio))} · ${esc(a.tipo || "")}</b><span>${esc([a.nome, a.assunto, a.codigo, a.criado_por === "Zoe" ? "marcado pela Zoe" : ""].filter(Boolean).join(" · "))}</span></span>${a.wa ? `<button class="sm" data-zc="${esc(a.wa)}">Conversa</button>` : ""}${a.status === "marcado" ? `<button class="sm g" data-ok="${a.id}">Realizado</button><button class="sm g" data-cx="${a.id}">Cancelar</button>` : ""}</div>`;
+  $("main").innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><h2>Próximos</h2><button class="sm p" id="nag">+ Compromisso</button></div><div class="list">${futuros.map(linha).join("") || '<p class="empty">Nada marcado.</p>'}</div></div>
+  <div class="card" id="fag" hidden><h3>Novo compromisso</h3><div class="grid"><label>Data e hora<input type="datetime-local" id="aini"></label><label>Tipo<select id="atip">${["Reunião (vídeo)", "Reunião presencial", "Visita ao imóvel", "Ligação", "Captação no local", "Bloqueio (indisponível)"].map((x) => `<option>${x}</option>`).join("")}</select></label><label class="full">Com quem<input id="anom"></label><label class="full">Assunto<input id="aass"></label></div><button class="p" id="asv">Salvar</button></div>
+  ${passados.length ? `<div class="card"><h3>Anteriores e cancelados</h3><div class="list">${passados.map(linha).join("")}</div></div>` : ""}
+  <p class="hint">A Zoe só oferece horários livres. Compromissos daqui (inclusive "Bloqueio") ocupam a agenda dela.</p>`;
+  document.querySelectorAll("[data-zc]").forEach((b) => (b.onclick = () => go({ v: "conversa", id: b.dataset.zc })));
+  const muda = async (id, status) => { const a = S.agenda.find((x) => x.id === id); await store.save("agenda", { ...a, status, [status + "_em"]: now() }); };
+  document.querySelectorAll("[data-ok]").forEach((b) => (b.onclick = () => muda(b.dataset.ok, "realizado")));
+  document.querySelectorAll("[data-cx]").forEach((b) => confirmar2(b, "Confirmar", () => muda(b.dataset.cx, "cancelado")));
+  $("nag").onclick = () => { $("fag").hidden = false; $("aini").focus(); };
+  $("asv").onclick = async () => { const v = $("aini").value; if (!v) return toast("Informe data e hora."); const ini = new Date(v); const dur = Number(CFGZ().horario?.duracao) || 60;
+    const iso = (d) => { const x = new Date(d.getTime() - 3 * 3600e3); return x.toISOString().slice(0, 19) + "-03:00"; };
+    await store.save("agenda", { id: uid("ag"), criado: now(), inicio: iso(ini), fim: iso(new Date(ini.getTime() + dur * 60e3)), tipo: $("atip").value, nome: $("anom").value.trim(), assunto: $("aass").value.trim(), status: "marcado", criado_por: EU.usuario || "" }); toast("Compromisso salvo."); };
 };
 
 iniciar();
