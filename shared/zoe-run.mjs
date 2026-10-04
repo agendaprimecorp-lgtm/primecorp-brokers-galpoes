@@ -26,7 +26,7 @@ export async function criarContexto({ base, sandbox = false } = {}) {
         await registrarEmissao({ tipo: "zoe_aviso", conteudo: a.texto, meta: { conversa: a.conv, urgente: a.urgente } }).catch(() => null);
         for (const n of equipeWA()) {
           try { await enviar(n, "🤖 Zoe · " + a.texto); }
-          catch { const tpl = env("ZOE_MODELO_AVISO"); if (tpl) await enviarModelo(n, tpl, [a.texto.slice(0, 900)]).catch(() => null); }
+          catch { const tpl = env("ZOE_MODELO_AVISO") || "zoe_aviso"; if (tpl) await enviarModelo(n, tpl, [a.texto.slice(0, 900)]).catch(() => null); }
         }
       }
       return { gravados: pend.length, avisos };

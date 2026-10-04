@@ -72,7 +72,7 @@ export function enviar(para, texto, botoes = []) {
 }
 /** Modelo aprovado (fora da janela de 24 h). Parâmetros vão no corpo, em ordem. */
 export function enviarModelo(para, nome, parametros = [], idioma = "pt_BR") {
-  return post({ to: para, type: "template", template: { name: nome, language: { code: idioma }, components: parametros.length ? [{ type: "body", parameters: parametros.map((p) => ({ type: "text", text: String(p).slice(0, 1000) })) }] : [] } });
+  return post({ to: para, type: "template", template: { name: nome, language: { code: idioma }, components: parametros.length ? [{ type: "body", parameters: parametros.map((p) => ({ type: "text", text: String(p).replace(/\s+/g, " ").trim().slice(0, 1000) || "-" })) }] : [] } });
 }
 /** 360dialog: aponta o webhook do número para o sistema, com a chave num cabeçalho privado. */
 export async function conectarWebhook360(urlWebhook) {
@@ -82,6 +82,15 @@ export async function conectarWebhook360(urlWebhook) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j?.meta?.developer_message || j?.error?.message || `360dialog recusou (${r.status})`);
   return j;
+}
+/** 360dialog: cria o modelo "zoe_aviso" (utilidade) para avisar a equipe fora da janela de 24 h. */
+export const MODELO_AVISO = "zoe_aviso";
+export async function criarModeloAviso() {
+  const tok = env("WHATSAPP_TOKEN"); if (!tok) throw new Error("WHATSAPP_TOKEN não configurado.");
+  const r = await (globalThis.__fetchWA || fetch)((env("WHATSAPP_API_BASE") || "https://waba-v2.360dialog.io") + "/v1/configs/templates", { method: "POST", headers: { "D360-API-KEY": tok, "content-type": "application/json" }, body: JSON.stringify({ name: MODELO_AVISO, category: "UTILITY", language: "pt_BR", components: [{ type: "BODY", text: "Aviso da Zoe para a equipe PrimeCorp: {{1}}. Responda esta mensagem para abrir a conversa.", example: { body_text: [["cliente aguardando atendimento humano na conversa de Carlos"]] } }] }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok && !/already exists|duplicate|existe/i.test(JSON.stringify(j))) throw new Error(j?.meta?.developer_message || j?.error?.message || `360dialog recusou (${r.status})`);
+  return { nome: MODELO_AVISO, status: j?.status || (r.ok ? "PENDING" : "já existia") };
 }
 export const marcarLida = (id) => post({ status: "read", message_id: id }).catch(() => null);
 

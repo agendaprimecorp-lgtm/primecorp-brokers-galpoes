@@ -17,6 +17,21 @@ const deLocal = (y, m, d, h, mi) => new Date(Date.UTC(y, m, d, h + 3, mi));
 const hm = (s) => { const [h, m] = String(s || "0:0").split(":").map(Number); return [h || 0, m || 0]; };
 export const fmtHora = fmtData;
 
+/** Hora de término do dia da semana (0=dom … 6=sáb): exceção por dia > sábado > padrão. */
+export const fimDoDia = (H, wd) => (H.fim_dia && H.fim_dia[wd]) || (wd === 6 && H.sabado_ate) || H.fim;
+const DIA_N = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6, "sáb": 6 };
+/** "seg-qui" / "seg,qua,sex" / "1-5" → [1,2,3,4] */
+export function lerDias(t) {
+  const out = new Set();
+  const txt = String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+(a|ate)\s+/g, "-").replace(/\s+e\s+/g, ",").replace(/\s*-\s*/g, "-");
+  for (const parte of txt.split(/[,;\s]+/).filter(Boolean)) {
+    const [a, b] = parte.split(/[-–]/).map((x) => x.trim().slice(0, 3)).map((x) => (x in DIA_N ? DIA_N[x] : /^\d$/.test(x) ? +x : null));
+    if (a == null) continue; if (b == null) { out.add(a); continue; }
+    for (let d = a; d !== (b + 1) % 7; d = (d + 1) % 7) out.add(d);
+  }
+  return [...out].filter((d) => d >= 0 && d <= 6).sort();
+}
+
 /** Horários livres a partir de amanhã (ou hoje, respeitando antecedência). */
 export function horariosLivres(cfgZoe, agenda, agora, { dias = 7, turno = null, max = 8 } = {}) {
   const H = { ...ZOE_PADRAO.horario, ...(cfgZoe?.horario || {}) };
@@ -30,7 +45,7 @@ export function horariosLivres(cfgZoe, agenda, agora, { dias = 7, turno = null, 
     const iso = `${D.y}-${String(D.m + 1).padStart(2, "0")}-${String(D.d).padStart(2, "0")}`;
     const sab = D.wd === 6 && H.sabado_ate;
     if (bloq.has(iso) || (!H.dias.includes(D.wd) && !sab)) continue;
-    const [hi, mi] = hm(H.inicio); const [hf, mf] = hm(sab ? H.sabado_ate : H.fim);
+    const [hi, mi] = hm(H.inicio); const [hf, mf] = hm(fimDoDia(H, D.wd));
     for (let t = deLocal(D.y, D.m, D.d, hi, mi).getTime(); t + dur * 60e3 <= deLocal(D.y, D.m, D.d, hf, mf).getTime() && out.length < max; t += dur * 60e3) {
       const h = local(new Date(t)).h;
       if (turno === "manha" && h >= 12) continue; if (turno === "tarde" && h < 12) continue;
@@ -72,6 +87,7 @@ export const FERRAMENTAS_EQUIPE = [
   T("buscar_imoveis", FERRAMENTAS_CLIENTE[0].description.replace("(nunca endereço)", "(com código e verificação)"), FERRAMENTAS_CLIENTE[0].input_schema.properties, ["tipo", "operacao"]),
   T("verificacao_imovel", "Situação da verificação documental de um imóvel pelo código PC-0000.", { codigo: s("PC-0000") }, ["codigo"]),
   FERRAMENTAS_CLIENTE[2], FERRAMENTAS_CLIENTE[3],
+  T("ajustar_horario", "Altera o horário de atendimento/agenda da equipe quando Rodrigo ou Joselia pedirem. Confirme o que entendeu antes de chamar. Só os campos informados mudam.", { dias: s("dias de atendimento, ex.: 'seg-sex' ou 'seg-qui'"), inicio: s("HH:MM"), fim: s("HH:MM (término padrão)"), fim_por_dia: s("exceções de término, ex.: 'sex=16:00, sab=12:00' (sab=vazio para não atender)"), duracao_min: nn("duração padrão das reuniões"), bloquear_datas: s("AAAA-MM-DD separados por vírgula (dias sem agenda)") }),
 ];
 
 /* ---------------- Prompt ---------------- */
@@ -82,8 +98,9 @@ export function promptSistema({ zoe, geral, agora, equipe, contato, conversa }) 
   const z = { ...ZOE_PADRAO, ...(zoe || {}) };
   const sub = (t) => String(t || "").replace("{{COMISSAO_VENDA}}", pctTxt(geral?.com_venda_pct || 6)).replace("{{COMISSAO_LOCACAO}}", alugTxt(geral?.com_locacao_alugueis || 1));
   const H = { ...ZOE_PADRAO.horario, ...(z.horario || {}) };
-  const L = local(agora); const dentro = H.dias.includes(L.wd) && L.h * 60 + L.mi >= hm(H.inicio)[0] * 60 + hm(H.inicio)[1] && L.h * 60 + L.mi < hm(H.fim)[0] * 60 + hm(H.fim)[1];
-  const base = `Você é a Zoe, assistente virtual da PrimeCorp Brokers no WhatsApp. Agora: ${fmtData(agora)} (horário de Brasília); ${dentro ? "dentro" : "FORA"} do horário de atendimento humano (${H.dias.map((d) => DIAS[d].slice(0, 3)).join(", ")} das ${H.inicio} às ${H.fim}).
+  const L = local(agora); const dentro = H.dias.includes(L.wd) && L.h * 60 + L.mi >= hm(H.inicio)[0] * 60 + hm(H.inicio)[1] && L.h * 60 + L.mi < hm(fimDoDia(H, L.wd))[0] * 60 + hm(fimDoDia(H, L.wd))[1];
+  const textoHorario = H.dias.map((d) => `${DIAS[d].slice(0, 3)} ${H.inicio}–${fimDoDia(H, d)}`).join(", ") + (H.sabado_ate && !H.dias.includes(6) ? `, sáb ${H.inicio}–${H.sabado_ate}` : "");
+  const base = `Você é a Zoe, assistente virtual da PrimeCorp Brokers no WhatsApp. Agora: ${fmtData(agora)} (horário de Brasília); ${dentro ? "dentro" : "FORA"} do horário de atendimento humano (${textoHorario}).
 
 QUEM SOMOS
 ${sub(z.quem_somos)}
@@ -205,6 +222,19 @@ export function executar(ctx, conv, nome, inp, equipe) {
       ctx.avisar(`Cancelado pelo cliente (Zoe): ${a.tipo} de ${fmtData(new Date(Date.parse(a.inicio)))} · ${a.nome}`, conv, true);
       return { ok: true };
     }
+    case "ajustar_horario": {
+      if (!equipe) return { erro: "Somente a equipe altera o horário." };
+      const cfg = ctx.cfg.zoe || {}; const H = { ...ZOE_PADRAO.horario, ...(cfg.horario || {}) }; const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+      const norm = (x) => { const m = String(x || "").trim().match(/^(\d{1,2})(?:[:h](\d{2}))?h?$/i); return m ? `${m[1].padStart(2, "0")}:${m[2] || "00"}` : ""; };
+      if (inp.dias) { const d = lerDias(inp.dias); if (!d.length) return { erro: "Dias não entendidos." }; H.dias = d; }
+      if (inp.inicio) { const v = norm(inp.inicio); if (!HHMM.test(v)) return { erro: "Início inválido." }; H.inicio = v; }
+      if (inp.fim) { const v = norm(inp.fim); if (!HHMM.test(v)) return { erro: "Fim inválido." }; H.fim = v; }
+      if (inp.fim_por_dia) { H.fim_dia = { ...(H.fim_dia || {}) }; for (const par of String(inp.fim_por_dia).split(/[,;]/)) { const [k, v] = par.split("=").map((x) => x.trim().toLowerCase()); const d = DIA_N[k?.slice(0, 3)]; if (d == null) continue; const h = norm(v); if (d === 6) H.sabado_ate = HHMM.test(h) ? h : ""; else if (HHMM.test(h)) H.fim_dia[d] = h; else delete H.fim_dia[d]; } }
+      if (inp.duracao_min) H.duracao = Math.max(15, Math.min(240, Number(inp.duracao_min) || 60));
+      const bloqueios = inp.bloquear_datas ? [...new Set([...(cfg.bloqueios || []), ...String(inp.bloquear_datas).split(/[,;\s]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x))])] : cfg.bloqueios;
+      const novo = { ...cfg, horario: H, ...(bloqueios ? { bloqueios } : {}) }; ctx.cfg.zoe = novo; ctx.salvar("config", "zoe", novo);
+      return { ok: true, horario: H.dias.map((d) => `${DIAS[d].slice(0, 3)} ${H.inicio}–${fimDoDia(H, d)}`).join(", ") + (H.sabado_ate && !H.dias.includes(6) ? `, sáb ${H.inicio}–${H.sabado_ate}` : ""), duracao_min: H.duracao, bloqueios: bloqueios || [] };
+    }
     case "salvar_contato": { const c = garantirContato(ctx, conv, inp); return { ok: true, contato: c.nome }; }
     case "chamar_equipe": {
       conv.precisa_humano = { motivo: limpa(inp.motivo, 200), urgente: !!inp.urgente, em: agora.toISOString() };
@@ -286,7 +316,7 @@ export async function responder(ctx, conv, { equipe = false } = {}) {
   executar(ctx, conv, "chamar_equipe", { motivo: "A Zoe não concluiu a resposta (muitas etapas).", urgente: false }, equipe);
   return { texto: "Vou pedir para a equipe confirmar isso e já te respondemos por aqui.", botoes: [], acoes: [...acoes, "chamar_equipe"] };
 }
-function dentroHorario(ctx) { const H = { ...ZOE_PADRAO.horario, ...(ctx.cfg.zoe?.horario || {}) }; const L = local(ctx.agora); const min = L.h * 60 + L.mi; return H.dias.includes(L.wd) && min >= hm(H.inicio)[0] * 60 + hm(H.inicio)[1] && min < hm(H.fim)[0] * 60 + hm(H.fim)[1]; }
+function dentroHorario(ctx) { const H = { ...ZOE_PADRAO.horario, ...(ctx.cfg.zoe?.horario || {}) }; const L = local(ctx.agora); const min = L.h * 60 + L.mi; const f = hm(fimDoDia(H, L.wd)); return H.dias.includes(L.wd) && min >= hm(H.inicio)[0] * 60 + hm(H.inicio)[1] && min < f[0] * 60 + f[1]; }
 
 /* ---------------- Conversa: registro de mensagens ---------------- */
 export const MAX_MSGS = 150;

@@ -52,7 +52,7 @@ export async function revisarSemana({ agora = Date.now(), base = env("URL") } = 
   await registrarEmissao({ tipo: "zoe_revisao", conteudo: `Revisão semanal: ${blocos.length} conversa(s), ${sugs.length} sugestão(ões). ${resumo}`, meta: { semana } }).catch(() => null);
   if (sugs.length) {
     const msg = `🤖 Zoe · Revisão semanal\n${resumo}\n\n${sugs.length} sugestão(ões) aguardando sua aprovação:\n${sugs.map((s, i) => `${i + 1}. ${s.titulo || s.texto.slice(0, 60)}`).join("\n")}\n\nAprove em: ${base || "o app"} → Zoe → Revisão`;
-    for (const n of equipeWA()) { try { await enviar(n, msg); } catch { const tpl = env("ZOE_MODELO_AVISO"); if (tpl) await enviarModelo(n, tpl, [msg.slice(0, 900)]).catch(() => null); } }
+    for (const n of equipeWA()) { try { await enviar(n, msg); } catch { const tpl = env("ZOE_MODELO_AVISO") || "zoe_aviso"; if (tpl) await enviarModelo(n, tpl, [msg.slice(0, 900)]).catch(() => null); } }
   }
   return { conversas: blocos.length, sugestoes: sugs.length, resumo };
 }

@@ -10,7 +10,7 @@ import { varrer } from "../../shared/varredura.mjs";
 import V from "../../shared/verif.mjs";
 import { criarContexto } from "../../shared/zoe-run.mjs";
 import { responder, anexarMsg } from "../../shared/zoe.mjs";
-import { enviar, janelaAberta, equipeWA, conectarWebhook360 } from "../../shared/whatsapp.mjs";
+import { enviar, janelaAberta, equipeWA, conectarWebhook360, criarModeloAviso } from "../../shared/whatsapp.mjs";
 import { decidirSugestao } from "../../shared/zoe-revisao.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -272,6 +272,11 @@ export default async (req: Request, context: Context) => {
       if (conv.modo === "humano") conv.modo = "zoe"; // na simulação, segue com a Zoe
       delete conv.id; await salvarRegistro("conversas", id, conv);
       return json({ ok: true, conversa: id, resposta: r.texto, botoes: r.botoes, acoes: r.acoes, simulado: g.simulado, avisos: (g.avisos || []).map((x: any) => x.texto) });
+    }
+    if (rota === "zoe" && a === "modelo-aviso" && req.method === "POST") {
+      if (!admin) return erro("Somente o administrador cria modelos.", 403);
+      if ((env("WHATSAPP_PROVEDOR") || "").toLowerCase() !== "360dialog") return erro("Disponível no modo 360dialog.");
+      try { return json({ ok: true, ...(await criarModeloAviso()) }); } catch (e) { return erro(e instanceof Error ? e.message : String(e), 502); }
     }
     if (rota === "zoe" && a === "revisar" && req.method === "POST") {
       if (!admin) return erro("Somente o administrador roda a revisão.", 403);

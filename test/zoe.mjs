@@ -290,5 +290,25 @@ await t("Zoe: frente tributária (prefeituras e parceiros) no conhecimento", asy
   const c = salvos.find((x) => x[0] === "contatos")[1]; assert.equal(c.tipo, "Parceiro tributário"); assert.equal(c.cargo, "Advogada OAB/MG 123"); assert.match(c.obs, /12 municípios/);
 });
 
+await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async () => {
+  const salvos = []; const ctxZ = { agora: new Date("2026-10-05T12:00:00-03:00"), cfg: { zoe: { faq: "x" }, geral: {} }, listar: () => [], salvar: (c, id, d) => salvos.push([c, id, d]), avisar: () => {} };
+  assert.ok(Z.executar(ctxZ, { id: "1" }, "ajustar_horario", { dias: "seg a sex" }, false).erro, "cliente não altera");
+  const r = Z.executar(ctxZ, { id: "1" }, "ajustar_horario", { dias: "seg a sex", inicio: "9h", fim: "18:00", fim_por_dia: "sex=16:00" }, true);
+  assert.equal(r.horario, "seg 09:00–18:00, ter 09:00–18:00, qua 09:00–18:00, qui 09:00–18:00, sex 09:00–16:00");
+  const cfg = salvos.at(-1)[2]; assert.equal(cfg.faq, "x", "não apaga o resto"); assert.equal(cfg.horario.fim_dia[5], "16:00");
+  const sexta = Z.horariosLivres(cfg, [], new Date("2026-10-08T20:00:00-03:00"), { dias: 2, max: 20 }).map((d) => d.toISOString()).filter((x) => x.startsWith("2026-10-09"));
+  assert.ok(sexta.length && sexta.every((x) => x < "2026-10-09T19:00"), "sexta acaba às 16h (19h UTC)");
+  assert.match(Z.promptSistema({ zoe: cfg, geral: {}, agora: new Date() }), /sex 09:00–16:00/);
+});
+await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebra de linha", async () => {
+  Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog" }); const ant = globalThis.__fetchWA; const reqs = [];
+  globalThis.__fetchWA = async (url, op) => { reqs.push([String(url), JSON.parse(op.body)]); return new Response(JSON.stringify({ status: "PENDING" }), { status: 200 }); };
+  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "zoe_aviso");
+  assert.equal(reqs[0][0], "https://waba-v2.360dialog.io/v1/configs/templates"); assert.equal(reqs[0][1].category, "UTILITY"); assert.match(reqs[0][1].components[0].text, /\{\{1\}\}/);
+  const { enviarModelo } = await import("../shared/whatsapp.mjs"); await enviarModelo("5519998051985", "zoe_aviso", ["linha 1\nlinha   2"]);
+  assert.equal(reqs.at(-1)[1].template.components[0].parameters[0].text, "linha 1 linha 2");
+  globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR;
+});
+
 console.log(`\n${ok} testes de verificação e Zoe OK`);
 await db.stop(); process.exit(0);
