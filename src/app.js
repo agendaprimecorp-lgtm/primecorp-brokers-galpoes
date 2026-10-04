@@ -278,7 +278,7 @@ async function exportCSV() {
 }
 
 /* ================= CRM (contatos) ================= */
-const TIPOS_C = ["Cliente (empresa)", "Cliente (investidor)", "Corretor parceiro", "Imobiliária", "Proprietário", "Outro"];
+const TIPOS_C = ["Cliente (empresa)", "Cliente (investidor)", "Corretor parceiro", "Imobiliária", "Proprietário", "Órgão público", "Parceiro tributário", "Outro"];
 VIEWS.contatos = () => {
   header("CRM");
   const f = route.f || "todos";
@@ -1832,6 +1832,7 @@ VIEWS.zoe = () => {
     <label>Quem somos<textarea data-z="quem_somos" rows="5">${esc(z.quem_somos)}</textarea></label>
     <label>O que oferecemos (use {{COMISSAO_VENDA}} e {{COMISSAO_LOCACAO}} para puxar a comissão padrão)<textarea data-z="servicos" rows="9">${esc(z.servicos)}</textarea></label>
     <label>Perguntas frequentes<textarea data-z="faq" rows="7">${esc(z.faq)}</textarea></label>
+    <label>Frente tributária (prefeituras, estados e parceiros tributários)<textarea data-z="tributario" rows="10">${esc(z.tributario || "")}</textarea></label>
     <label>Orientações extras da equipe (ex.: campanha do mês, imóvel em destaque, regiões que não atendemos)<textarea data-z="regras_extra" rows="3">${esc(z.regras_extra || "")}</textarea></label>
     <label>Local das reuniões<input data-z="local_reuniao" value="${esc(z.local_reuniao)}"></label>
     <label>Zoe retoma a conversa após (horas) sem nova resposta sua pelo celular · 0 = só quando você devolver<input data-z="retomar_h" inputmode="numeric" value="${esc(cfg.retomar_h ?? 12)}"></label>

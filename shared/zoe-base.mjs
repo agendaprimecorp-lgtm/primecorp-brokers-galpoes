@@ -15,6 +15,20 @@ Lema: unimos oferta e procura. Cada imóvel apresentado passa por checagem de da
 - Para visitar: agendamos dia e horário com o responsável; levar documento com foto.
 - Para alugar galpão/comercial a empresa costuma apresentar: contrato social, cartão CNPJ, balanço/DRE recente e garantia (seguro-fiança, caução, fiança bancária ou título de capitalização) — a lista final é do proprietário.
 - SAC (dúvidas, sugestões e reclamações): ${PC.SAC}.`,
+  tributario: `PRIMECORP CONSULTORIA — RECUPERAÇÃO DE CRÉDITOS PARA MUNICÍPIOS E ESTADOS (B2G)
+O que fazemos: diagnóstico e recuperação de créditos tributários, previdenciários e de repasses de prefeituras, câmaras, autarquias e estados, com atuação administrativa e/ou judicial conduzida por equipe técnica e jurídica parceira.
+Remuneração: exclusivamente por êxito (percentual sobre o valor efetivamente recuperado/compensado). Sem custo antecipado para o ente. Análise inicial sem custo.
+Contratação pública: o ente contrata seguindo a Lei 14.133/2021 (o enquadramento — inexigibilidade, dispensa ou licitação — é decidido pela própria administração; temos modelos de Termo de Referência, minuta de contrato por êxito e parecer de apoio).
+Frentes de análise (cada caso depende de diagnóstico; nunca prometer resultado):
+- IRRF: imposto de renda retido na fonte pelo município/estado sobre pagamentos a pessoas físicas e jurídicas (tema 1130 do STF).
+- PASEP: revisão da base de cálculo e de recolhimentos indevidos.
+- RAT/FAP: revisão do grau de risco e do fator previdenciário sobre a folha do regime geral.
+- ISSQN: revisão de arrecadação e de repasses do imposto.
+- FGTS: revisão de recolhimentos de servidores celetistas.
+- FPM/FPE: conferência de cotas e diferenças de repasse.
+Como começa: 1) reunião de apresentação (online, 30 a 60 min) com Rodrigo; 2) envio de documentos para o diagnóstico (lista passada pela equipe após a reunião); 3) relatório de diagnóstico com as oportunidades; 4) contratação pelo ente e execução.
+Canal de indicação: qualquer pessoa pode indicar seu estado ou município para análise inicial sem custo.
+PARCEIROS (consultores, advogados, contadores, assessores e captadores com relacionamento com gestores públicos): o parceiro indica e acompanha o ente; a PrimeCorp conduz diagnóstico, proposta e execução. A remuneração do parceiro é por êxito, proporcional ao recebido pela PrimeCorp, e formalizada em contrato de parceria antes de qualquer apresentação. Percentuais e condições só a equipe informa.`,
   regras_extra: "",
   horario: { dias: [1, 2, 3, 4, 5], inicio: "09:00", fim: "18:00", duracao: 60, antecedencia_h: 3, sabado_ate: "" },
   local_reuniao: "Videochamada (link enviado na confirmação) ou presencial combinado com o corretor",

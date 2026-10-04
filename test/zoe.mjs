@@ -281,5 +281,14 @@ await t("modelo: padrão novo com reserva automática", async () => {
   assert.equal(r.texto, "ok"); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-5-5", "claude-sonnet-4-5"]); globalThis.__modelosFora = [];
 });
 
+await t("Zoe: frente tributária (prefeituras e parceiros) no conhecimento", async () => {
+  const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date() });
+  for (const x of [/RECUPERAÇÃO DE CRÉDITOS PARA MUNICÍPIOS/, /IRRF/, /RAT\/FAP/, /FPM\/FPE/, /exclusivamente por êxito/, /H\) PARCEIRO TRIBUTÁRIO/, /Prefeituras \| Parceria tributária/]) assert.match(p, x);
+  const p2 = Z.promptSistema({ zoe: { servicos: "texto antigo salvo" }, geral: {}, agora: new Date() }); assert.match(p2, /tema 1130/, "vale mesmo com conhecimento antigo salvo");
+  const salvos = []; const ctxZ = { agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: () => [], salvar: (col, id, d) => salvos.push([col, d]), avisar: () => {} };
+  Z.executar(ctxZ, { id: "5511999990000" }, "salvar_contato", { nome: "Dra. Paula", cargo: "Advogada OAB/MG 123", perfil: "Parceiro tributário", cidade: "Sul de Minas", observacoes: "atua com 12 municípios" }, false);
+  const c = salvos.find((x) => x[0] === "contatos")[1]; assert.equal(c.tipo, "Parceiro tributário"); assert.equal(c.cargo, "Advogada OAB/MG 123"); assert.match(c.obs, /12 municípios/);
+});
+
 console.log(`\n${ok} testes de verificação e Zoe OK`);
 await db.stop(); process.exit(0);
