@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" id="atendente">
+  <defs>
+    <clipPath id="corpo"><rect x="0" y="0" width="1000" height="1000"/></clipPath>
+  </defs>
+  <g clip-path="url(#corpo)">
+  <!-- coque baixo (atrás) -->
+  <ellipse cx="652" cy="515" rx="50" ry="44" fill="#241915"/>
+  <path d="M618 500 C640 480 670 485 690 505" stroke="#3A2A22" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- cabelo atrás, preso -->
+  <path d="M352 470 C325 265 445 178 515 180 C620 182 695 268 660 470 C650 500 620 520 600 525 L410 525 C385 515 360 500 352 470Z" fill="#241915"/>
+  <!-- pescoço -->
+  <path d="M445 560 L445 680 C470 705 540 705 565 680 L565 560Z" fill="#B97A57"/>
+  <path d="M445 600 C480 640 530 640 565 600 L565 560 L445 560Z" fill="#A86A49"/>
+  <!-- corpo / blazer -->
+  <path d="M180 1000 C190 820 260 740 380 705 L505 760 L630 705 C750 740 820 820 830 1000Z" fill="#1E2227"/>
+  <!-- blusa -->
+  <path d="M410 700 L505 860 L600 700 L565 680 C540 705 470 705 445 680Z" fill="#FFFFFF"/>
+  <path d="M505 860 L470 790 L505 770 L540 790Z" fill="#EDEFF2"/>
+  <!-- lapelas -->
+  <path d="M380 705 L505 900 L470 1000 L340 1000 L300 830 L360 800 L330 760Z" fill="#2B3036"/>
+  <path d="M630 705 L505 900 L540 1000 L670 1000 L710 830 L650 800 L680 760Z" fill="#2B3036"/>
+  <path d="M380 705 L505 900" stroke="#15181C" stroke-width="5"/>
+  <path d="M630 705 L505 900" stroke="#15181C" stroke-width="5"/>
+  <!-- broche hexágono -->
+  <g transform="translate(615 845)">
+    <polygon points="0,-26 22.5,-13 22.5,13 0,26 -22.5,13 -22.5,-13" fill="#C8102E"/>
+    <polygon points="0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+  </g>
+  <!-- orelhas -->
+  <ellipse cx="368" cy="445" rx="26" ry="38" fill="#B97A57"/>
+  <ellipse cx="642" cy="445" rx="26" ry="38" fill="#B97A57"/>
+  <!-- rosto -->
+  <path d="M370 400 C370 280 440 230 505 230 C570 230 640 280 640 400 C640 520 575 600 505 600 C435 600 370 520 370 400Z" fill="#C98B66"/>
+  <!-- franja / cabelo frente -->
+  <path d="M362 420 C350 280 430 205 520 210 C610 215 668 290 650 420 C640 360 610 300 560 285 C520 330 430 345 380 350 C372 370 366 395 362 420Z" fill="#2E211B"/>
+  <path d="M560 285 C600 300 632 345 645 400" stroke="#3E2D24" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- sobrancelhas -->
+  <path d="M418 395 C440 380 468 380 486 390" stroke="#2E211B" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M524 390 C542 380 570 380 592 395" stroke="#2E211B" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <!-- olhos -->
+  <ellipse cx="452" cy="432" rx="17" ry="20" fill="#1E1512"/>
+  <ellipse cx="558" cy="432" rx="17" ry="20" fill="#1E1512"/>
+  <circle cx="458" cy="425" r="5" fill="#FFFFFF"/>
+  <circle cx="564" cy="425" r="5" fill="#FFFFFF"/>
+  <!-- nariz -->
+  <path d="M505 455 C500 480 495 492 505 498" stroke="#A86A49" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <!-- bochechas -->
+  <ellipse cx="420" cy="490" rx="28" ry="15" fill="#E07F6E" opacity=".35"/>
+  <ellipse cx="590" cy="490" rx="28" ry="15" fill="#E07F6E" opacity=".35"/>
+  <!-- sorriso -->
+  <path d="M458 523 C485 555 527 555 552 523 C530 535 480 535 458 523Z" fill="#FFFFFF" stroke="#9E3B33" stroke-width="7" stroke-linejoin="round"/>
+  <!-- headset -->
+  <path d="M345 440 C330 250 680 250 665 440" stroke="#1E2227" stroke-width="16" fill="none" stroke-linecap="round"/>
+  <rect x="330" y="410" width="42" height="74" rx="18" fill="#1E2227"/>
+  <rect x="638" y="410" width="42" height="74" rx="18" fill="#1E2227"/>
+  <path d="M352 482 C358 545 400 560 448 560" stroke="#1E2227" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <circle cx="452" cy="560" r="12" fill="#C8102E"/>
+  </g>
+</svg>

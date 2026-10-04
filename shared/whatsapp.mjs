@@ -70,6 +70,10 @@ export function enviar(para, texto, botoes = []) {
   if (botoes.length) return post({ to: para, type: "interactive", interactive: { type: "button", body: { text: texto.slice(0, 1024) }, action: { buttons: botoes.slice(0, 3).map((b, i) => ({ type: "reply", reply: { id: "b" + i, title: b.slice(0, 20) } })) } } });
   return post({ to: para, type: "text", text: { body: texto.slice(0, 4096), preview_url: true } });
 }
+/** Imagem por link público (dentro da janela de 24 h). */
+export function enviarImagem(para, link, legenda = "") {
+  return post({ to: para, type: "image", image: { link, ...(legenda ? { caption: legenda.slice(0, 1024) } : {}) } });
+}
 /** Modelo aprovado (fora da janela de 24 h). Parâmetros vão no corpo, em ordem. */
 export function enviarModelo(para, nome, parametros = [], idioma = "pt_BR") {
   return post({ to: para, type: "template", template: { name: nome, language: { code: idioma }, components: parametros.length ? [{ type: "body", parameters: parametros.map((p) => ({ type: "text", text: String(p).replace(/\s+/g, " ").trim().slice(0, 1000) || "-" })) }] : [] } });

@@ -349,5 +349,15 @@ await t("assistente se chama PrimeCorp e ajusta o tratamento pelo nome", async (
   assert.match(Z.promptSistema({ zoe: { nome: "Clara" }, geral: {}, agora: new Date() }), /Você é Clara/);
 });
 
+await t("primeiro contato recebe o cartão de boas-vindas uma única vez", async () => {
+  globalThis.__zoe = () => fala("Olá! Sou a PrimeCorp, sua atendente virtual.");
+  const n0 = enviados.length; await W(payload("5519900001111", "Oi", "wamid.BV1"));
+  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519900001111", espera: 0 }) }));
+  const img = enviados.slice(n0).filter((m) => m.type === "image"); assert.equal(img.length, 1); assert.match(img[0].image.link, /\/marca\/primecorp-boas-vindas\.jpg$/);
+  const n1 = enviados.length; await W(payload("5519900001111", "Quero alugar galpão", "wamid.BV2"));
+  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519900001111", espera: 0 }) }));
+  assert.equal(enviados.slice(n1).filter((m) => m.type === "image").length, 0, "só na primeira vez");
+});
+
 console.log(`\n${ok} testes de verificação e Zoe OK`);
 await db.stop(); process.exit(0);

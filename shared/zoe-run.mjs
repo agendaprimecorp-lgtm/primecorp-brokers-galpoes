@@ -1,7 +1,7 @@
 // Liga o cérebro da Zoe ao banco (Netlify Database) e ao WhatsApp.
 import { db, env, obterRegistro, salvarRegistro, registrarEmissao } from "./servidor.mjs";
 import { responder, anexarMsg, fmtHora } from "./zoe.mjs";
-import { enviar, enviarModelo, equipeWA, janelaAberta } from "./whatsapp.mjs";
+import { enviar, enviarModelo, enviarImagem, equipeWA, janelaAberta } from "./whatsapp.mjs";
 import { transcreverPendentes } from "./audio.mjs";
 
 /** Contexto com leitura em memória e gravação adiada (sandbox = simulação, nada é gravado fora da conversa). */
@@ -58,12 +58,17 @@ export async function processarConversa(wa, { base, esperaMs = 2500 } = {}) {
   catch (e) { console.error("Zoe:", e); ctx.avisar(`Assistente com erro na conversa ${conv.nome || "+" + wa}: ${e?.message || e}`, conv, true); r = { texto: "Tive um problema técnico agora. Já avisei a equipe, que responde por aqui em breve.", botoes: [], acoes: ["erro"] }; conv.precisa_humano = { motivo: "erro técnico da assistente", em: new Date().toISOString() }; }
 
   let enviadoId = null, falha = null;
+  // primeiro contato: cartão de boas-vindas com a atendente virtual (uma vez por conversa)
+  const primeiro = !equipe && !(conv0.msgs || []).some((m) => m.de === "zoe" || m.de === "humano") && !conv0.boas_vindas;
+  if (primeiro && r.texto && ctx.cfg.zoe.boas_vindas_imagem !== false && base && janelaAberta(conv)) {
+    try { await enviarImagem(wa, new URL("/marca/primecorp-boas-vindas.jpg", base).toString()); conv.boas_vindas = new Date().toISOString(); } catch (e) { console.error("Boas-vindas:", e?.message || e); }
+  }
   if (r.texto && janelaAberta(conv)) { try { enviadoId = await enviar(wa, r.texto, r.botoes); } catch (e) { falha = String(e?.message || e); } }
   await ctx.gravar();
   // relê para não perder mensagens que chegaram durante a resposta
   const atual = (await obterRegistro("conversas", wa)) || conv0;
   const novas = (atual.msgs || []).filter((m) => !(conv0.msgs || []).some((x) => x.id === m.id));
-  const fin = { ...atual, contato: conv.contato || atual.contato || null, nome: conv.nome || atual.nome, briefings: conv.briefings || atual.briefings, precisa_humano: conv.precisa_humano ?? atual.precisa_humano ?? null, modo: atual.modo === "humano" && atual.modo_em !== conv0.modo_em ? "humano" : conv.modo || "zoe", optout: !!(conv.optout || atual.optout), processando: null, msgs: conv0.msgs || [] };
+  const fin = { ...atual, ...(conv.boas_vindas ? { boas_vindas: conv.boas_vindas } : {}), contato: conv.contato || atual.contato || null, nome: conv.nome || atual.nome, briefings: conv.briefings || atual.briefings, precisa_humano: conv.precisa_humano ?? atual.precisa_humano ?? null, modo: atual.modo === "humano" && atual.modo_em !== conv0.modo_em ? "humano" : conv.modo || "zoe", optout: !!(conv.optout || atual.optout), processando: null, msgs: conv0.msgs || [] };
   if (r.texto) anexarMsg(fin, { id: enviadoId || "z" + Date.now().toString(36), de: "zoe", t: new Date().toISOString(), texto: r.texto + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), acoes: r.acoes, ...(falha ? { falha } : {}) });
   for (const m of novas) anexarMsg(fin, m);
   await salvarRegistro("conversas", wa, fin);
