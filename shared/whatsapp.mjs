@@ -87,14 +87,27 @@ export async function conectarWebhook360(urlWebhook) {
   if (!r.ok) throw new Error(j?.meta?.developer_message || j?.error?.message || `360dialog recusou (${r.status})`);
   return j;
 }
-/** 360dialog: cria o modelo "zoe_aviso" (utilidade) para avisar a equipe fora da janela de 24 h. */
+/** 360dialog: modelos aprovados — aviso à equipe (fora das 24 h) e primeiro contato com quem se cadastrou no site. */
 export const MODELO_AVISO = "primecorp_aviso";
+export const MODELO_SITE = "primecorp_site";
+const MODELOS = () => [
+  { name: MODELO_AVISO, category: "UTILITY", language: "pt_BR", components: [{ type: "BODY", text: "Aviso da assistente virtual para a equipe PrimeCorp: {{1}}. Responda esta mensagem para abrir a conversa.", example: { body_text: [["cliente aguardando atendimento humano na conversa de Carlos"]] } }] },
+  { name: MODELO_SITE, category: "UTILITY", language: "pt_BR", components: [
+    { type: "BODY", text: "Olá, {{1}}! Aqui é a PrimeCorp, atendente virtual da PrimeCorp Consultoria. Recebemos o seu cadastro no nosso site sobre {{2}} e podemos seguir o atendimento por aqui. Para continuar, é só responder esta mensagem.", example: { body_text: [["Carlos", "setor público"]] } },
+    { type: "FOOTER", text: "Para não receber mais mensagens, responda SAIR." },
+    { type: "BUTTONS", buttons: [{ type: "QUICK_REPLY", text: "Quero continuar" }, { type: "QUICK_REPLY", text: "Falar com a equipe" }] },
+  ] },
+];
 export async function criarModeloAviso() {
   const tok = env("WHATSAPP_TOKEN"); if (!tok) throw new Error("WHATSAPP_TOKEN não configurado.");
-  const r = await (globalThis.__fetchWA || fetch)((env("WHATSAPP_API_BASE") || "https://waba-v2.360dialog.io") + "/v1/configs/templates", { method: "POST", headers: { "D360-API-KEY": tok, "content-type": "application/json" }, body: JSON.stringify({ name: MODELO_AVISO, category: "UTILITY", language: "pt_BR", components: [{ type: "BODY", text: "Aviso da assistente virtual para a equipe PrimeCorp: {{1}}. Responda esta mensagem para abrir a conversa.", example: { body_text: [["cliente aguardando atendimento humano na conversa de Carlos"]] } }] }) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok && !/already exists|duplicate|existe/i.test(JSON.stringify(j))) throw new Error(j?.meta?.developer_message || j?.error?.message || `360dialog recusou (${r.status})`);
-  return { nome: MODELO_AVISO, status: j?.status || (r.ok ? "PENDING" : "já existia") };
+  const out = [];
+  for (const m of MODELOS()) {
+    const r = await (globalThis.__fetchWA || fetch)((env("WHATSAPP_API_BASE") || "https://waba-v2.360dialog.io") + "/v1/configs/templates", { method: "POST", headers: { "D360-API-KEY": tok, "content-type": "application/json" }, body: JSON.stringify(m) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok && !/already exists|duplicate|existe/i.test(JSON.stringify(j))) throw new Error(`${m.name}: ` + (j?.meta?.developer_message || j?.error?.message || `360dialog recusou (${r.status})`));
+    out.push(`${m.name} ${j?.status || (r.ok ? "PENDING" : "já existia")}`);
+  }
+  return { nome: out.join(" · "), status: "enviado para aprovação" };
 }
 export const marcarLida = (id) => post({ status: "read", message_id: id }).catch(() => null);
 

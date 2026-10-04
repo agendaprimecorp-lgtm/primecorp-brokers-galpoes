@@ -284,7 +284,7 @@ await t("modelo: padrão novo com reserva automática", async () => {
 
 await t("Zoe: frente tributária (prefeituras e parceiros) no conhecimento", async () => {
   const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date() });
-  for (const x of [/RECUPERAÇÃO DE CRÉDITOS PARA MUNICÍPIOS/, /IRRF/, /RAT\/FAP/, /FPM\/FPE/, /exclusivamente por êxito/, /H\) PARCEIRO TRIBUTÁRIO/, /Prefeituras \| Parceria tributária/]) assert.match(p, x);
+  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /por êxito/, /H\) PARCEIRO TRIBUTÁRIO/, /Imóveis \| Prefeituras \| Empresas/, /55\.745\.297/, /Tema 69/, /CEBAS/, /725 do Código Civil|art\. 725/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/]) assert.match(p, x);
   const p2 = Z.promptSistema({ zoe: { servicos: "texto antigo salvo" }, geral: {}, agora: new Date() }); assert.match(p2, /tema 1130/, "vale mesmo com conhecimento antigo salvo");
   const salvos = []; const ctxZ = { agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: () => [], salvar: (col, id, d) => salvos.push([col, d]), avisar: () => {} };
   Z.executar(ctxZ, { id: "5511999990000" }, "salvar_contato", { nome: "Dra. Paula", cargo: "Advogada OAB/MG 123", perfil: "Parceiro tributário", cidade: "Sul de Minas", observacoes: "atua com 12 municípios" }, false);
@@ -304,7 +304,8 @@ await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async (
 await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebra de linha", async () => {
   Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog" }); const ant = globalThis.__fetchWA; const reqs = [];
   globalThis.__fetchWA = async (url, op) => { reqs.push([String(url), JSON.parse(op.body)]); return new Response(JSON.stringify({ status: "PENDING" }), { status: 200 }); };
-  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "primecorp_aviso");
+  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "primecorp_aviso PENDING · primecorp_site PENDING");
+  const site = reqs.find((x) => x[1].name === "primecorp_site")?.[1]; assert.ok(site, "modelo do site criado"); assert.match(JSON.stringify(site), /Quero continuar/); assert.match(JSON.stringify(site), /responda SAIR/);
   assert.equal(reqs[0][0], "https://waba-v2.360dialog.io/v1/configs/templates"); assert.equal(reqs[0][1].category, "UTILITY"); assert.match(reqs[0][1].components[0].text, /\{\{1\}\}/);
   const { enviarModelo } = await import("../shared/whatsapp.mjs"); await enviarModelo("5519998051985", "zoe_aviso", ["linha 1\nlinha   2"]);
   assert.equal(reqs.at(-1)[1].template.components[0].parameters[0].text, "linha 1 linha 2");
@@ -380,6 +381,58 @@ await t("expediente: seg-qui 9-18, sex 9-16; fora disso a assistente atende e os
   globalThis.__aberto = true;
   const e = await RUN.entregarFila(); assert.ok(e.entregues >= 1); assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /fora do horário chegaram/.test(m.text?.body || "")));
   assert.equal((await RUN.entregarFila()).entregues, 0, "não repete");
+});
+
+await t("site: formulário vira lead, avisa a equipe e leva o cliente à assistente no WhatsApp", async () => {
+  const sl = (await import("./out/site-lead.mjs")).default; const S = await import("../shared/site.mjs"); const { db: sdb } = await import("../shared/servidor.mjs");
+  const SITE = "https://primecorpconsultoria.com.br";
+  const post = (b, origin = SITE, ip = "201.0.0.1") => sl(new Request("https://pc.test/site/lead", { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(b) }), { ip });
+  const base = { form: "consulta", perfil: "Instituição de ensino / filantrópica", nome: "Ana Souza", municipio: "Campinas/SP", fone: "(19) 99777-1234", email: "ana@escola.org", consentimento: true, pagina: "ensino e filantropia" };
+  const op = await sl(new Request("https://pc.test/site/lead", { method: "OPTIONS", headers: { origin: SITE } }), {}); assert.equal(op.status, 204); assert.equal(op.headers.get("access-control-allow-origin"), SITE);
+  assert.equal((await post(base, "https://malicioso.com")).status, 403);
+  assert.equal((await post({ ...base, consentimento: false })).status, 400, "sem LGPD não grava");
+  assert.equal((await post({ ...base, fone: "123" })).status, 400);
+  const hp = await J(await post({ ...base, hp: "robô" })); assert.equal(hp.s, 200); assert.ok(!hp.j.codigo, "honeypot: finge sucesso e não grava");
+  const n0 = enviados.length; const r = await J(await post(base));
+  assert.equal(r.s, 200); assert.match(r.j.codigo, /^S[0-9A-F]{6}$/); assert.match(r.j.whatsapp, /^https:\/\/wa\.me\/5519981105192\?text=/);
+  assert.match(decodeURIComponent(r.j.whatsapp), new RegExp("ensino e filantropia.*" + r.j.codigo));
+  assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /Novo cadastro no site · ensino e filantropia · Ana Souza/.test(m.text?.body || "")), "equipe avisada");
+  const lead = (await sdb().sql`SELECT dados FROM registros WHERE colecao='site_leads' AND id=${"sl_" + r.j.codigo}`)[0].dados;
+  assert.equal(lead.wa, "5519997771234"); assert.equal(lead.status, "novo"); assert.ok(!lead.ip.includes("201."), "IP só em hash");
+  // indicação com extras
+  const ind = await J(await post({ form: "indicacao", perfil: "Cidadão", nome: "Carlos", municipio: "Hortolândia/SP", fone: "19988887777", consentimento: true, extras: { acesso_gestao: "conheço o secretário", declaracao_nao_vinculo: true } }, SITE, "201.0.0.2"));
+  assert.equal(ind.s, 200); assert.match(decodeURIComponent(ind.j.whatsapp), /indicação de município/);
+  // a conversa que cita o código já chega com o cadastro no contexto
+  const L = (await sdb().sql`SELECT dados FROM registros WHERE colecao='site_leads'`).map((x) => x.dados);
+  const conv = { id: "5511900000001", msgs: [{ de: "cliente", t: new Date().toISOString(), texto: `Olá! Acabei de me cadastrar no site da PrimeCorp (ensino e filantropia). Código ${r.j.codigo}.` }] };
+  assert.equal(S.leadDaConversa(L, conv)?.codigo, r.j.codigo, "pelo código");
+  assert.equal(S.leadDaConversa(L, { id: "5519997771234", msgs: [] })?.codigo, r.j.codigo, "pelo telefone");
+  assert.equal(S.leadDaConversa(L, { id: "551997771234", msgs: [] })?.codigo, r.j.codigo, "telefone sem o 9");
+  let sys = ""; globalThis.__zoe = (req) => { sys = typeof req.system === "string" ? req.system : JSON.stringify(req.system); return fala("Olá, Ana!"); };
+  const salvos = []; await Z.responder({ agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: (c) => (c === "site_leads" ? L : []), salvar: (c, id, d) => salvos.push([c, d]), avisar: () => {}, cliente: new (await import("./mocks/anthropic.mjs")).default() }, conv);
+  assert.match(sys, /CADASTRO PELO SITE/); assert.match(sys, /Ana Souza/); assert.match(sys, /Não peça de novo/);
+  assert.ok(salvos.some(([c, d]) => c === "site_leads" && d.status === "conversando"));
+  // limite por IP
+  for (let i = 0; i < 6; i++) await post({ ...base, nome: "Spam " + i }, SITE, "9.9.9.9");
+  assert.equal((await post(base, SITE, "9.9.9.9")).status, 429);
+});
+
+await t("site: quem não chamou em 10 min recebe o convite (modelo aprovado) uma vez", async () => {
+  const RUN = await import("../shared/zoe-run.mjs"); const { db: sdb } = await import("../shared/servidor.mjs");
+  await sdb().sql`UPDATE registros SET criado_em = NOW() - INTERVAL '15 minutes' WHERE colecao = 'site_leads'`;
+  await sdb().sql`UPDATE registros SET dados = jsonb_set(dados, '{criado}', to_jsonb((NOW() - INTERVAL '15 minutes')::text)) WHERE colecao = 'site_leads'`;
+  // Carlos (indicação) chamou no WhatsApp depois do cadastro → não recebe convite
+  await W(payload("5519988887777", "oi, vim do site", "wamid.SITE1"));
+  const n0 = enviados.length; const r = await RUN.convidarLeads(new Date("2026-10-06T14:00:00-03:00"));
+  const tpls = enviados.slice(n0).filter((m) => m.type === "template");
+  assert.ok(tpls.some((m) => m.to === "5519997771234" && m.template.name === "primecorp_site" && JSON.stringify(m.template).includes("Ana")), "Ana convidada");
+  assert.ok(!tpls.some((m) => m.to === "5519988887777"), "quem já falou não recebe modelo");
+  assert.ok(r.convidados >= 1);
+  const st = Object.fromEntries((await sdb().sql`SELECT dados FROM registros WHERE colecao='site_leads'`).map((x) => [x.dados.wa, x.dados.status]));
+  assert.equal(st["5519997771234"], "convidado"); assert.equal(st["5519988887777"], "conversando");
+  const n1 = enviados.length; await RUN.convidarLeads(new Date()); assert.equal(enviados.slice(n1).filter((m) => m.to === "5519997771234").length, 0, "não repete");
+  const ab = globalThis.__aberto; globalThis.__aberto = false;
+  assert.equal((await RUN.convidarLeads(new Date("2026-10-06T23:30:00-03:00"))).convidados, 0, "não chama de madrugada"); globalThis.__aberto = ab;
 });
 
 console.log(`\n${ok} testes de verificação e Zoe OK`);

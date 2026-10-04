@@ -11,7 +11,7 @@ export async function criarContexto({ base, sandbox = false } = {}) {
     if (!cache[col]) { const rows = await db().sql`SELECT id, dados FROM registros WHERE colecao = ${col} AND excluido = FALSE`; cache[col] = rows.map((r) => ({ ...r.dados, id: r.id })); }
     return cache[col];
   };
-  for (const c of ["ofertas", "anuncios", "briefings", "contatos", "agenda", "negocios", "conversas", "b2g"]) await carregar(c);
+  for (const c of ["ofertas", "anuncios", "briefings", "contatos", "agenda", "negocios", "conversas", "b2g", "site_leads"]) await carregar(c);
   const cfgRows = await db().sql`SELECT id, dados FROM registros WHERE colecao = 'config' AND excluido = FALSE`;
   const cfg = Object.fromEntries(cfgRows.map((r) => [r.id, r.dados]));
   return {
@@ -40,6 +40,31 @@ export async function avisarEquipe(texto) {
     try { await enviar(n, "🤖 Assistente PrimeCorp · " + texto); }
     catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [texto.slice(0, 900)]).catch(() => null); }
   }
+}
+
+/** Aviso à equipe respeitando o expediente (fora dele vai para a fila). */
+export async function avisarOuEnfileirar(texto, { urgente = false } = {}) {
+  const cfgRows = await db().sql`SELECT dados FROM registros WHERE colecao = 'config' AND id = 'zoe' AND excluido = FALSE`;
+  const aberto = globalThis.__aberto ?? estaAberto(cfgRows[0]?.dados || {}, new Date());
+  await registrarEmissao({ tipo: "zoe_aviso", conteudo: texto, meta: { urgente } }).catch(() => null);
+  if (aberto || urgente) return avisarEquipe(texto);
+  await salvarRegistro("zoe_fila", "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), { texto, em: new Date().toISOString() });
+}
+
+/** Leads do site que não chamaram no WhatsApp em 10 min: a assistente chama primeiro com o modelo aprovado (8h–20h). */
+export async function convidarLeads(agora = new Date()) {
+  const h = Number(new Date(agora.getTime() - 3 * 3600e3).toISOString().slice(11, 13));
+  if (!globalThis.__aberto && (h < 8 || h >= 20)) return { convidados: 0, motivo: "fora da janela de contato" };
+  const rows = await db().sql`SELECT id, dados FROM registros WHERE colecao = 'site_leads' AND excluido = FALSE AND dados->>'status' = 'novo' AND criado_em < NOW() - INTERVAL '10 minutes' AND criado_em > NOW() - INTERVAL '48 hours'`;
+  const tpl = env("ZOE_MODELO_SITE") || "primecorp_site"; let n = 0;
+  for (const r of rows) {
+    const l = r.dados; const conv = await obterRegistro("conversas", l.wa);
+    const falou = (conv?.msgs || []).some((m) => m.de === "cliente" && m.t >= l.criado);
+    if (falou) { await salvarRegistro("site_leads", r.id, { ...l, status: "conversando" }); continue; }
+    try { await enviarModelo(l.wa, tpl, [String(l.nome || "").split(" ")[0] || "tudo bem", l.linha || "seu atendimento"]); await salvarRegistro("site_leads", r.id, { ...l, status: "convidado", convidado_em: new Date().toISOString() }); n++; }
+    catch (e) { await salvarRegistro("site_leads", r.id, { ...l, status: "falha_convite", erro: String(e?.message || e).slice(0, 200) }); }
+  }
+  return { convidados: n };
 }
 
 /** Início do expediente: entrega de uma vez o que chegou fora do horário. */

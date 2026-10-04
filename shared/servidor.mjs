@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import dns from "node:dns/promises";
 import net from "node:net";
 
-export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios", "conversas", "agenda", "zoe_sugestoes", "b2g"];
+export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios", "conversas", "agenda", "zoe_sugestoes", "b2g", "site_leads"];
 
 let _db = null;
 export function db() {

@@ -5,6 +5,7 @@ import PC from "./core.mjs";
 import V from "./verif.mjs";
 import { ZOE_PADRAO } from "./zoe-base.mjs";
 import { MODELO_PADRAO, MODELOS_RESERVA, modeloIndisponivel } from "./servidor.mjs";
+import { leadDaConversa, resumoLead } from "./site.mjs";
 import { parceirosDoNumero, resumoReservas, disponibilidade, painelB2G, semAcento, lerPessoas, PESSOAS_PADRAO } from "./b2g.mjs";
 const pessoasB2G = (ctx) => lerPessoas(ctx.cfg?.zoe?.b2g_pessoas ?? PESSOAS_PADRAO);
 
@@ -130,7 +131,7 @@ export const FERRAMENTAS_TRIBUTARIO = [
 function pctTxt(v) { const n = PC.parseBR(v) || 0; return `${PC.nf(n)}% sobre o valor da venda`; }
 function alugTxt(v) { const n = PC.parseBR(v) || 1; return `${PC.nf(n)} aluguel${n === 1 ? "" : "éis"} mensal${n === 1 ? "" : "is"}`; }
 
-export function promptSistema({ zoe, geral, agora, equipe, contato, conversa, parceiros = [] }) {
+export function promptSistema({ zoe, geral, agora, equipe, contato, conversa, parceiros = [], lead = null }) {
   const z = { ...ZOE_PADRAO, ...(zoe || {}) };
   const sub = (t) => String(t || "").replace("{{COMISSAO_VENDA}}", pctTxt(geral?.com_venda_pct || 6)).replace("{{COMISSAO_LOCACAO}}", alugTxt(geral?.com_locacao_alugueis || 1));
   const H = horarioDe(z);
@@ -146,20 +147,31 @@ ${sub(z.servicos)}
 PERGUNTAS FREQUENTES
 ${sub(z.faq)}
 
+${z.institucional || ZOE_PADRAO.institucional}
+
 ${z.tributario || ZOE_PADRAO.tributario}
+
+${z.empresas || ZOE_PADRAO.empresas}
+
+${z.filantropia || ZOE_PADRAO.filantropia}
+
+${z.indicacao || ZOE_PADRAO.indicacao}
 
 LOCAL DAS REUNIÕES: ${z.local_reuniao}
 ${z.regras_extra ? "\nORIENTAÇÕES DA EQUIPE\n" + z.regras_extra + "\n" : ""}`;
   if (equipe) return base + `
 MODO EQUIPE: você está falando com ${contato?.nome || "um membro da equipe"} (equipe PrimeCorp). Seja uma secretária executiva: direta, números primeiro, sem saudações longas. Use as ferramentas para responder com dados reais do sistema. Pode citar códigos PC, nomes de clientes e situação de verificação. Nunca altere valores, comissões ou exclua registros: para isso, oriente a usar o app.`;
   return base + `
-LINHAS DE CONVERSA (identifique a intenção na 1ª ou 2ª mensagem e siga a linha; se não estiver claro, ofereça botões: Imóveis | Prefeituras | Parceria tributária):
+LINHAS DE CONVERSA (identifique a intenção na 1ª ou 2ª mensagem e siga a linha; se não estiver claro, ofereça botões: Imóveis | Prefeituras | Empresas (e, se fizer sentido, pergunte se é instituição de ensino/filantrópica ou indicação de município)):
 A) BUSCA DE IMÓVEL (empresa, investidor, família): pergunte UMA coisa por vez, nesta ordem, pulando o que já foi dito: 1 tipo e operação (alugar/comprar) · 2 cidade/região · 3 tamanho (m², ha ou dormitórios) · 4 orçamento · 5 prazo · 6 para empresa: atividade, pé-direito, docas, energia · 7 nome e empresa. Com tipo+operação+local+tamanho ou orçamento: chame registrar_demanda, depois buscar_imoveis. Se houver opções, mostre até 3 em faixas (código PC, tipo, região, faixa de área e valor) e diga que a ficha completa vai pela Sala do Cliente após o termo. Sempre ofereça agendar uma conversa de 30 a 60 min. Prometa retorno com opções verificadas em até 24 horas úteis.
 B) PROPRIETÁRIO quer vender/alugar: tipo, operação, cidade e bairro, áreas, valor pretendido, nº da matrícula e cartório (se souber), se há financiamento/ônus, se está ocupado. Registre com registrar_imovel_proprietario e ofereça agendar a "Captação no local". Honorários: informe o padrão do texto acima, sem negociar; negociação = chamar_equipe.
 C) CORRETOR OU IMOBILIÁRIA: pergunte se tem cliente (demanda) ou imóvel (estoque) e o CRECI. Demanda → linha A com perfil "Corretor parceiro"/"Imobiliária"; imóvel → linha B com papel Corretor/Imobiliária. Explique que a divisão de honorários é formalizada em acordo antes de qualquer apresentação.
 D) INTERESSE EM ANÚNCIO (código PC, link /i/… ou "vi o anúncio"): use buscar_imoveis ou o código citado; informe só o que é público e ofereça visita (agendar tipo "Visita ao imóvel").
 E) PREFEITURA / CÂMARA / ÓRGÃO PÚBLICO (crédito tributário/previdenciário): explique em 2 linhas o que a PrimeCorp Consultoria faz (êxito, sem custo antecipado, análise inicial sem custo). Pergunte UMA coisa por vez: 1 município/estado e órgão · 2 nome e cargo · 3 qual frente interessa (IRRF, PASEP, RAT/FAP, ISSQN, FGTS, FPM/FPE ou "todas") · 4 se já tem contrato vigente com outra consultoria no tema · 5 e-mail. Registre com salvar_contato (perfil "Órgão público", empresa = órgão) e ofereça reunião de apresentação com Rodrigo (horarios_livres → agendar, tipo "Reunião (vídeo)", assunto "B2G – <município>"). Depois chame chamar_equipe (motivo "B2G: <município> – <frente>").
 H) PARCEIRO TRIBUTÁRIO. Se for PARCEIRO CADASTRADO (aviso abaixo): atenda direto — reservas dele, situação de entes, pedido de reserva (a equipe consulta a central de reservas e libera por 90 dias; ente já reservado não pode ser trabalhado — ofereça fila de espera), registro de andamento e marcação de reunião com Rodrigo/equipe técnica para o ente. Se NÃO for cadastrado (consultor, advogado, contador, assessor ou captador que quer levar a solução a prefeituras/estados): agradeça, explique em 2 linhas o modelo (ele indica e acompanha; a PrimeCorp faz diagnóstico, proposta e execução; remuneração do parceiro por êxito, formalizada em contrato antes de qualquer apresentação). Pergunte UMA coisa por vez: 1 nome e profissão (OAB/CRC se tiver) · 2 estados e municípios onde atua · 3 relacionamento com gestores (prefeito, secretário de finanças, procurador, câmara) · 4 quais frentes quer oferecer · 5 se já tem algum ente interessado (qual) · 6 e-mail. Registre com salvar_contato (perfil "Parceiro tributário", cidade = região de atuação) e ofereça reunião com Rodrigo (agendar, tipo "Reunião (vídeo)", assunto "Parceria tributária – <nome>"). Percentual de comissão, contrato de parceria ou material institucional: diga que a equipe envia após a reunião e chame chamar_equipe (motivo "Parceiro tributário: <nome> – <região>").
+I) EMPRESA (créditos tributários/previdenciários, teses, CNPJ inapto): siga a seção EMPRESAS — explique em 2 linhas, qualifique uma coisa por vez, separe pacificado de tese em julgamento, registre e ofereça reunião com a equipe técnica.
+J) ENSINO OU FILANTROPIA (universidade, faculdade, colégio, hospital filantrópico, assistência social): siga a seção ENSINO E FILANTROPIA — qualifique (CEBAS, Prouni, funcionários), registre e ofereça reunião com a equipe.
+K) INDICADOR (cidadão ou profissional que quer indicar um município): siga a seção PROGRAMA DE INDICAÇÃO — verifique a vedação a agente público/parente ANTES de falar em reconhecimento; registre e chame a equipe.
 F) AGENDA: marcar, remarcar, cancelar → horarios_livres, agendar, meus_agendamentos, cancelar_agendamento.
 G) RECLAMAÇÃO, cobrança, jurídico, proposta formal, contraproposta ou desconto → chamar_equipe e avise que um humano responde ${dentro ? "em instantes" : abre}.
 FORA DO HORÁRIO: continue atendendo normalmente (qualificar, registrar, agendar, consultar reservas). Quando precisar de pessoa, diga com clareza quando a equipe volta (${abre}) e nunca prometa resposta humana antes disso. Use urgente=true em chamar_equipe só para urgência real (prazo vencendo hoje, cliente pronto para fechar, problema grave); o resto a equipe recebe no início do expediente.
@@ -178,6 +190,7 @@ REGRAS INEGOCIÁVEIS
 11. Frente tributária: nunca revele nome, telefone ou carteira de outro parceiro, nem contatos internos de prefeituras de outro parceiro. Nunca diga que um ente está "livre": a carteira da PrimeCorp não é a central de reservas. Ente reservado conosco → "já reservado com a PrimeCorp"; ente fora da carteira → "precisa solicitar a reserva; a equipe consulta a central e confirma".
 12. Tratamento: use o nome que a pessoa informou (ou o do perfil do WhatsApp) para concordar o gênero com naturalidade — "bem-vindo/bem-vinda", "Sr./Sra.", "Dr./Dra." quando ela se apresentar assim. Se o nome não deixar claro, use linguagem neutra (ex.: "É um prazer atender você"), sem "(a)". Nunca pergunte o gênero e nunca mude o conteúdo, a firmeza ou o nível técnico da conversa por causa dele: só a concordância e a cordialidade.
 ${parceiros.length ? `\nPARCEIRO TRIBUTÁRIO CADASTRADO falando agora: ${parceiros.map((p) => p.nome + (p.empresa ? " (" + p.empresa + ")" : "")).join(" / ")} · ${parceiros.reduce((n, p) => n + (p.reservas || []).length, 0)} ente(s) na carteira. Trate pelo primeiro nome, sem pedir cadastro de novo e sem a apresentação de assistente virtual longa (1 linha basta). Use minhas_reservas para status, consultar_ente para saber a situação de um ente, solicitar_reserva para pedir reserva (sempre passa pela central) e informar_andamento quando ele trouxer novidade. Comissão, contrato, pagamento ou repasse: diga que a equipe responde e chame chamar_equipe.` : ""}
+${lead ? "\n" + resumoLead(lead) : ""}
 ${conversa?.nome && !contato ? `\nNOME NO PERFIL DO WHATSAPP: ${String(conversa.nome).slice(0, 60)}` : ""}
 ${contato ? `\nCONTATO JÁ CADASTRADO: ${[contato.nome, contato.empresa, contato.tipo].filter(Boolean).join(" · ")}` : ""}${conversa?.resumo ? `\nRESUMO DA CONVERSA ANTERIOR: ${conversa.resumo}` : ""}`;
 }
@@ -341,7 +354,7 @@ export function finalizar(txt) {
   return { texto: t, botoes };
 }
 
-const HUMANO_RE = /^\s*(humano|atendente|pessoa|falar com (uma )?pessoa|falar com (o )?(rodrigo|corretor|joselia))\s*[.!]?\s*$/i;
+const HUMANO_RE = /^\s*(humano|atendente|pessoa|falar com (uma )?pessoa|falar com a equipe|falar com (o )?(rodrigo|corretor|joselia))\s*[.!]?\s*$/i;
 const SAIR_RE = /^\s*(sair|parar|pare|stop|descadastrar|n[aã]o quero mais (receber )?mensagens?)\s*[.!]?\s*$/i;
 
 /**
@@ -357,7 +370,9 @@ export async function responder(ctx, conv, { equipe = false } = {}) {
   const client = ctx.cliente || new Anthropic();
   const model = ctx.modelo || MODELO_PADRAO;
   const parceiros = equipe ? [] : parceirosDoNumero(ctx.listar("b2g"), conv.id, pessoasB2G(ctx));
-  const sistema = promptSistema({ zoe: ctx.cfg.zoe, geral: ctx.cfg.geral, agora: ctx.agora, equipe, contato: contatoDe(ctx, conv), conversa: conv, parceiros });
+  const lead = equipe ? null : leadDaConversa(ctx.listar("site_leads"), conv);
+  if (lead && !["conversando", "atendido"].includes(lead.status)) ctx.salvar("site_leads", lead.id, { ...lead, status: "conversando", conversa: conv.id });
+  const sistema = promptSistema({ zoe: ctx.cfg.zoe, geral: ctx.cfg.geral, agora: ctx.agora, equipe, contato: contatoDe(ctx, conv), conversa: conv, parceiros, lead });
   const msgs = [];
   for (const m of (conv.msgs || []).slice(-30)) {
     const role = m.de === "cliente" ? "user" : "assistant"; let content = String(m.texto || (m.midia ? `[${m.midia} enviado]` : "")).slice(0, 2000) || "…";
