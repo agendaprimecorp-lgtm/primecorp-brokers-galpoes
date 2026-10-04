@@ -43,6 +43,14 @@ export function lerEntradas(payload) {
   return out;
 }
 
+/** Status de entrega (sent/delivered/read/failed) com o erro da Meta, quando houver. */
+export function lerStatus(payload) {
+  const out = [];
+  for (const e of payload?.entry || []) for (const ch of e.changes || []) for (const s of ch.value?.statuses || [])
+    out.push({ id: s.id, para: s.recipient_id, status: s.status, erro: (s.errors || []).map((x) => `${x.code} ${x.title || ""} ${x.error_data?.details || x.message || ""}`.trim()).join(" | ") || null });
+  return out;
+}
+
 /** Provedor: "meta" (Cloud API direta, padrão) ou "360dialog" (parceiro oficial; permite coexistência com o app do celular). */
 export const provedor = () => (env("WHATSAPP_PROVEDOR") || "meta").toLowerCase();
 async function post(corpo) {
@@ -58,6 +66,7 @@ async function post(corpo) {
 
 /** Texto simples ou com até 3 botões de resposta (só dentro da janela de 24 h). */
 export function enviar(para, texto, botoes = []) {
+  texto = String(texto).replace(/\*\*(.+?)\*\*/g, "*$1*").replace(/^#+\s*/gm, "").replace(/^---$/gm, ""); // markdown → formatação do WhatsApp
   if (botoes.length) return post({ to: para, type: "interactive", interactive: { type: "button", body: { text: texto.slice(0, 1024) }, action: { buttons: botoes.slice(0, 3).map((b, i) => ({ type: "reply", reply: { id: "b" + i, title: b.slice(0, 20) } })) } } });
   return post({ to: para, type: "text", text: { body: texto.slice(0, 4096), preview_url: true } });
 }
