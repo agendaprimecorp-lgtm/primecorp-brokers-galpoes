@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { env, obterRegistro, salvarRegistro } from "../../shared/servidor.mjs";
-import { assinaturaValida, chaveValida, lerEntradas, equipeWA, marcarLida } from "../../shared/whatsapp.mjs";
+import { assinaturaValida, chaveValida, lerEntradas, lerStatus, equipeWA, marcarLida } from "../../shared/whatsapp.mjs";
 import { anexarMsg, waNum } from "../../shared/zoe.mjs";
 
 // Webhook público do WhatsApp (Cloud API). Valida a assinatura da Meta, grava a mensagem e aciona a Zoe em segundo plano.
@@ -16,6 +16,13 @@ export default async (req: Request, _context: Context) => {
   const autentico = (env("WHATSAPP_APP_SECRET") && assinaturaValida(corpo, req.headers.get("x-hub-signature-256") || "", env("WHATSAPP_APP_SECRET"))) || chaveValida(req.headers.get("x-chave-webhook") || url.searchParams.get("chave") || "");
   if (!autentico) return new Response("Assinatura inválida", { status: 401 });
   let payload: any; try { payload = JSON.parse(corpo); } catch { return new Response("ok"); }
+  for (const s of lerStatus(payload)) { // registra falhas de entrega na conversa (diagnóstico)
+    console.log("WA status:", s.status, s.para, s.erro || "");
+    if (s.status !== "failed") continue;
+    const wa = waNum(s.para); const conv: any = await obterRegistro("conversas", wa);
+    const msg = conv?.msgs?.find((x: any) => x.id === s.id);
+    if (msg) { msg.falha = s.erro || "falhou na entrega"; await salvarRegistro("conversas", wa, conv); }
+  }
   const esperado = env("WHATSAPP_PHONE_ID");
   const msgs = lerEntradas(payload).filter((m) => !esperado || !m.numero_empresa || m.numero_empresa === esperado);
   const equipe = equipeWA(); const acionar = new Set<string>();
