@@ -32,7 +32,7 @@ Fluxo praticado com os parceiros (reservas): 1) o parceiro pergunta pelo municí
 Canal de indicação: qualquer pessoa pode indicar seu estado ou município para análise inicial sem custo.
 PARCEIROS (consultores, advogados, contadores, assessores e captadores com relacionamento com gestores públicos): o parceiro indica e acompanha o ente; a PrimeCorp conduz diagnóstico, proposta e execução. A remuneração do parceiro é por êxito, proporcional ao recebido pela PrimeCorp, e formalizada em contrato de parceria antes de qualquer apresentação. Percentuais e condições só a equipe informa.`,
   regras_extra: "",
-  horario: { dias: [1, 2, 3, 4, 5], inicio: "09:00", fim: "18:00", duracao: 60, antecedencia_h: 3, sabado_ate: "" },
+  horario: { dias: [1, 2, 3, 4, 5], inicio: "09:00", fim: "18:00", fim_dia: { 5: "16:00" }, duracao: 60, antecedencia_h: 3, sabado_ate: "" }, // seg–qui 9–18, sex 9–16, fim de semana fechado
   local_reuniao: "Videochamada (link enviado na confirmação) ou presencial combinado com o corretor",
   saudacao_fora_horario: true,
 };

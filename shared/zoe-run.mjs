@@ -1,6 +1,6 @@
 // Liga o cérebro da Zoe ao banco (Netlify Database) e ao WhatsApp.
 import { db, env, obterRegistro, salvarRegistro, registrarEmissao } from "./servidor.mjs";
-import { responder, anexarMsg, fmtHora } from "./zoe.mjs";
+import { responder, anexarMsg, fmtHora, estaAberto, proximaAbertura } from "./zoe.mjs";
 import { enviar, enviarModelo, enviarImagem, equipeWA, janelaAberta } from "./whatsapp.mjs";
 import { transcreverPendentes } from "./audio.mjs";
 
@@ -22,16 +22,37 @@ export async function criarContexto({ base, sandbox = false } = {}) {
     async gravar() {
       if (sandbox) return { gravados: 0, simulado: pend.map(([c, id]) => `${c}/${id}`), avisos };
       for (const [c, id, d] of pend) { const { id: _x, ...dados } = d; await salvarRegistro(c, id, dados); }
+      const aberto = globalThis.__aberto ?? estaAberto(cfg.zoe, new Date()); // __aberto: só testes
       for (const a of avisos) {
         await registrarEmissao({ tipo: "zoe_aviso", conteudo: a.texto, meta: { conversa: a.conv, urgente: a.urgente } }).catch(() => null);
-        for (const n of equipeWA()) {
-          try { await enviar(n, "🤖 Assistente PrimeCorp · " + a.texto); }
-          catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [a.texto.slice(0, 900)]).catch(() => null); }
-        }
+        // fora do expediente só o que é URGENTE vai na hora; o resto entra na fila e chega no início do expediente
+        if (!aberto && !/^URGENTE/.test(a.texto)) { await salvarRegistro("zoe_fila", "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), { texto: a.texto, conversa: a.conv || null, em: new Date().toISOString() }).catch(() => null); continue; }
+        await avisarEquipe(a.texto);
       }
       return { gravados: pend.length, avisos };
     },
   };
+}
+
+/** Mensagem para Rodrigo/Joselia (texto livre na janela de 24 h; fora dela, modelo aprovado). */
+export async function avisarEquipe(texto) {
+  for (const n of equipeWA()) {
+    try { await enviar(n, "🤖 Assistente PrimeCorp · " + texto); }
+    catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [texto.slice(0, 900)]).catch(() => null); }
+  }
+}
+
+/** Início do expediente: entrega de uma vez o que chegou fora do horário. */
+export async function entregarFila(agora = new Date()) {
+  const cfgRows = await db().sql`SELECT dados FROM registros WHERE colecao = 'config' AND id = 'zoe' AND excluido = FALSE`;
+  const cfgZoe = cfgRows[0]?.dados || {};
+  if (!(globalThis.__aberto ?? estaAberto(cfgZoe, agora))) return { entregues: 0, motivo: "fora do horário" };
+  const fila = await db().sql`SELECT id, dados FROM registros WHERE colecao = 'zoe_fila' AND excluido = FALSE ORDER BY criado_em`;
+  if (!fila.length) return { entregues: 0 };
+  const linhas = fila.map((r) => "• " + String(r.dados.texto || "").slice(0, 300));
+  await avisarEquipe(`Início do expediente · fora do horário chegaram ${fila.length} aviso(s):\n${linhas.join("\n").slice(0, 3500)}`);
+  for (const r of fila) await db().sql`UPDATE registros SET excluido = TRUE, atualizado_em = NOW() WHERE colecao = 'zoe_fila' AND id = ${r.id}`;
+  return { entregues: fila.length };
 }
 
 /** Processa a última mensagem da conversa e responde no WhatsApp. */

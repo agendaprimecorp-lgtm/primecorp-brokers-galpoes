@@ -8,6 +8,7 @@ process.env.ADMIN_EMAILS = "contato@primecorpconsultoria.com.br";
 process.env.COLETA_SEGREDO = "s".repeat(40);
 Object.assign(process.env, { WHATSAPP_APP_SECRET: "segredo-app", WHATSAPP_VERIFY_TOKEN: "tok-verif", WHATSAPP_TOKEN: "tk", WHATSAPP_PHONE_ID: "999", ZOE_EQUIPE: "19998051985" });
 globalThis.__user = { email: "contato@primecorpconsultoria.com.br" };
+globalThis.__aberto = true; // expediente aberto nos testes (o teste de expediente controla isso)
 const api = (await import("./out/api.mjs")).default;
 const wh = (await import("./out/whatsapp.mjs")).default;
 const zbg = (await import("./out/zoe-background.mjs")).default;
@@ -298,7 +299,7 @@ await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async (
   const cfg = salvos.at(-1)[2]; assert.equal(cfg.faq, "x", "não apaga o resto"); assert.equal(cfg.horario.fim_dia[5], "16:00");
   const sexta = Z.horariosLivres(cfg, [], new Date("2026-10-08T20:00:00-03:00"), { dias: 2, max: 20 }).map((d) => d.toISOString()).filter((x) => x.startsWith("2026-10-09"));
   assert.ok(sexta.length && sexta.every((x) => x < "2026-10-09T19:00"), "sexta acaba às 16h (19h UTC)");
-  assert.match(Z.promptSistema({ zoe: cfg, geral: {}, agora: new Date() }), /sex 09:00–16:00/);
+  assert.match(Z.promptSistema({ zoe: cfg, geral: {}, agora: new Date() }), /sex 9h–16h/);
 });
 await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebra de linha", async () => {
   Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog" }); const ant = globalThis.__fetchWA; const reqs = [];
@@ -357,6 +358,28 @@ await t("primeiro contato recebe o cartão de boas-vindas uma única vez", async
   const n1 = enviados.length; await W(payload("5519900001111", "Quero alugar galpão", "wamid.BV2"));
   await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519900001111", espera: 0 }) }));
   assert.equal(enviados.slice(n1).filter((m) => m.type === "image").length, 0, "só na primeira vez");
+});
+
+await t("expediente: seg-qui 9-18, sex 9-16; fora disso a assistente atende e os avisos esperam", async () => {
+  const Zm = Z; const at = (iso) => new Date(iso);
+  assert.equal(Zm.estaAberto({}, at("2026-10-08T17:30:00-03:00")), true, "quinta 17h30");
+  assert.equal(Zm.estaAberto({}, at("2026-10-09T16:30:00-03:00")), false, "sexta 16h30");
+  assert.equal(Zm.estaAberto({}, at("2026-10-10T10:00:00-03:00")), false, "sábado");
+  assert.equal(Zm.proximaAbertura({}, at("2026-10-09T17:00:00-03:00")), "segunda-feira às 09:00");
+  assert.equal(Zm.proximaAbertura({}, at("2026-10-07T20:00:00-03:00")), "amanhã às 09:00");
+  assert.equal(Zm.descreverHorario({}), "seg a qui 9h–18h, sex 9h–16h");
+  const r = await Zm.responder({ agora: at("2026-10-10T11:00:00-03:00"), cfg: { zoe: {}, geral: {} }, listar: () => [], salvar: () => {}, avisar: () => {} }, { id: "x", msgs: [{ de: "cliente", t: new Date().toISOString(), texto: "humano" }] });
+  assert.match(r.texto, /segunda-feira às 09:00/); assert.match(r.texto, /seg a qui 9h–18h, sex 9h–16h/);
+  // fila: aviso fora do horário não dispara WhatsApp na hora; entregarFila manda tudo junto no expediente
+  const RUN = await import("../shared/zoe-run.mjs");
+  globalThis.__aberto = false; // equipe fora do expediente
+  globalThis.__zoe = (req) => { const last = req.messages.at(-1); if (typeof last.content === "string") return passo("chamar_equipe", { motivo: "quer proposta", urgente: false }); return fala("Nossa equipe retorna no próximo expediente."); };
+  const n0 = enviados.length; await W(payload("5519900002222", "quero proposta", "wamid.FL1"));
+  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519900002222", espera: 0 }) }));
+  assert.ok(!enviados.slice(n0).some((m) => m.to === "5519998051985"), "fora do horário: equipe não é acordada");
+  globalThis.__aberto = true;
+  const e = await RUN.entregarFila(); assert.ok(e.entregues >= 1); assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /fora do horário chegaram/.test(m.text?.body || "")));
+  assert.equal((await RUN.entregarFila()).entregues, 0, "não repete");
 });
 
 console.log(`\n${ok} testes de verificação e Zoe OK`);

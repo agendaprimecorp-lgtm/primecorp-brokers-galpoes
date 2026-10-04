@@ -1,0 +1,9 @@
+import type { Config } from "@netlify/functions";
+import { entregarFila } from "../../shared/zoe-run.mjs";
+
+// A cada 15 min: se o expediente começou, entrega à equipe os avisos acumulados fora do horário.
+export default async () => {
+  try { const r = await entregarFila(); if (r.entregues) console.log("Avisos entregues:", r.entregues); } catch (e) { console.error("Fila de avisos:", e); }
+};
+
+export const config: Config = { schedule: "*/15 * * * *" };

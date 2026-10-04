@@ -1843,7 +1843,7 @@ VIEWS.zoe = () => {
     });
     const rv = $("zrv"); if (rv) rv.onclick = async () => { rv.disabled = true; const st = $("zrs"); st.className = "status"; st.textContent = "Revisando as conversas da semana… (1 a 2 min)"; try { await api("zoe/revisar", { method: "POST" }); setTimeout(async () => { await store.carregar(); render(); }, 90000); } catch (e) { st.className = "status err"; st.textContent = e.message; rv.disabled = false; } };
   } else {
-    const z = { ...ZOE_BASE, ...cfg }; const H = { ...ZOE_BASE.horario, ...(cfg.horario || {}) }; const so = !ehAdmin();
+    const z = { ...ZOE_BASE, ...cfg }; const H = { ...ZOE_BASE.horario, ...(cfg.horario || {}), fim_dia: { ...ZOE_BASE.horario.fim_dia, ...((cfg.horario || {}).fim_dia || {}) } }; const so = !ehAdmin();
     zb.innerHTML = `<div class="card" id="zc"><h2>Conhecimento e regras da assistente</h2><p class="hint">Tudo o que a assistente sabe sobre a PrimeCorp vem daqui. Escreva fatos objetivos; ela não inventa o que não estiver aqui ou no sistema. As regras de segurança (sem endereço, sem negociar, LGPD, transbordo) são fixas.</p>
     <label class="cert"><input type="checkbox" data-z="ativa" ${z.ativa !== false ? "checked" : ""}><span>Assistente responde automaticamente no WhatsApp</span></label>
     <label class="cert"><input type="checkbox" data-z="boas_vindas_imagem" ${cfg.boas_vindas_imagem !== false ? "checked" : ""}><span>No primeiro contato, enviar o cartão de boas-vindas com a atendente virtual</span></label>
