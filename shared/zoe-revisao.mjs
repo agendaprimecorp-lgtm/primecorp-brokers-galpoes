@@ -4,7 +4,7 @@ import { db, env, salvarRegistro, obterRegistro, registrarEmissao, extrairJSON, 
 import { ZOE_PADRAO } from "./zoe-base.mjs";
 import { enviar, enviarModelo, equipeWA } from "./whatsapp.mjs";
 
-export const PROMPT_REVISAO = `Você é o supervisor de qualidade da Zoe, assistente virtual de WhatsApp da PrimeCorp Brokers (intermediação de imóveis comerciais, industriais, rurais e residenciais na Região de Campinas).
+export const PROMPT_REVISAO = `Você é o supervisor de qualidade da assistente virtual de WhatsApp da PrimeCorp Brokers (intermediação de imóveis comerciais, industriais, rurais e residenciais na Região de Campinas).
 Recebe o CONHECIMENTO ATUAL da Zoe e as CONVERSAS DA SEMANA. Encontre onde ela errou, travou, repetiu pergunta, chamou a equipe por falta de informação, ou onde clientes perguntaram algo que o conhecimento não cobre.
 Responda SOMENTE um objeto JSON:
 {"resumo":"2 a 3 frases sobre a semana (volume, tipos de demanda, principais falhas)","sugestoes":[{"tipo":"faq"|"orientacao","titulo":"até 60 caracteres","texto":"o texto exato a ser acrescentado ao conhecimento (faq: '- Pergunta? Resposta.'; orientacao: instrução curta e objetiva para a Zoe)","motivo":"por que, citando o que aconteceu nas conversas","exemplo":"trecho curto da conversa que motivou (sem telefone, sem endereço)"}]}
@@ -51,8 +51,8 @@ export async function revisarSemana({ agora = Date.now(), base = env("URL") } = 
   const resumo = limpa(j?.resumo, 600);
   await registrarEmissao({ tipo: "zoe_revisao", conteudo: `Revisão semanal: ${blocos.length} conversa(s), ${sugs.length} sugestão(ões). ${resumo}`, meta: { semana } }).catch(() => null);
   if (sugs.length) {
-    const msg = `🤖 Zoe · Revisão semanal\n${resumo}\n\n${sugs.length} sugestão(ões) aguardando sua aprovação:\n${sugs.map((s, i) => `${i + 1}. ${s.titulo || s.texto.slice(0, 60)}`).join("\n")}\n\nAprove em: ${base || "o app"} → Zoe → Revisão`;
-    for (const n of equipeWA()) { try { await enviar(n, msg); } catch { const tpl = env("ZOE_MODELO_AVISO") || "zoe_aviso"; if (tpl) await enviarModelo(n, tpl, [msg.slice(0, 900)]).catch(() => null); } }
+    const msg = `🤖 Assistente PrimeCorp · Revisão semanal\n${resumo}\n\n${sugs.length} sugestão(ões) aguardando sua aprovação:\n${sugs.map((s, i) => `${i + 1}. ${s.titulo || s.texto.slice(0, 60)}`).join("\n")}\n\nAprove em: ${base || "o app"} → Assistente → Revisão`;
+    for (const n of equipeWA()) { try { await enviar(n, msg); } catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [msg.slice(0, 900)]).catch(() => null); } }
   }
   return { conversas: blocos.length, sugestoes: sugs.length, resumo };
 }

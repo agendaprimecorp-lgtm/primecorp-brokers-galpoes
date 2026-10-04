@@ -5,7 +5,8 @@ import PC from "./core.mjs";
 import V from "./verif.mjs";
 import { ZOE_PADRAO } from "./zoe-base.mjs";
 import { MODELO_PADRAO, MODELOS_RESERVA, modeloIndisponivel } from "./servidor.mjs";
-import { parceirosDoNumero, resumoReservas, disponibilidade, painelB2G, semAcento } from "./b2g.mjs";
+import { parceirosDoNumero, resumoReservas, disponibilidade, painelB2G, semAcento, lerPessoas, PESSOAS_PADRAO } from "./b2g.mjs";
+const pessoasB2G = (ctx) => lerPessoas(ctx.cfg?.zoe?.b2g_pessoas ?? PESSOAS_PADRAO);
 
 export const TZ = "-03:00"; // Brasília (sem horário de verão desde 2019)
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -95,8 +96,8 @@ export const FERRAMENTAS_EQUIPE = [
 
 export const FERRAMENTAS_TRIBUTARIO = [
   T("minhas_reservas", "Reservas (municípios/estados/consórcios) do PARCEIRO TRIBUTÁRIO que está falando, com status, validade e último andamento. Só funciona para parceiro cadastrado.", {}),
-  T("consultar_ente", "Verifica se um município, estado ou consórcio está livre para reserva na frente tributária. Responde só livre/reservado (nunca o nome de outro parceiro).", { ente: s("nome do município, estado ou consórcio"), uf: s("UF, ex.: SP") }, ["ente"]),
-  T("solicitar_reserva", "Registra o pedido de reserva de um ente livre para o parceiro, para a equipe liberar. Confirme antes nome do ente, UF e quem é o contato no ente.", { ente: s(""), uf: s(""), contato_no_ente: s("quem o parceiro conhece no ente (cargo/nome)"), frentes: s("IRRF, PASEP, RAT/FAP, ISSQN, FGTS, FPM/FPE ou todas"), observacoes: s("") }, ["ente"]),
+  T("consultar_ente", "Verifica a situação de um município, estado ou consórcio na carteira da PrimeCorp: sua_reserva, reservado (com a PrimeCorp) ou consultar_central (não consta na carteira — exige solicitação de reserva; nunca dizer que está livre).", { ente: s("nome do município, estado ou consórcio"), uf: s("UF, ex.: SP") }, ["ente"]),
+  T("solicitar_reserva", "Registra o pedido de reserva de um ente (a equipe consulta a central e confirma). Para ente já reservado, só com fila_espera=true. Confirme antes nome do ente, UF e quem é o contato no ente.", { ente: s(""), uf: s(""), fila_espera: { type: "boolean" }, contato_no_ente: s("quem o parceiro conhece no ente (cargo/nome)"), frentes: s("IRRF, PASEP, RAT/FAP, ISSQN, FGTS, FPM/FPE ou todas"), observacoes: s("") }, ["ente"]),
   T("informar_andamento", "Registra uma novidade que o parceiro trouxe sobre um ente reservado (reunião marcada, pedido de proposta, documento, objeção) para a equipe atualizar.", { ente: s(""), andamento: s("o que aconteceu, em 1 a 3 frases") }, ["ente", "andamento"]),
 ];
 
@@ -110,7 +111,7 @@ export function promptSistema({ zoe, geral, agora, equipe, contato, conversa, pa
   const H = { ...ZOE_PADRAO.horario, ...(z.horario || {}) };
   const L = local(agora); const dentro = H.dias.includes(L.wd) && L.h * 60 + L.mi >= hm(H.inicio)[0] * 60 + hm(H.inicio)[1] && L.h * 60 + L.mi < hm(fimDoDia(H, L.wd))[0] * 60 + hm(fimDoDia(H, L.wd))[1];
   const textoHorario = H.dias.map((d) => `${DIAS[d].slice(0, 3)} ${H.inicio}–${fimDoDia(H, d)}`).join(", ") + (H.sabado_ate && !H.dias.includes(6) ? `, sáb ${H.inicio}–${H.sabado_ate}` : "");
-  const base = `Você é a Zoe, assistente virtual da PrimeCorp Brokers no WhatsApp. Agora: ${fmtData(agora)} (horário de Brasília); ${dentro ? "dentro" : "FORA"} do horário de atendimento humano (${textoHorario}).
+  const base = `Você é ${z.nome || "PrimeCorp"}, a assistente virtual da PrimeCorp Brokers no WhatsApp (seu nome é ${z.nome || "PrimeCorp"}; nunca use outro nome). Agora: ${fmtData(agora)} (horário de Brasília); ${dentro ? "dentro" : "FORA"} do horário de atendimento humano (${textoHorario}).
 
 QUEM SOMOS
 ${sub(z.quem_somos)}
@@ -134,7 +135,7 @@ B) PROPRIETÁRIO quer vender/alugar: tipo, operação, cidade e bairro, áreas, 
 C) CORRETOR OU IMOBILIÁRIA: pergunte se tem cliente (demanda) ou imóvel (estoque) e o CRECI. Demanda → linha A com perfil "Corretor parceiro"/"Imobiliária"; imóvel → linha B com papel Corretor/Imobiliária. Explique que a divisão de honorários é formalizada em acordo antes de qualquer apresentação.
 D) INTERESSE EM ANÚNCIO (código PC, link /i/… ou "vi o anúncio"): use buscar_imoveis ou o código citado; informe só o que é público e ofereça visita (agendar tipo "Visita ao imóvel").
 E) PREFEITURA / CÂMARA / ÓRGÃO PÚBLICO (crédito tributário/previdenciário): explique em 2 linhas o que a PrimeCorp Consultoria faz (êxito, sem custo antecipado, análise inicial sem custo). Pergunte UMA coisa por vez: 1 município/estado e órgão · 2 nome e cargo · 3 qual frente interessa (IRRF, PASEP, RAT/FAP, ISSQN, FGTS, FPM/FPE ou "todas") · 4 se já tem contrato vigente com outra consultoria no tema · 5 e-mail. Registre com salvar_contato (perfil "Órgão público", empresa = órgão) e ofereça reunião de apresentação com Rodrigo (horarios_livres → agendar, tipo "Reunião (vídeo)", assunto "B2G – <município>"). Depois chame chamar_equipe (motivo "B2G: <município> – <frente>").
-H) PARCEIRO TRIBUTÁRIO. Se for PARCEIRO CADASTRADO (aviso abaixo): atenda direto — reservas, disponibilidade de entes, pedido de reserva (reserva padrão de 90 dias, liberada pela equipe; ente já reservado por outro parceiro não pode ser trabalhado), registro de andamento e marcação de reunião com Rodrigo/equipe técnica para o ente. Se NÃO for cadastrado (consultor, advogado, contador, assessor ou captador que quer levar a solução a prefeituras/estados): agradeça, explique em 2 linhas o modelo (ele indica e acompanha; a PrimeCorp faz diagnóstico, proposta e execução; remuneração do parceiro por êxito, formalizada em contrato antes de qualquer apresentação). Pergunte UMA coisa por vez: 1 nome e profissão (OAB/CRC se tiver) · 2 estados e municípios onde atua · 3 relacionamento com gestores (prefeito, secretário de finanças, procurador, câmara) · 4 quais frentes quer oferecer · 5 se já tem algum ente interessado (qual) · 6 e-mail. Registre com salvar_contato (perfil "Parceiro tributário", cidade = região de atuação) e ofereça reunião com Rodrigo (agendar, tipo "Reunião (vídeo)", assunto "Parceria tributária – <nome>"). Percentual de comissão, contrato de parceria ou material institucional: diga que a equipe envia após a reunião e chame chamar_equipe (motivo "Parceiro tributário: <nome> – <região>").
+H) PARCEIRO TRIBUTÁRIO. Se for PARCEIRO CADASTRADO (aviso abaixo): atenda direto — reservas dele, situação de entes, pedido de reserva (a equipe consulta a central de reservas e libera por 90 dias; ente já reservado não pode ser trabalhado — ofereça fila de espera), registro de andamento e marcação de reunião com Rodrigo/equipe técnica para o ente. Se NÃO for cadastrado (consultor, advogado, contador, assessor ou captador que quer levar a solução a prefeituras/estados): agradeça, explique em 2 linhas o modelo (ele indica e acompanha; a PrimeCorp faz diagnóstico, proposta e execução; remuneração do parceiro por êxito, formalizada em contrato antes de qualquer apresentação). Pergunte UMA coisa por vez: 1 nome e profissão (OAB/CRC se tiver) · 2 estados e municípios onde atua · 3 relacionamento com gestores (prefeito, secretário de finanças, procurador, câmara) · 4 quais frentes quer oferecer · 5 se já tem algum ente interessado (qual) · 6 e-mail. Registre com salvar_contato (perfil "Parceiro tributário", cidade = região de atuação) e ofereça reunião com Rodrigo (agendar, tipo "Reunião (vídeo)", assunto "Parceria tributária – <nome>"). Percentual de comissão, contrato de parceria ou material institucional: diga que a equipe envia após a reunião e chame chamar_equipe (motivo "Parceiro tributário: <nome> – <região>").
 F) AGENDA: marcar, remarcar, cancelar → horarios_livres, agendar, meus_agendamentos, cancelar_agendamento.
 G) RECLAMAÇÃO, cobrança, jurídico, proposta formal, contraproposta ou desconto → chamar_equipe e avise que um humano responde ${dentro ? "em instantes" : "no próximo horário de atendimento"}.
 
@@ -149,8 +150,10 @@ REGRAS INEGOCIÁVEIS
 8. Para oferecer até 3 opções de toque, termine a mensagem com uma linha exatamente assim: [[botoes: Opção 1 | Opção 2 | Opção 3]] (cada opção até 20 caracteres).
 9. Se pedirem para parar de receber mensagens, confirme e encerre.
 10. Mensagens que começam com [áudio] são transcrições da voz do cliente: responda normalmente. Se vier [áudio não transcrito] ou [áudio inaudível], peça com gentileza para escrever em texto.
-11. Frente tributária: nunca revele nome, telefone ou carteira de outro parceiro, nem contatos internos de prefeituras de outro parceiro. De entes que não são do parceiro, diga só "livre" ou "reservado até dd/mm".
-${parceiros.length ? `\nPARCEIRO TRIBUTÁRIO CADASTRADO falando agora: ${parceiros.map((p) => p.nome + (p.empresa ? " (" + p.empresa + ")" : "")).join(" / ")} · ${parceiros.reduce((n, p) => n + (p.reservas || []).length, 0)} ente(s) na carteira. Trate pelo primeiro nome, sem pedir cadastro de novo e sem a apresentação de assistente virtual longa (1 linha basta). Use minhas_reservas para status, consultar_ente para disponibilidade, solicitar_reserva para pedir reserva e informar_andamento quando ele trouxer novidade. Comissão, contrato, pagamento ou repasse: diga que a equipe responde e chame chamar_equipe.` : ""}
+11. Frente tributária: nunca revele nome, telefone ou carteira de outro parceiro, nem contatos internos de prefeituras de outro parceiro. Nunca diga que um ente está "livre": a carteira da PrimeCorp não é a central de reservas. Ente reservado conosco → "já reservado com a PrimeCorp"; ente fora da carteira → "precisa solicitar a reserva; a equipe consulta a central e confirma".
+12. Tratamento: use o nome que a pessoa informou (ou o do perfil do WhatsApp) para concordar o gênero com naturalidade — "bem-vindo/bem-vinda", "Sr./Sra.", "Dr./Dra." quando ela se apresentar assim. Se o nome não deixar claro, use linguagem neutra (ex.: "É um prazer atender você"), sem "(a)". Nunca pergunte o gênero e nunca mude o conteúdo, a firmeza ou o nível técnico da conversa por causa dele: só a concordância e a cordialidade.
+${parceiros.length ? `\nPARCEIRO TRIBUTÁRIO CADASTRADO falando agora: ${parceiros.map((p) => p.nome + (p.empresa ? " (" + p.empresa + ")" : "")).join(" / ")} · ${parceiros.reduce((n, p) => n + (p.reservas || []).length, 0)} ente(s) na carteira. Trate pelo primeiro nome, sem pedir cadastro de novo e sem a apresentação de assistente virtual longa (1 linha basta). Use minhas_reservas para status, consultar_ente para saber a situação de um ente, solicitar_reserva para pedir reserva (sempre passa pela central) e informar_andamento quando ele trouxer novidade. Comissão, contrato, pagamento ou repasse: diga que a equipe responde e chame chamar_equipe.` : ""}
+${conversa?.nome && !contato ? `\nNOME NO PERFIL DO WHATSAPP: ${String(conversa.nome).slice(0, 60)}` : ""}
 ${contato ? `\nCONTATO JÁ CADASTRADO: ${[contato.nome, contato.empresa, contato.tipo].filter(Boolean).join(" · ")}` : ""}${conversa?.resumo ? `\nRESUMO DA CONVERSA ANTERIOR: ${conversa.resumo}` : ""}`;
 }
 
@@ -174,7 +177,7 @@ function garantirContato(ctx, conv, d = {}) {
   let c = contatoDe(ctx, conv);
   const tel = "+" + conv.id;
   const tipo = /prefeit|munic|órgão|orgao/i.test(d.perfil || "") ? "Órgão público" : /tribut/i.test(d.perfil || "") ? "Parceiro tributário" : ["Cliente (empresa)", "Cliente (investidor)", "Corretor parceiro", "Imobiliária", "Proprietário", "Outro"].find((t) => t === d.perfil) || (/pessoa/i.test(d.perfil || "") ? "Outro" : d.perfil ? "Outro" : c?.tipo || "Outro");
-  const novo = { ...(c || { id: novoId("c"), criado: ctx.agora.toISOString(), origem: "WhatsApp · Zoe", telefone: tel }), ...(d.nome ? { nome: limpa(d.nome, 120) } : {}), ...(d.empresa ? { empresa: limpa(d.empresa, 120) } : {}), ...(d.email ? { email: limpa(d.email, 120).toLowerCase() } : {}), ...(d.documento ? { documento: limpa(d.documento, 30) } : {}), ...(d.cidade ? { cidade: limpa(d.cidade, 80) } : {}), ...(d.creci ? { creci: limpa(d.creci, 30) } : {}), ...(d.cargo ? { cargo: limpa(d.cargo, 80) } : {}), ...(d.observacoes ? { obs: limpa(d.observacoes, 600) } : {}), tipo: d.perfil ? tipo : c?.tipo || tipo, atualizado: ctx.agora.toISOString() };
+  const novo = { ...(c || { id: novoId("c"), criado: ctx.agora.toISOString(), origem: "WhatsApp · Assistente", telefone: tel }), ...(d.nome ? { nome: limpa(d.nome, 120) } : {}), ...(d.empresa ? { empresa: limpa(d.empresa, 120) } : {}), ...(d.email ? { email: limpa(d.email, 120).toLowerCase() } : {}), ...(d.documento ? { documento: limpa(d.documento, 30) } : {}), ...(d.cidade ? { cidade: limpa(d.cidade, 80) } : {}), ...(d.creci ? { creci: limpa(d.creci, 30) } : {}), ...(d.cargo ? { cargo: limpa(d.cargo, 80) } : {}), ...(d.observacoes ? { obs: limpa(d.observacoes, 600) } : {}), tipo: d.perfil ? tipo : c?.tipo || tipo, atualizado: ctx.agora.toISOString() };
   if (!novo.nome) novo.nome = conv.nome || "Contato WhatsApp";
   ctx.salvar("contatos", novo.id, novo); conv.contato = novo.id; if (novo.nome) conv.nome = novo.nome;
   return novo;
@@ -189,12 +192,12 @@ export function executar(ctx, conv, nome, inp, equipe) {
     case "registrar_demanda": {
       const c = garantirContato(ctx, conv, inp);
       const parc = /corretor|imobili/i.test(inp.perfil || "");
-      const b = { id: novoId("b"), criado: agora.toISOString(), atualizado: agora.toISOString(), status: "ativo", origem: "WhatsApp · Zoe", nome: `${limpa(inp.empresa || inp.nome, 60)} · ${limpa(inp.tipo, 40)} ${limpa(inp.operacao, 20)}`.trim(),
+      const b = { id: novoId("b"), criado: agora.toISOString(), atualizado: agora.toISOString(), status: "ativo", origem: "WhatsApp · Assistente", nome: `${limpa(inp.empresa || inp.nome, 60)} · ${limpa(inp.tipo, 40)} ${limpa(inp.operacao, 20)}`.trim(),
         tipo: limpa(inp.tipo, 40), operacao: /venda|compra/i.test(inp.operacao || "") ? "Venda" : "Locação", cidades: limpa(inp.cidades, 200), regiao: limpa(inp.regiao, 120),
         areaMin: numS(inp.area_min), areaMax: numS(inp.area_max), haMin: numS(inp.ha_min), haMax: numS(inp.ha_max), dormMin: numS(inp.dormitorios_min), vagasMin: numS(inp.vagas_min), peMin: numS(inp.pe_direito_min), kvaMin: numS(inp.energia_min_kva), docasMin: numS(inp.docas_min), aluguelMax: numS(inp.aluguel_max), precoMaxM2: numS(inp.preco_max_m2), valorMax: numS(inp.valor_max), prazo: limpa(inp.prazo, 80),
-        desejaveis: limpa(inp.uso, 300), obs: `Registrado pela Zoe (WhatsApp +${conv.id}). ${limpa(inp.observacoes, 400)}`.trim(), ...(parc ? { parceiro_id: c.id, parceiro: c.nome, parceiro_tel: c.telefone } : { cliente: c.id }) };
+        desejaveis: limpa(inp.uso, 300), obs: `Registrado pela assistente (WhatsApp +${conv.id}). ${limpa(inp.observacoes, 400)}`.trim(), ...(parc ? { parceiro_id: c.id, parceiro: c.nome, parceiro_tel: c.telefone } : { cliente: c.id }) };
       ctx.salvar("briefings", b.id, b); conv.briefings = [...new Set([...(conv.briefings || []), b.id])];
-      ctx.avisar(`Nova demanda pela Zoe: ${b.nome} (${c.nome}, +${conv.id}).`, conv, false);
+      ctx.avisar(`Nova demanda pela assistente: ${b.nome} (${c.nome}, +${conv.id}).`, conv, false);
       return { ok: true, briefing: b.id, proximo: "Diga que a equipe monta as opções verificadas em até 24 horas úteis e ofereça buscar_imoveis/agendar." };
     }
     case "registrar_imovel_proprietario": {
@@ -204,7 +207,7 @@ export function executar(ctx, conv, nome, inp, equipe) {
         tipo: limpa(inp.tipo, 40), operacao: limpa(inp.operacao, 30) || "Venda", cidade: limpa(inp.cidade, 80), regiao: limpa(inp.bairro_regiao, 120), terreno: numS(inp.area_terreno), construida: numS(inp.area_construida), area_ha: numS(inp.area_ha), dormitorios: numS(inp.dormitorios), venda: numS(inp.valor_venda), aluguel: numS(inp.valor_aluguel),
         matricula: limpa(inp.matricula, 40), cartorio: limpa(inp.cartorio, 120), itens: limpa(inp.observacoes, 400), contato_origem: c.id, conversa: conv.id };
       ctx.salvar("ofertas", o.id, o);
-      ctx.avisar(`Imóvel oferecido pela Zoe: ${o.tipo} em ${o.cidade} (${c.nome}, +${conv.id}). Está em Ofertas → A revisar.`, conv, false);
+      ctx.avisar(`Imóvel oferecido pela assistente: ${o.tipo} em ${o.cidade} (${c.nome}, +${conv.id}). Está em Ofertas → A revisar.`, conv, false);
       return { ok: true, oferta: o.id, proximo: "Ofereça agendar a Captação no local (horarios_livres → agendar tipo 'Captação no local')." };
     }
     case "horarios_livres": {
@@ -218,9 +221,9 @@ export function executar(ctx, conv, nome, inp, equipe) {
       const c = garantirContato(ctx, conv, { nome: inp.nome });
       const dur = Number({ ...ZOE_PADRAO.horario, ...(cfgZ.horario || {}) }.duracao) || 60;
       const oferta = inp.codigo_imovel ? ctx.listar("ofertas").find((o) => o.codigo && o.codigo.toUpperCase() === String(inp.codigo_imovel).toUpperCase()) : null;
-      const a = { id: novoId("ag"), criado: agora.toISOString(), inicio: isoLocal(ini) + ":00" + TZ, fim: isoLocal(new Date(ini.getTime() + dur * 60e3)) + ":00" + TZ, tipo: limpa(inp.tipo, 40), assunto: limpa(inp.assunto, 200), nome: limpa(inp.nome, 120), contato: c.id, conversa: conv.id, wa: conv.id, oferta: oferta?.id || null, codigo: oferta?.codigo || limpa(inp.codigo_imovel, 12), status: "marcado", criado_por: "Zoe" };
+      const a = { id: novoId("ag"), criado: agora.toISOString(), inicio: isoLocal(ini) + ":00" + TZ, fim: isoLocal(new Date(ini.getTime() + dur * 60e3)) + ":00" + TZ, tipo: limpa(inp.tipo, 40), assunto: limpa(inp.assunto, 200), nome: limpa(inp.nome, 120), contato: c.id, conversa: conv.id, wa: conv.id, oferta: oferta?.id || null, codigo: oferta?.codigo || limpa(inp.codigo_imovel, 12), status: "marcado", criado_por: "Assistente" };
       ctx.salvar("agenda", a.id, a);
-      ctx.avisar(`Agendado pela Zoe: ${a.tipo} · ${fmtData(ini)} · ${a.nome} (+${conv.id}) · ${a.assunto}`, conv, true);
+      ctx.avisar(`Agendado pela assistente: ${a.tipo} · ${fmtData(ini)} · ${a.nome} (+${conv.id}) · ${a.assunto}`, conv, true);
       return { ok: true, id: a.id, confirmado: fmtData(ini), proximo: "Confirme ao cliente com dia da semana, data, hora e tipo; diga que receberá a confirmação/link da equipe." };
     }
     case "meus_agendamentos": {
@@ -231,7 +234,7 @@ export function executar(ctx, conv, nome, inp, equipe) {
       const a = agenda().find((x) => x.id === inp.id && x.wa === conv.id);
       if (!a) return { erro: "Agendamento não encontrado para este contato." };
       ctx.salvar("agenda", a.id, { ...a, status: "cancelado", cancelado_em: agora.toISOString() });
-      ctx.avisar(`Cancelado pelo cliente (Zoe): ${a.tipo} de ${fmtData(new Date(Date.parse(a.inicio)))} · ${a.nome}`, conv, true);
+      ctx.avisar(`Cancelado pelo cliente (assistente): ${a.tipo} de ${fmtData(new Date(Date.parse(a.inicio)))} · ${a.nome}`, conv, true);
       return { ok: true };
     }
     case "ajustar_horario": {
@@ -250,24 +253,24 @@ export function executar(ctx, conv, nome, inp, equipe) {
     case "salvar_contato": { const c = garantirContato(ctx, conv, inp); return { ok: true, contato: c.nome }; }
     case "chamar_equipe": {
       conv.precisa_humano = { motivo: limpa(inp.motivo, 200), urgente: !!inp.urgente, em: agora.toISOString() };
-      ctx.avisar(`${inp.urgente ? "URGENTE · " : ""}Zoe pede você na conversa com ${conv.nome || "+" + conv.id}: ${limpa(inp.motivo, 200)}`, conv, true);
+      ctx.avisar(`${inp.urgente ? "URGENTE · " : ""}A assistente pede você na conversa com ${conv.nome || "+" + conv.id}: ${limpa(inp.motivo, 200)}`, conv, true);
       return { ok: true, orientacao: "Avise que a equipe foi chamada e responde por aqui. Continue disponível para dúvidas simples." };
     }
     /* ----- frente tributária ----- */
     case "minhas_reservas": {
-      const ps = parceirosDoNumero(ctx.listar("b2g"), conv.id);
+      const ps = parceirosDoNumero(ctx.listar("b2g"), conv.id, pessoasB2G(ctx));
       if (!ps.length) return { erro: "Este número não está no cadastro de parceiros tributários. Siga a linha H para novo parceiro." };
       return { parceiro: ps.map((p) => p.nome).join(" / "), reservas: ps.flatMap((p) => resumoReservas(p, agora)) };
     }
-    case "consultar_ente": return disponibilidade(ctx.listar("b2g"), inp.ente, inp.uf, agora, conv.id);
+    case "consultar_ente": return disponibilidade(ctx.listar("b2g"), inp.ente, inp.uf, agora, conv.id, pessoasB2G(ctx));
     case "solicitar_reserva": case "informar_andamento": {
-      const ps = parceirosDoNumero(ctx.listar("b2g"), conv.id); const d = nome === "solicitar_reserva" ? disponibilidade(ctx.listar("b2g"), inp.ente, inp.uf, agora, conv.id) : null;
-      if (d && !d.livre && !d.sua_reserva) return { ok: false, motivo: d.situacao, orientacao: "Explique que o ente não está disponível agora e ofereça fila de espera ou outro ente." };
-      if (d && d.sua_reserva) return { ok: false, motivo: `já é reserva sua (${d.status}, até ${d.ate})` };
-      const id = novoId("sol_"); const sol = { tipo: nome === "solicitar_reserva" ? "reserva" : "andamento", ente: limpa(inp.ente, 120) + (inp.uf ? "/" + limpa(inp.uf, 2).toUpperCase() : ""), contato_no_ente: limpa(inp.contato_no_ente, 200), frentes: limpa(inp.frentes, 120), texto: limpa(inp.andamento || inp.observacoes, 600), wa: conv.id, nome: ps.map((p) => p.nome).join(" / ") || conv.nome || "", parceiro_ids: ps.map((p) => p.id), cadastrado: !!ps.length, status: "pendente", em: agora.toISOString() };
+      const ps = parceirosDoNumero(ctx.listar("b2g"), conv.id, pessoasB2G(ctx)); const d = nome === "solicitar_reserva" ? disponibilidade(ctx.listar("b2g"), inp.ente, inp.uf, agora, conv.id, pessoasB2G(ctx)) : null;
+      if (d?.situacao === "reservado" && !inp.fila_espera) return { ok: false, motivo: "ente já reservado com a PrimeCorp", orientacao: "Diga que já está reservado e ofereça registrar na fila de espera (chame de novo com fila_espera=true) ou outro ente." };
+      if (d?.situacao === "sua_reserva") return { ok: false, motivo: `já é reserva sua (${d.status}, ${d.validade})` };
+      const id = novoId("sol_"); const sol = { tipo: nome === "solicitar_reserva" ? (inp.fila_espera ? "fila de espera" : "reserva") : "andamento", ente: limpa(inp.ente, 120) + (inp.uf ? "/" + limpa(inp.uf, 2).toUpperCase() : ""), contato_no_ente: limpa(inp.contato_no_ente, 200), frentes: limpa(inp.frentes, 120), texto: limpa(inp.andamento || inp.observacoes, 600), wa: conv.id, nome: ps.map((p) => p.nome).join(" / ") || conv.nome || "", parceiro_ids: ps.map((p) => p.id), cadastrado: !!ps.length, status: "pendente", em: agora.toISOString() };
       ctx.salvar("b2g", id, sol);
-      ctx.avisar(`${sol.tipo === "reserva" ? "Pedido de RESERVA" : "Andamento"} · ${sol.ente} · ${sol.nome || "+" + conv.id}${sol.cadastrado ? "" : " (não cadastrado)"}${sol.texto ? ": " + sol.texto : ""}${sol.contato_no_ente ? " · contato: " + sol.contato_no_ente : ""}`, conv, false);
-      return { ok: true, registrado: sol.tipo, orientacao: sol.tipo === "reserva" ? "Diga que o pedido foi registrado e a equipe confirma a liberação por aqui; a reserva só vale depois da confirmação." : "Agradeça e diga que a equipe já foi avisada." };
+      ctx.avisar(`${sol.tipo === "reserva" ? "Pedido de RESERVA (consultar central)" : sol.tipo === "fila de espera" ? "FILA DE ESPERA" : "Andamento"} · ${sol.ente} · ${sol.nome || "+" + conv.id}${sol.cadastrado ? "" : " (não cadastrado)"}${sol.texto ? ": " + sol.texto : ""}${sol.contato_no_ente ? " · contato: " + sol.contato_no_ente : ""}`, conv, false);
+      return { ok: true, registrado: sol.tipo, orientacao: sol.tipo === "andamento" ? "Agradeça e diga que a equipe já foi avisada." : "Diga que a solicitação foi registrada, que a equipe consulta a central de reservas e confirma por aqui; a reserva só vale depois dessa confirmação." };
     }
     case "painel_tributario": return painelB2G(ctx.listar("b2g"), agora, { dias: Number(inp.dias) || 15 });
     case "buscar_reserva": {
@@ -328,7 +331,7 @@ export async function responder(ctx, conv, { equipe = false } = {}) {
 
   const client = ctx.cliente || new Anthropic();
   const model = ctx.modelo || MODELO_PADRAO;
-  const parceiros = equipe ? [] : parceirosDoNumero(ctx.listar("b2g"), conv.id);
+  const parceiros = equipe ? [] : parceirosDoNumero(ctx.listar("b2g"), conv.id, pessoasB2G(ctx));
   const sistema = promptSistema({ zoe: ctx.cfg.zoe, geral: ctx.cfg.geral, agora: ctx.agora, equipe, contato: contatoDe(ctx, conv), conversa: conv, parceiros });
   const msgs = [];
   for (const m of (conv.msgs || []).slice(-30)) {
@@ -351,7 +354,7 @@ export async function responder(ctx, conv, { equipe = false } = {}) {
     msgs.push({ role: "assistant", content: r.content });
     msgs.push({ role: "user", content: usos.map((u) => { let res; try { res = executar(ctx, conv, u.name, u.input, equipe); } catch (e) { res = { erro: String(e?.message || e) }; } acoes.push(u.name); return { type: "tool_result", tool_use_id: u.id, content: JSON.stringify(res).slice(0, 8000) }; }) });
   }
-  executar(ctx, conv, "chamar_equipe", { motivo: "A Zoe não concluiu a resposta (muitas etapas).", urgente: false }, equipe);
+  executar(ctx, conv, "chamar_equipe", { motivo: "A assistente não concluiu a resposta (muitas etapas).", urgente: false }, equipe);
   return { texto: "Vou pedir para a equipe confirmar isso e já te respondemos por aqui.", botoes: [], acoes: [...acoes, "chamar_equipe"] };
 }
 function dentroHorario(ctx) { const H = { ...ZOE_PADRAO.horario, ...(ctx.cfg.zoe?.horario || {}) }; const L = local(ctx.agora); const min = L.h * 60 + L.mi; const f = hm(fimDoDia(H, L.wd)); return H.dias.includes(L.wd) && min >= hm(H.inicio)[0] * 60 + hm(H.inicio)[1] && min < f[0] * 60 + f[1]; }

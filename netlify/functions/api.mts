@@ -267,7 +267,7 @@ export default async (req: Request, context: Context) => {
       anexarMsg(conv, { id: "s" + Date.now().toString(36), de: "cliente", t: new Date().toISOString(), texto });
       conv.id = id;
       const ctx = await criarContexto({ base: env("URL") || url.origin, sandbox: true });
-      let r: any; try { r = await responder(ctx, conv, { equipe: !!body?.equipe }); } catch (e) { return erro("A Zoe não respondeu: " + (e instanceof Error ? e.message : String(e)), 502); }
+      let r: any; try { r = await responder(ctx, conv, { equipe: !!body?.equipe }); } catch (e) { return erro("A assistente não respondeu: " + (e instanceof Error ? e.message : String(e)), 502); }
       const g = await ctx.gravar();
       anexarMsg(conv, { id: "z" + Date.now().toString(36), de: "zoe", t: new Date().toISOString(), texto: r.texto + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), acoes: r.acoes });
       if (conv.modo === "humano") conv.modo = "zoe"; // na simulação, segue com a Zoe
@@ -302,7 +302,7 @@ export default async (req: Request, context: Context) => {
       return json({ ok: !!(r && (r.status === 202 || r.ok)) });
     }
     if (rota === "zoe" && a === "sugestao" && req.method === "POST") {
-      if (!admin) return erro("Somente o administrador aprova o que a Zoe aprende.", 403);
+      if (!admin) return erro("Somente o administrador aprova o que a assistente aprende.", 403);
       const body = await req.json().catch(() => null);
       if (!ID_RE.test(String(body?.id || ""))) return erro("Sugestão inválida.");
       const acao = body?.acao === "recusar" ? "recusar" : body?.acao === "aprovar" ? "aprovar" : "";

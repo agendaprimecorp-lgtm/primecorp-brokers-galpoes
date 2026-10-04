@@ -121,7 +121,7 @@ await t("Zoe: busca de galpão registra demanda, encontra opção sem endereço 
   assert.equal(visto[1].encontrados, 1); assert.equal(visto[1].imoveis[0].codigo, "PC-0001"); assert.ok(!JSON.stringify(visto[1]).includes("Dom Barreto")); assert.ok(!JSON.stringify(visto[1]).includes("45678"));
   const ult = enviados.filter((m) => m.to === "5519911112222").pop(); assert.ok(ult); assert.equal(ult.type, "interactive"); assert.equal(ult.interactive.action.buttons.length, 3);
   const d = await J(await api(R("GET", "/api/dados"), ctx()));
-  const b = d.j.briefings.find((x) => x.origem === "WhatsApp · Zoe"); assert.ok(b); assert.equal(b.areaMin, "5000"); assert.equal(b.operacao, "Locação");
+  const b = d.j.briefings.find((x) => x.origem === "WhatsApp · Assistente"); assert.ok(b); assert.equal(b.areaMin, "5000"); assert.equal(b.operacao, "Locação");
   const c = d.j.contatos.find((x) => x.telefone === "+5519911112222"); assert.equal(c.empresa, "Log Z"); assert.equal(b.cliente, c.id);
   const cv = d.j.conversas.find((x) => x.id === "5519911112222"); assert.equal(cv.ultima_de, "zoe"); assert.equal(cv.contato, c.id); assert.ok(!cv.processando);
   const e = await J(await api(R("GET", "/api/emissoes"), ctx())); assert.ok(e.j.emissoes.some((x) => x.tipo === "zoe_aviso" && /Nova demanda/.test(x.conteudo)));
@@ -137,7 +137,7 @@ await t("Zoe: agenda só em horário livre e avisa a equipe", async () => {
   assert.ok(Z.executar(c, conv, "agendar", { inicio: hs.horarios[0].inicio, tipo: "Ligação", assunto: "y", nome: "Ana" }).erro, "não marca duas vezes");
   assert.equal(Z.executar(c, conv, "meus_agendamentos", {}).agendamentos.length, 1);
   assert.ok(Z.executar(c, conv, "cancelar_agendamento", { id: ok1.id }).ok); assert.equal(mem.agenda[0].status, "cancelado");
-  assert.ok(av.some((x) => /Agendado pela Zoe/.test(x)));
+  assert.ok(av.some((x) => /Agendado pela assistente/.test(x)));
 });
 await t("Zoe: HUMANO transfere sem IA e silencia a Zoe; humano responde pelo app", async () => {
   globalThis.__zoe = () => { throw new Error("não devia chamar a IA"); };
@@ -303,7 +303,7 @@ await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async (
 await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebra de linha", async () => {
   Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog" }); const ant = globalThis.__fetchWA; const reqs = [];
   globalThis.__fetchWA = async (url, op) => { reqs.push([String(url), JSON.parse(op.body)]); return new Response(JSON.stringify({ status: "PENDING" }), { status: 200 }); };
-  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "zoe_aviso");
+  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "primecorp_aviso");
   assert.equal(reqs[0][0], "https://waba-v2.360dialog.io/v1/configs/templates"); assert.equal(reqs[0][1].category, "UTILITY"); assert.match(reqs[0][1].components[0].text, /\{\{1\}\}/);
   const { enviarModelo } = await import("../shared/whatsapp.mjs"); await enviarModelo("5519998051985", "zoe_aviso", ["linha 1\nlinha   2"]);
   assert.equal(reqs.at(-1)[1].template.components[0].parameters[0].text, "linha 1 linha 2");
@@ -322,21 +322,31 @@ await t("frente tributária: importa PrimeGov, reconhece parceiro e protege a ca
   assert.equal((await api(R("PUT", "/api/dados/b2g/bp_p1", { nome: "x" }), ctx())).status, 403);
   const agora = new Date("2026-10-04T12:00:00-03:00"); const lista = (await J(await api(R("GET", "/api/dados"), ctx()))).j.b2g;
   assert.equal(B.parceirosDoNumero(lista, "553591030705").length, 1, "acha mesmo sem o 9");
-  const outro = B.disponibilidade(lista, "araraquara", "SP", agora, "5535991030705"); assert.equal(outro.livre, false); assert.ok(!JSON.stringify(outro).includes("MARIA"), "não revela outro parceiro");
-  assert.equal(B.disponibilidade(lista, "Itajubá", "MG", agora, "5535991030705").livre, true, "reserva vencida = livre");
-  assert.equal(B.disponibilidade(lista, "Prefeitura de Pouso Alegre", "", agora, "5535991030705").sua_reserva, true);
+  const outro = B.disponibilidade(lista, "araraquara", "SP", agora, "5535991030705"); assert.equal(outro.situacao, "reservado"); assert.ok(!/MARIA|12\/2026/.test(JSON.stringify(outro)), "não revela parceiro nem prazo");
+  const venc = B.disponibilidade(lista, "Itajubá", "MG", agora, "5535991030705"); assert.equal(venc.situacao, "consultar_central", "fora da carteira ativa nunca é 'livre'"); assert.ok(!/"livre"/.test(JSON.stringify(venc)));
+  assert.equal(B.disponibilidade(lista, "Campinas", "SP", agora, "5535991030705").situacao, "consultar_central");
+  assert.equal(B.disponibilidade(lista, "Prefeitura de Pouso Alegre", "", agora, "5535991030705").situacao, "sua_reserva");
+  // pessoa com WhatsApp próprio vê as carteiras em que aparece no nome (ex.: co-parceiro)
+  const pes = B.lerPessoas("Maria Outra; (11) 91234-5678; maria outra"); assert.equal(B.parceirosDoNumero(lista, "5511912345678", pes)[0].nome, "MARIA OUTRA");
+  assert.equal(B.parceirosDoNumero(lista, "5511944944084").length, 1, "Kronenberg (padrão) acha a carteira com o telefone dele");
   // conversa real do parceiro pelo WhatsApp
   let sys, tools; globalThis.__zoe = (req) => { const last = req.messages.at(-1); if (typeof last.content === "string") { sys = req.system; tools = req.tools.map((x) => x.name); return passo("solicitar_reserva", { ente: "Varginha", uf: "MG", contato_no_ente: "Secretário de Finanças" }); } return fala("Pedido registrado. A equipe confirma a liberação por aqui."); };
   const n0 = enviados.length; await W(payload("5535991030705", "Quero reservar Varginha", "wamid.T1"));
   await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5535991030705", espera: 0 }) }));
   assert.match(sys, /PARCEIRO TRIBUTÁRIO CADASTRADO falando agora: JOÃO TESTE/); assert.ok(tools.includes("minhas_reservas") && tools.includes("consultar_ente"));
   const d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const sol = d.b2g.find((x) => x.id.startsWith("sol_"));
-  assert.equal(sol.ente, "Varginha/MG"); assert.equal(sol.cadastrado, true); assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /RESERVA · Varginha\/MG/.test(m.text?.body || "")), "equipe avisada");
+  assert.equal(sol.ente, "Varginha/MG"); assert.equal(sol.cadastrado, true); assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /RESERVA \(consultar central\) · Varginha\/MG/.test(m.text?.body || "")), "equipe avisada");
   assert.equal((await api(R("POST", "/api/b2g/solicitacao", { id: sol.id }), ctx())).status, 200);
   const ctxE = { agora, cfg: { zoe: {}, geral: {} }, listar: (c) => (c === "b2g" ? lista : []), salvar: () => {}, avisar: () => {} };
   const br = Z.executar(ctxE, { id: "5519998051985" }, "buscar_reserva", { termo: "araraquara" }, true); assert.equal(br.resultados[0].parceiro, "MARIA OUTRA", "equipe vê o parceiro");
   const pn = Z.executar(ctxE, { id: "x" }, "painel_tributario", {}, true); assert.equal(pn.reservas_ativas, 2);
   const nao = Z.executar(ctxE, { id: "5511900000000" }, "minhas_reservas", {}, false); assert.ok(nao.erro);
+});
+
+await t("assistente se chama PrimeCorp e ajusta o tratamento pelo nome", async () => {
+  const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), conversa: { nome: "Juliana" } });
+  assert.match(p, /Você é PrimeCorp, a assistente virtual/); assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
+  assert.match(Z.promptSistema({ zoe: { nome: "Clara" }, geral: {}, agora: new Date() }), /Você é Clara/);
 });
 
 console.log(`\n${ok} testes de verificação e Zoe OK`);

@@ -25,8 +25,8 @@ export async function criarContexto({ base, sandbox = false } = {}) {
       for (const a of avisos) {
         await registrarEmissao({ tipo: "zoe_aviso", conteudo: a.texto, meta: { conversa: a.conv, urgente: a.urgente } }).catch(() => null);
         for (const n of equipeWA()) {
-          try { await enviar(n, "🤖 Zoe · " + a.texto); }
-          catch { const tpl = env("ZOE_MODELO_AVISO") || "zoe_aviso"; if (tpl) await enviarModelo(n, tpl, [a.texto.slice(0, 900)]).catch(() => null); }
+          try { await enviar(n, "🤖 Assistente PrimeCorp · " + a.texto); }
+          catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [a.texto.slice(0, 900)]).catch(() => null); }
         }
       }
       return { gravados: pend.length, avisos };
@@ -55,7 +55,7 @@ export async function processarConversa(wa, { base, esperaMs = 2500 } = {}) {
   if (conv.modo === "humano" && !humanoAtivo && !equipe) { conv.modo = "zoe"; conv.modo_por = "retomada automática"; }
   let r;
   try { r = await responder(ctx, conv, { equipe }); }
-  catch (e) { console.error("Zoe:", e); ctx.avisar(`Zoe com erro na conversa ${conv.nome || "+" + wa}: ${e?.message || e}`, conv, true); r = { texto: "Tive um problema técnico agora. Já avisei a equipe, que responde por aqui em breve.", botoes: [], acoes: ["erro"] }; conv.precisa_humano = { motivo: "erro técnico da Zoe", em: new Date().toISOString() }; }
+  catch (e) { console.error("Zoe:", e); ctx.avisar(`Assistente com erro na conversa ${conv.nome || "+" + wa}: ${e?.message || e}`, conv, true); r = { texto: "Tive um problema técnico agora. Já avisei a equipe, que responde por aqui em breve.", botoes: [], acoes: ["erro"] }; conv.precisa_humano = { motivo: "erro técnico da assistente", em: new Date().toISOString() }; }
 
   let enviadoId = null, falha = null;
   if (r.texto && janelaAberta(conv)) { try { enviadoId = await enviar(wa, r.texto, r.botoes); } catch (e) { falha = String(e?.message || e); } }

@@ -64,10 +64,10 @@ await p.click('[data-aba="conversas"]'); await W(); await p.reload(); await W(90
 if (!(await p.$('[data-zc="5519911112222"]'))) { await p.click('[data-tab="mais"]').catch(() => {}); await W(); await p.click('#m10'); await W(); }
 ok(!!(await p.$('[data-zc="5519911112222"]')), 'conversa do WhatsApp aparece na lista'); await sh('07_zoe_conversas');
 await p.click('[data-zc="5519911112222"]'); await W(600);
-const ct = await p.textContent('main'); ok(/Zoe pediu você/.test(ct), 'transbordo: Zoe pede humano'); ok(/Tenho estes horários/.test(ct), 'Zoe ofereceu horários livres');
+const ct = await p.textContent('main'); ok(/Assistente pediu você/.test(ct), 'transbordo: Zoe pede humano'); ok(/Tenho estes horários/.test(ct), 'Zoe ofereceu horários livres');
 await p.fill('#htx', 'Oi Carlos, aqui é o Rodrigo. Te ligo em 10 minutos.'); await p.click('#hgo'); ok(await esperar(async () => /Rodrigo\. Te ligo/.test(await p.textContent('#chat'))), 'humano responde pelo app');
 await sh('08_conversa', p, true);
-await p.click('#dev'); ok(await esperar(async () => /Zoe atendendo/.test(await p.textContent('main'))), 'devolve para a Zoe');
+await p.click('#dev'); ok(await esperar(async () => /Assistente atendendo/.test(await p.textContent('main'))), 'devolve para a Zoe');
 
 // 4) Agenda e painel
 await p.click('[data-tab="mais"]').catch(() => {}); await W(); await p.click('#m11'); await W(); await p.click('#nag');

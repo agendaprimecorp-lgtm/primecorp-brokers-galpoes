@@ -41,7 +41,22 @@ const hoje = (agora) => new Date(agora.getTime() - 3 * 3600e3).toISOString().sli
 export const reservaAtiva = (r, agora) => r.status === "contratado" || (!!r.fim && r.fim >= hoje(agora));
 const fmt = (iso) => (iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "");
 
-export const parceirosDoNumero = (lista, wa) => { const v = variantes(wa); return (lista || []).filter((p) => !String(p.id).startsWith("sol_") && (p.telefones || []).some((t) => v.has(t))); };
+/** Pessoas da equipe de parceiros com WhatsApp próprio (complementa o PrimeGov, que guarda 1 telefone por cadastro).
+ * Texto, uma por linha: "Nome; telefone; apelido1, apelido2" — o parceiro é dela se o nome do cadastro contém o nome ou um apelido. */
+export function lerPessoas(txt) {
+  return String(txt || "").split(/\n+/).map((l) => l.split(";").map((x) => x.trim())).filter(([n, t]) => n && t)
+    .map(([nome, tel, ap = ""]) => ({ nome, telefones: telefones(tel), chaves: [nome, ...ap.split(",")].map(semAcento).map((x) => x.trim()).filter((x) => x.length >= 4) }))
+    .filter((p) => p.telefones.length);
+}
+export const PESSOAS_PADRAO = `Rodrigo Kronenberg; (11) 94494-4084; kronenberg, kronemberg
+Rodrigo Caparica; (11) 99980-0300; caparica
+Marcelo MT; (65) 99646-9855; marcelo mt
+Zezinho; (11) 99946-1772; zezinho, jose lopes`;
+
+export const parceirosDoNumero = (lista, wa, pessoas = lerPessoas(PESSOAS_PADRAO)) => {
+  const v = variantes(wa); const eu = (pessoas || []).filter((x) => x.telefones.some((t) => v.has(t)));
+  return (lista || []).filter((p) => !String(p.id).startsWith("sol_") && ((p.telefones || []).some((t) => v.has(t)) || eu.some((x) => x.chaves.some((k) => semAcento(p.nome).includes(k)))));
+};
 
 /** Reservas do parceiro, prontas para a Zoe ler. */
 export function resumoReservas(p, agora) {
@@ -52,10 +67,12 @@ export function resumoReservas(p, agora) {
   }));
 }
 
-/** Procura um ente (município/estado/consórcio) entre as reservas. Nunca devolve o nome de outro parceiro. */
-export function disponibilidade(lista, ente, uf, agora, waSolicitante = "") {
-  const alvo = semAcento(ente).replace(/^(municipio|prefeitura|cidade) (de |do |da )?/, ""); const u = String(uf || "").toUpperCase().slice(0, 2);
-  const meus = new Set(parceirosDoNumero(lista, waSolicitante).map((p) => p.id));
+/** Situação de um ente na carteira PrimeCorp. A carteira local NÃO é a central de reservas:
+ * reservado conosco → "reservado"; fora da carteira → "consultar_central" (nunca "livre": só a equipe confirma após consultar a central).
+ * Ponto único para trocar pela consulta à central quando ela for integrada. */
+export function disponibilidade(lista, ente, uf, agora, waSolicitante = "", pessoas) {
+  const alvo = semAcento(ente).replace(/^(municipio|prefeitura|cidade|camara) (municipal )?(de |do |da )?/, ""); const u = String(uf || "").toUpperCase().slice(0, 2);
+  const meus = new Set(parceirosDoNumero(lista, waSolicitante, pessoas).map((p) => p.id));
   const achados = [];
   for (const p of lista || []) for (const r of p.reservas || []) {
     const n = semAcento(r.nome);
@@ -64,9 +81,10 @@ export function disponibilidade(lista, ente, uf, agora, waSolicitante = "") {
     achados.push({ r, proprio: meus.has(p.id) });
   }
   const ativo = achados.find((x) => reservaAtiva(x.r, agora));
-  if (!ativo) return { ente: ente + (u ? "/" + u : ""), livre: true, observacao: achados.length ? "Já teve reserva anterior, hoje vencida." : "" };
-  if (ativo.proprio) return { ente: ativo.r.nome + "/" + ativo.r.uf, livre: false, sua_reserva: true, status: STATUS_B2G[ativo.r.status], ate: ativo.r.status === "contratado" ? "contratado" : fmt(ativo.r.fim) };
-  return { ente: ativo.r.nome + (ativo.r.uf ? "/" + ativo.r.uf : ""), livre: false, sua_reserva: false, situacao: ativo.r.status === "contratado" ? "em atendimento pela PrimeCorp (contratado)" : `reservado para outro parceiro até ${fmt(ativo.r.fim)}`, fila: "pode entrar na fila de espera: se a reserva vencer sem avanço, a equipe avisa" };
+  const nomeEnte = (r) => r.nome + (r.uf ? "/" + r.uf : "");
+  if (ativo?.proprio) return { ente: nomeEnte(ativo.r), situacao: "sua_reserva", status: STATUS_B2G[ativo.r.status], validade: ativo.r.status === "contratado" ? "contratado" : "até " + fmt(ativo.r.fim) };
+  if (ativo) return { ente: nomeEnte(ativo.r), situacao: "reservado", orientacao: "Diga apenas que o ente já está reservado com a PrimeCorp (sem dizer com quem nem até quando). Ofereça registrar interesse para fila de espera ou outro ente." };
+  return { ente: ente + (u ? "/" + u : ""), situacao: "consultar_central", orientacao: "NÃO diga que está livre. Diga que não consta reserva na carteira da PrimeCorp e que, para trabalhar o ente, é preciso solicitar a reserva: a equipe consulta a central e confirma por aqui. Ofereça registrar a solicitação agora (solicitar_reserva)." };
 }
 
 /** Números do sistema para a equipe. */
