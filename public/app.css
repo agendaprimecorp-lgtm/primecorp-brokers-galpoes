@@ -382,3 +382,4 @@ p.sim{align-self:flex-end;margin:0;font-size:12px;color:var(--ink2);font-style:i
 .row .grow,.row input.grow{flex:1;min-width:0}
 .seg.sm button{padding:6px 10px;font-size:13px}
 .zoe-p .item{width:100%}
+.card.sug{border:1px solid var(--line,#e3e5e8);box-shadow:none;margin:10px 0}.card.sug textarea{width:100%;margin:6px 0}

@@ -11,12 +11,13 @@ import V from "../../shared/verif.mjs";
 import { criarContexto } from "../../shared/zoe-run.mjs";
 import { responder, anexarMsg } from "../../shared/zoe.mjs";
 import { enviar, janelaAberta, equipeWA, conectarWebhook360 } from "../../shared/whatsapp.mjs";
+import { decidirSugestao } from "../../shared/zoe-revisao.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_PDF = 4 * 1024 * 1024; // 4 MB
 const MAX_FOTO = 3 * 1024 * 1024; // 3 MB por foto já tratada no celular
 const SO_ADMIN_COL = ["config", "usuarios"];
-const SO_SERVIDOR_COL = ["conversas"]; // gravadas só pelo servidor (evita sobrescrever mensagens que chegam)
+const SO_SERVIDOR_COL = ["conversas", "zoe_sugestoes"]; // gravadas só pelo servidor (evita sobrescrever mensagens que chegam)
 const MAX_MAT = 4_300_000; // ~4,3 MB (limite de corpo das functions: 6 MB em base64)
 const MAT_TIPOS: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const FOTO_RE = /^fotos\/[A-Za-z0-9_-]{1,80}\/[\w-]{6,40}\.jpg$/;
@@ -55,7 +56,7 @@ export default async (req: Request, context: Context) => {
       if (!COLECOES.includes(a)) return erro("Coleção inválida.");
       if (!ID_RE.test(b)) return erro("Identificador inválido.");
       if (SO_ADMIN_COL.includes(a) && !admin) return erro("Somente o administrador altera esta área.", 403);
-      if (SO_SERVIDOR_COL.includes(a) && req.method === "PUT") return erro("Conversas são gravadas pelo servidor.", 403);
+      if (SO_SERVIDOR_COL.includes(a) && req.method === "PUT") return erro(a === "conversas" ? "Conversas são gravadas pelo servidor." : "Use Aprovar ou Recusar.", 403);
       if (req.method === "DELETE" && !admin) return erro("Somente o administrador exclui registros.", 403);
       if (req.method === "PUT") {
         const body = await req.json().catch(() => null);
@@ -271,6 +272,20 @@ export default async (req: Request, context: Context) => {
       if (conv.modo === "humano") conv.modo = "zoe"; // na simulação, segue com a Zoe
       delete conv.id; await salvarRegistro("conversas", id, conv);
       return json({ ok: true, conversa: id, resposta: r.texto, botoes: r.botoes, acoes: r.acoes, simulado: g.simulado, avisos: (g.avisos || []).map((x: any) => x.texto) });
+    }
+    if (rota === "zoe" && a === "revisar" && req.method === "POST") {
+      if (!admin) return erro("Somente o administrador roda a revisão.", 403);
+      const r = await fetch(new URL("/.netlify/functions/zoe-revisao-background", env("URL") || url.origin), { method: "POST", headers: { "x-coleta-segredo": env("COLETA_SEGREDO") || "" } }).catch(() => null);
+      return json({ ok: !!(r && (r.status === 202 || r.ok)) });
+    }
+    if (rota === "zoe" && a === "sugestao" && req.method === "POST") {
+      if (!admin) return erro("Somente o administrador aprova o que a Zoe aprende.", 403);
+      const body = await req.json().catch(() => null);
+      if (!ID_RE.test(String(body?.id || ""))) return erro("Sugestão inválida.");
+      const acao = body?.acao === "recusar" ? "recusar" : body?.acao === "aprovar" ? "aprovar" : "";
+      if (!acao) return erro("Ação inválida.");
+      try { return json({ ok: true, ...(await decidirSugestao(body.id, acao, { texto: typeof body.texto === "string" ? body.texto : undefined, por: u.email })) }); }
+      catch (e: any) { return erro(e?.message || String(e), e?.status || 500); }
     }
     if (rota === "zoe" && a === "conectar" && req.method === "POST") {
       if (!admin) return erro("Somente o administrador conecta o WhatsApp.", 403);

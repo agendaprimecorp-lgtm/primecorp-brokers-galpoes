@@ -301,9 +301,9 @@ await t("link: fotos, contatos e proxy de imagem protegido", async () => {
 });
 
 await t("IA: modelo de reserva, resposta fora do padrão e item do roteiro", async () => {
-  globalThis.__modelosFora = ["claude-sonnet-4-5-20250929"]; globalThis.__modelos = [];
+  globalThis.__modelosFora = ["claude-sonnet-5-5"]; globalThis.__modelos = [];
   const a = await J(await api(R("POST", "/api/ia/ambiente", { fala: "fachada com portão", imagens: ["x".repeat(200)], tipo: "Casa", item: "Fachada" }), ctx()));
-  assert.equal(a.s, 200); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"], "cai no modelo de reserva");
+  assert.equal(a.s, 200); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-5-5", "claude-sonnet-4-5"], "cai no modelo de reserva");
   assert.match(globalThis.__iaReq.messages[0].content.at(-1).text, /Item do roteiro: Fachada/);
   globalThis.__modelosFora = [];
   globalThis.__iaLixo = { ambiente: 42, descricao: "  Sala ampla.  ", caracteristicas: "piso", dados: { dormitorios: "3", vagas: "dois", venda: "850.000" }, foto: { ok: false, problemas: ["escura", 7] } };

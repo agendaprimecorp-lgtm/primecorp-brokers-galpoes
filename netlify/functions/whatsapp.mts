@@ -38,7 +38,7 @@ export default async (req: Request, _context: Context) => {
     conv.equipe = equipe.includes(wa);
     if (!conv.nome && m.nome) conv.nome = m.nome;
     if (conv.optout && m.texto.trim()) conv.optout = false; // voltou a escrever: reabre
-    anexarMsg(conv, { id: m.id, de: "cliente", t: m.t, texto: m.texto, ...(m.midia ? { midia: m.midia } : {}) });
+    anexarMsg(conv, { id: m.id, de: "cliente", t: m.t, texto: m.texto, ...(m.midia ? { midia: m.midia } : {}), ...(m.midia_id ? { midia_id: m.midia_id } : {}) });
     await salvarRegistro("conversas", wa, conv);
     marcarLida(m.id);
     acionar.add(wa);

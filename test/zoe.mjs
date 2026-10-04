@@ -216,5 +216,70 @@ await t("360dialog: botão conecta o webhook com chave em cabeçalho", async () 
 });
 await t("status mostra WhatsApp configurado e webhook", async () => { const s = await J(await api(R("GET", "/api/status"), ctx())); assert.equal(s.j.whatsapp_configurado, true); assert.match(s.j.webhook, /\/whatsapp\/webhook$/); });
 
+await t("Zoe: botões no formato antigo viram botões de verdade", async () => {
+  const f = Z.finalizar("Perfeito! E qual operação você precisa?\n[Alugar | Comprar]"); assert.equal(f.texto, "Perfeito! E qual operação você precisa?"); assert.deepEqual(f.botoes, ["Alugar", "Comprar"]);
+  assert.equal(Z.finalizar("Veja [aqui] o link").botoes.length, 0, "colchete comum não vira botão");
+  let hist; globalThis.__zoe = (req) => { hist = req.messages; return fala("Em qual cidade?\n[[botoes: Sumaré | Campinas]]"); };
+  const conv = { id: "x", msgs: [{ de: "cliente", t: new Date().toISOString(), texto: "oi" }, { de: "zoe", t: new Date().toISOString(), texto: "Qual tipo?\n[Galpão | Casa]" }, { de: "cliente", t: new Date().toISOString(), texto: "Galpão" }] };
+  const ctxZ = { agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: () => [], salvar: () => {}, avisar: () => {}, cliente: new (await import("./mocks/anthropic.mjs")).default() };
+  const r = await Z.responder(ctxZ, conv); assert.deepEqual(r.botoes, ["Sumaré", "Campinas"]);
+  assert.match(hist.find((m) => m.role === "assistant").content, /\[\[botoes: Galpão \| Casa\]\]/, "histórico ensina o formato certo");
+});
+await t("Zoe: áudio do cliente é baixado, transcrito e respondido", async () => {
+  const ant = globalThis.__fetchWA; const urls = [];
+  globalThis.__fetchWA = async (url, op) => { urls.push(String(url));
+    if (String(url).endsWith("/media.A1")) return new Response(JSON.stringify({ url: "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=A1", mime_type: "audio/ogg; codecs=opus" }), { status: 200 });
+    if (String(url).includes("attachments")) return new Response(Buffer.from("OggS-audio"), { status: 200, headers: { "content-type": "audio/ogg" } });
+    enviados.push(JSON.parse(op.body)); return new Response(JSON.stringify({ messages: [{ id: "wamid.a" + enviados.length }] }), { status: 200 }); };
+  let ouvido; globalThis.__transcrever = async (buf, mime) => { ouvido = [buf.toString(), mime]; return "Quero alugar um galpão em Sumaré"; };
+  let viu; globalThis.__zoe = (req) => { viu = req.messages.at(-1).content; return fala("Entendido, galpão para alugar em Sumaré."); };
+  const corpo = JSON.stringify({ entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "999" }, contacts: [{ wa_id: "5519944443333", profile: { name: "Ana" } }], messages: [{ from: "5519944443333", id: "wamid.AU1", timestamp: String(Math.floor(Date.now() / 1000)), type: "audio", audio: { id: "media.A1", mime_type: "audio/ogg; codecs=opus", voice: true } }] } }] }] });
+  assert.equal((await W(corpo)).status, 200);
+  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519944443333", espera: 0 }) }));
+  assert.deepEqual(ouvido, ["OggS-audio", "audio/ogg"]); assert.match(viu, /\[áudio\] Quero alugar um galpão em Sumaré/);
+  assert.ok(urls.some((u) => u.includes("graph.facebook.com") && u.endsWith("/media.A1")));
+  const cv = (await J(await api(R("GET", "/api/dados"), ctx()))).j.conversas.find((x) => x.id === "5519944443333");
+  assert.ok(cv.msgs.find((m) => m.id === "wamid.AU1").transcrito); assert.equal(cv.msgs.at(-1).de, "zoe");
+  // 360dialog: baixa pelo host da 360dialog com a mesma rota
+  Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog" }); urls.length = 0;
+  const { baixarMidia } = await import("../shared/audio.mjs"); const m = await baixarMidia("media.A1");
+  assert.equal(urls[0], "https://waba-v2.360dialog.io/media.A1"); assert.equal(urls[1], "https://waba-v2.360dialog.io/whatsapp_business/attachments/?mid=A1"); assert.equal(m.mime, "audio/ogg");
+  delete process.env.WHATSAPP_PROVEDOR; globalThis.__fetchWA = ant; delete globalThis.__transcrever;
+});
+await t("Zoe: falha na transcrição pede para escrever (sem travar)", async () => {
+  globalThis.__transcrever = async () => { throw new Error("sem cota"); };
+  const ant = globalThis.__fetchWA; globalThis.__fetchWA = async (url, op) => { if (String(url).endsWith("/media.B1")) return new Response(JSON.stringify({ url: "https://lookaside.fbsbx.com/x?mid=B1" }), { status: 200 }); if (String(url).includes("mid=B1")) return new Response("x", { status: 200 }); return ant(url, op); };
+  let viu; globalThis.__zoe = (req) => { viu = req.messages.at(-1).content; return fala("Não consegui ouvir seu áudio. Pode escrever?"); };
+  const corpo = JSON.stringify({ entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "999" }, messages: [{ from: "5519944442222", id: "wamid.AU2", timestamp: String(Math.floor(Date.now() / 1000)), type: "audio", audio: { id: "media.B1" } }] } }] }] });
+  await W(corpo); await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519944442222", espera: 0 }) }));
+  assert.match(viu, /\[áudio não transcrito\]/); globalThis.__fetchWA = ant; delete globalThis.__transcrever;
+});
+await t("revisão semanal: sugere, só aprende com aprovação", async () => {
+  const rv = (await import("./out/zoe-revisao-background.mjs")).default;
+  let prompt; globalThis.__revisao = (t) => { prompt = t; return { resumo: "Semana com 4 conversas; clientes perguntaram sobre visita no sábado.", sugestoes: [{ tipo: "faq", titulo: "Visita aos sábados", texto: "- Fazem visita no sábado? Sim, com agendamento até sexta.", motivo: "2 clientes perguntaram", exemplo: "vocês atendem sábado?" }, { tipo: "orientacao", titulo: "Galpão acima de 20 mil m²", texto: "Para galpões acima de 20 mil m², chame a equipe logo após entender a demanda.", motivo: "Zoe demorou" }, { tipo: "faq", texto: "" }] }; };
+  const n0 = enviados.length;
+  await rv(new Request("https://pc.test/x", { method: "POST", headers: SEG }));
+  assert.match(prompt, /CONVERSAS DA SEMANA/); assert.ok(!/99805-1985|5519998051985/.test(prompt.split("CONVERSAS DA SEMANA")[1]), "sem equipe nem telefones");
+  let d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const pend = d.zoe_sugestoes.filter((x) => x.status === "pendente"); assert.equal(pend.length, 2);
+  assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /Revisão semanal/.test(m.text?.body || "")), "equipe avisada no WhatsApp");
+  const faq0 = d.config.find((c) => c.id === "zoe")?.faq;
+  assert.equal((await api(R("PUT", "/api/dados/zoe_sugestoes/" + pend[0].id, { status: "aprovada" }), ctx())).status, 403, "não aprova por fora");
+  const fq = pend.find((x) => x.tipo === "faq"), or = pend.find((x) => x.tipo === "orientacao");
+  assert.equal((await api(R("POST", "/api/zoe/sugestao", { id: fq.id, acao: "aprovar", texto: "- Fazem visita no sábado? Sim, das 9h às 12h, com agendamento." }), ctx())).status, 200);
+  assert.equal((await api(R("POST", "/api/zoe/sugestao", { id: or.id, acao: "recusar" }), ctx())).status, 200);
+  assert.equal((await api(R("POST", "/api/zoe/sugestao", { id: or.id, acao: "aprovar" }), ctx())).status, 409, "já decidida");
+  d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const z = d.config.find((c) => c.id === "zoe");
+  assert.match(z.faq, /das 9h às 12h/); assert.ok(z.faq.length > (faq0 || "").length); assert.ok(!/20 mil/.test(z.regras_extra || ""), "recusada não entra");
+  assert.match(Z.promptSistema({ zoe: z, geral: {}, agora: new Date() }), /das 9h às 12h/, "a Zoe já usa");
+  globalThis.__user = { email: "outra@x.com" };
+  globalThis.__user = { email: "contato@primecorpconsultoria.com.br" }; delete globalThis.__revisao;
+});
+await t("modelo: padrão novo com reserva automática", async () => {
+  const S = await import("../shared/servidor.mjs"); assert.equal(S.MODELO_PADRAO, "claude-sonnet-5-5");
+  globalThis.__modelos = []; globalThis.__modelosFora = ["claude-sonnet-5-5"]; globalThis.__zoe = () => fala("ok");
+  const r = await Z.responder({ agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: () => [], salvar: () => {}, avisar: () => {}, cliente: new (await import("./mocks/anthropic.mjs")).default() }, { id: "m", msgs: [{ de: "cliente", t: new Date().toISOString(), texto: "oi" }] });
+  assert.equal(r.texto, "ok"); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-5-5", "claude-sonnet-4-5"]); globalThis.__modelosFora = [];
+});
+
 console.log(`\n${ok} testes de verificação e Zoe OK`);
 await db.stop(); process.exit(0);

@@ -1,7 +1,7 @@
 // Varredura automática do imóvel (somente servidor): CEP, mapa, CNPJ e leitura da matrícula por IA.
 // Fontes gratuitas e públicas; o que exige login/emolumentos (matrícula no ONR) entra pelo PDF que o corretor envia.
 import Anthropic from "@anthropic-ai/sdk";
-import { env, extrairJSON } from "./servidor.mjs";
+import { env, extrairJSON, MODELO_PADRAO, MODELOS_RESERVA, modeloIndisponivel } from "./servidor.mjs";
 import V from "./verif.mjs";
 
 const UA = "PrimeCorpBrokers-Sistema/1.0 (contato@primecorpconsultoria.com.br)";
@@ -102,12 +102,12 @@ export function limparMatricula(r) {
 /** Lê a matrícula enviada (PDF ou foto JPEG/PNG em base64). */
 export async function lerMatricula(b64, tipo) {
   const client = new Anthropic();
-  const model = env("MODELO_IA") || "claude-sonnet-4-5-20250929";
+  const model = env("MODELO_IA") || MODELO_PADRAO;
   const doc = tipo === "application/pdf"
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
     : { type: "image", source: { type: "base64", media_type: tipo, data: b64 } };
-  const fila = [model, "claude-sonnet-4-5", "claude-haiku-4-5"].filter((x, i, a) => a.indexOf(x) === i); let r, ult;
-  for (const m of fila) { try { r = await client.messages.create({ model: m, max_tokens: 4000, messages: [{ role: "user", content: [doc, { type: "text", text: PROMPT_MATRICULA }] }] }); break; } catch (e) { ult = e; if (![404, 503, 529].includes(e?.status)) throw e; } }
+  const fila = [model, ...MODELOS_RESERVA].filter((x, i, a) => a.indexOf(x) === i); let r, ult;
+  for (const m of fila) { try { r = await client.messages.create({ model: m, max_tokens: 4000, messages: [{ role: "user", content: [doc, { type: "text", text: PROMPT_MATRICULA }] }] }); break; } catch (e) { ult = e; if (!modeloIndisponivel(e)) throw e; } }
   if (!r) throw ult;
   const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
   return limparMatricula(extrairJSON(out));

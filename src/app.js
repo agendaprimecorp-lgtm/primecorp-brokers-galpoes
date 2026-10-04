@@ -45,7 +45,7 @@ async function api(path, opts = {}) {
   if (!r.ok) throw new ErroAPI(j.erro || "Erro " + r.status, r.status);
   return j;
 }
-const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [], conversas: [], agenda: [] };
+const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [], conversas: [], agenda: [], zoe_sugestoes: [] };
 const store = {
   async carregar() { const d = await api("dados"); Object.keys(S).forEach((k) => (S[k] = d[k] || [])); },
   async save(n, o) {
@@ -140,7 +140,7 @@ function qrSVG(txt, tam = 168) { const q = qrcode(0, "M"); q.addData(txt); q.mak
 const cartaoCelular = (titulo, texto) => `<div class="card celular"><div class="qr">${qrSVG(location.origin)}</div><div><span class="k">Use o celular</span><h2>${esc(titulo)}</h2><p class="hint">${esc(texto)}</p><p class="hint">Aponte a câmera do celular para o código ou abra <b>${esc(location.host)}</b>. O que for registrado no celular aparece aqui em segundos.</p></div></div>`;
 // No computador, o painel acompanha o que chega do celular (sincroniza a cada 20 s).
 let ultimaSync = null, assinaturaDados = "";
-const assinatura = () => (S.conversas || []).map((c) => c.id + (c.ultima_em || "") + (c.modo || "")).join("|") + (S.agenda || []).map((a) => a.id + a.status).join("|") + S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
+const assinatura = () => (S.conversas || []).map((c) => c.id + (c.ultima_em || "") + (c.modo || "")).join("|") + (S.agenda || []).map((a) => a.id + a.status).join("|") + S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + (S.zoe_sugestoes || []).map((g) => g.id + g.status).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
 async function sincronizar(forcar) {
   if (!usuarioAtual || document.visibilityState !== "visible") return;
   if (editing && !forcar) return;
@@ -1768,19 +1768,22 @@ async function pdfVerificacao(o) {
 /* ================= ZOE · WHATSAPP E AGENDA ================= */
 const CFGZ = () => S.config.find((c) => c.id === "zoe") || {};
 const quandoAg = (iso) => { try { const d = new Date(iso); return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
+const sugPend = () => (S.zoe_sugestoes || []).filter((x) => x.status === "pendente").sort((a, b) => (a.id || "").localeCompare(b.id || ""));
 const convReais = () => (S.conversas || []).filter((c) => !c.simulacao).sort((a, b) => (b.ultima_em || "").localeCompare(a.ultima_em || ""));
 const hojeAg = () => { const h = new Date().toDateString(); return (S.agenda || []).filter((a) => a.status !== "cancelado" && new Date(a.inicio).toDateString() === h).sort((a, b) => a.inicio.localeCompare(b.inicio)); };
 function cardZoePainel() {
   const pend = convReais().filter((c) => c.precisa_humano); const hj = hojeAg(); const novas = convReais().filter((c) => c.ultima_de === "cliente" && c.modo === "humano");
-  if (!pend.length && !hj.length && !novas.length) return "";
+  const sg = sugPend().length;
+  if (!pend.length && !hj.length && !novas.length && !sg) return "";
   return `<div class="card zoe-p"><div class="row" style="justify-content:space-between"><h3>🤖 Zoe</h3><button class="sm" id="gozoe">Conversas</button></div>
   ${pend.length ? `<div class="list">${pend.slice(0, 5).map((c) => `<button class="item" data-zc="${c.id}"><span class="dot ${c.precisa_humano?.urgente ? "vermelho" : "amarelo"}"></span><span class="t"><b>${esc(c.nome || "+" + c.id)}</b><span>${esc(c.precisa_humano?.motivo || "")}</span></span><span>›</span></button>`).join("")}</div>` : ""}
   ${novas.filter((c) => !c.precisa_humano).length ? `<p class="hint">${novas.filter((c) => !c.precisa_humano).length} conversa(s) com você aguardando resposta.</p>` : ""}
+  ${sg ? `<p class="hint">${sg} sugestão(ões) da revisão semanal aguardando aprovação (Zoe → Revisão).</p>` : ""}
   ${hj.length ? `<button class="item" id="goagenda" style="width:100%"><span class="t"><b>Hoje: ${hj.length} compromisso(s)</b><span>${esc(hj.map((a) => quandoAg(a.inicio).split(" ").pop() + " " + a.tipo + " · " + a.nome).join(" | "))}</span></span><span>›</span></button>` : ""}</div>`;
 }
 VIEWS.zoe = () => {
   header("Zoe · WhatsApp"); const aba = route.aba || "conversas"; const cfg = CFGZ();
-  $("main").innerHTML = `<div class="seg">${[["conversas", "Conversas"], ["testar", "Testar a Zoe"], ["config", "Conhecimento"]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
+  $("main").innerHTML = `<div class="seg">${[["conversas", "Conversas"], ["testar", "Testar a Zoe"], ["config", "Conhecimento"], ["revisao", "Revisão" + (sugPend().length ? " (" + sugPend().length + ")" : "")]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
   document.querySelectorAll("[data-aba]").forEach((b) => (b.onclick = () => { route = { v: "zoe", aba: b.dataset.aba }; render(); }));
   const zb = $("zb");
   if (aba === "conversas") {
@@ -1807,6 +1810,20 @@ VIEWS.zoe = () => {
         ch.insertAdjacentHTML("beforeend", bolha({ de: "zoe", texto: r.resposta + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), t: now(), acoes: r.acoes }) + ((r.simulado || []).length || (r.avisos || []).length ? `<p class="sim">Simulação: ${esc([...(r.simulado || []).map((x) => "gravaria " + x.split("/")[0]), ...(r.avisos || []).map((x) => "avisaria a equipe: " + x)].join(" · "))}</p>` : "")); ch.scrollTop = ch.scrollHeight; $("zst").textContent = "";
       } catch (e) { $("zst").className = "status err"; $("zst").textContent = e.message; } $("zgo").disabled = false; $("ztx").focus(); };
     $("zgo").onclick = () => env(false); $("ztx").onkeydown = (e) => { if (e.key === "Enter") env(false); }; $("zre").onclick = () => env(true);
+  } else if (aba === "revisao") {
+    const pend = sugPend(); const feitas = (S.zoe_sugestoes || []).filter((x) => x.status !== "pendente").sort((a, b) => (b.decidido_em || "").localeCompare(a.decidido_em || "")).slice(0, 10); const adm = ehAdmin();
+    zb.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><h2>Revisão semanal</h2>${adm ? '<button class="sm" id="zrv">Revisar agora</button>' : ""}</div>
+    <p class="hint">Toda segunda às 8h a Zoe relê as conversas da semana e sugere o que aprender. Nada entra no conhecimento sem a sua aprovação. Você pode ajustar o texto antes de aprovar.</p><div class="status" id="zrs"></div>
+    ${pend.map((g) => `<div class="card sug" data-sg="${g.id}"><div class="row" style="justify-content:space-between"><b>${esc(g.titulo || "Sugestão")}</b><span class="chip">${g.tipo === "faq" ? "Pergunta frequente" : "Orientação"}</span></div>
+      <p class="hint">${esc(g.motivo || "")}${g.exemplo ? `<br><i>“${esc(g.exemplo)}”</i>` : ""}</p>
+      <textarea rows="3" data-sgt ${adm ? "" : "disabled"}>${esc(g.texto)}</textarea>
+      ${adm ? '<div class="row"><button class="p grow" data-ap>Aprovar</button><button class="grow" data-rc>Recusar</button></div>' : '<p class="note">Somente o administrador aprova.</p>'}</div>`).join("") || '<p class="empty">Nenhuma sugestão pendente.</p>'}
+    ${feitas.length ? `<h3>Decididas</h3><div class="list">${feitas.map((g) => `<div class="item"><span class="dot ${g.status === "aprovada" ? "verde" : ""}"></span><span class="t"><b>${esc(g.titulo || g.texto.slice(0, 60))}</b><span>${esc((g.status === "aprovada" ? "Aprovada" : "Recusada") + " · " + fdt(g.decidido_em))}</span></span></div>`).join("")}</div>` : ""}</div>`;
+    zb.querySelectorAll("[data-sg]").forEach((el) => {
+      const dec = async (acao) => { el.querySelectorAll("button").forEach((b) => (b.disabled = true)); try { await api("zoe/sugestao", { method: "POST", body: JSON.stringify({ id: el.dataset.sg, acao, texto: el.querySelector("[data-sgt]").value }) }); toast(acao === "aprovar" ? "Aprendido. A Zoe já usa a partir da próxima mensagem." : "Recusada."); await store.carregar(); render(); } catch (e) { toast(e.message); el.querySelectorAll("button").forEach((b) => (b.disabled = false)); } };
+      const ap = el.querySelector("[data-ap]"); if (ap) ap.onclick = () => dec("aprovar"); const rc = el.querySelector("[data-rc]"); if (rc) rc.onclick = () => dec("recusar");
+    });
+    const rv = $("zrv"); if (rv) rv.onclick = async () => { rv.disabled = true; const st = $("zrs"); st.className = "status"; st.textContent = "Revisando as conversas da semana… (1 a 2 min)"; try { await api("zoe/revisar", { method: "POST" }); setTimeout(async () => { await store.carregar(); render(); }, 90000); } catch (e) { st.className = "status err"; st.textContent = e.message; rv.disabled = false; } };
   } else {
     const z = { ...ZOE_BASE, ...cfg }; const H = { ...ZOE_BASE.horario, ...(cfg.horario || {}) }; const so = !ehAdmin();
     zb.innerHTML = `<div class="card" id="zc"><h2>Conhecimento e regras da Zoe</h2><p class="hint">Tudo o que a Zoe sabe sobre a PrimeCorp vem daqui. Escreva fatos objetivos; ela não inventa o que não estiver aqui ou no sistema. As regras de segurança (sem endereço, sem negociar, LGPD, transbordo) são fixas.</p>

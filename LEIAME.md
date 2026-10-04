@@ -199,3 +199,9 @@ Variáveis no modo 360dialog:
 | `ZOE_EQUIPE` | WhatsApp pessoais de Rodrigo e Joselia (não o número da empresa) |
 
 Depois do deploy: app → Mais → Zoe → **Conectar WhatsApp ao sistema** (o sistema aponta o webhook do número na 360dialog, com a chave num cabeçalho privado). Teste mandando "oi" do seu celular para o número da Zoe.
+
+## Zoe: áudio, botões, modelo e revisão semanal (out/2026)
+- **Áudio:** áudios de clientes são baixados (Meta ou 360dialog) e transcritos pelo Gemini via AI Gateway da Netlify (`MODELO_AUDIO`, padrão `gemini-2.5-flash`). A Zoe lê como `[áudio] …`; se falhar, pede para escrever.
+- **Botões:** respostas com opções sempre saem como botões tocáveis (também corrige o formato antigo `[A | B]`).
+- **Modelo:** padrão `claude-sonnet-5-5` com reserva automática (`claude-sonnet-4-5`, `claude-haiku-4-5`). `MODELO_IA` no Netlify sobrepõe.
+- **Revisão semanal:** toda segunda 08:00 (Brasília) a Zoe analisa as conversas da semana e grava sugestões em **Zoe → Revisão**; a equipe recebe aviso no WhatsApp. Nada entra no conhecimento sem **Aprovar** (dá para editar o texto antes). "Revisar agora" roda na hora.

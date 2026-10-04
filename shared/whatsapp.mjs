@@ -37,7 +37,7 @@ export function lerEntradas(payload) {
       else if (m.type === "button") texto = m.button?.text || "";
       else if (m.type === "location") texto = `[localização enviada: ${m.location?.latitude}, ${m.location?.longitude}]`;
       else { midia = m.type; texto = m[m.type]?.caption || ""; }
-      out.push({ id: m.id, de: m.from, nome: nomes[m.from] || "", t: new Date(Number(m.timestamp) * 1000 || Date.now()).toISOString(), texto: String(texto).slice(0, 4000), midia, numero_empresa: v.metadata?.phone_number_id || "" });
+      out.push({ id: m.id, de: m.from, nome: nomes[m.from] || "", t: new Date(Number(m.timestamp) * 1000 || Date.now()).toISOString(), texto: String(texto).slice(0, 4000), midia, ...(midia && m[m.type]?.id ? { midia_id: m[m.type].id } : {}), numero_empresa: v.metadata?.phone_number_id || "" });
     }
   }
   return out;

@@ -2,6 +2,7 @@
 import { db, env, obterRegistro, salvarRegistro, registrarEmissao } from "./servidor.mjs";
 import { responder, anexarMsg, fmtHora } from "./zoe.mjs";
 import { enviar, enviarModelo, equipeWA, janelaAberta } from "./whatsapp.mjs";
+import { transcreverPendentes } from "./audio.mjs";
 
 /** Contexto com leitura em memória e gravação adiada (sandbox = simulação, nada é gravado fora da conversa). */
 export async function criarContexto({ base, sandbox = false } = {}) {
@@ -47,6 +48,7 @@ export async function processarConversa(wa, { base, esperaMs = 2500 } = {}) {
   if (!equipe && (humanoAtivo || ctx.cfg.zoe.ativa === false)) return { pulou: "atendimento humano" };
   const hoje = (conv0.msgs || []).filter((m) => m.de === "zoe" && Date.now() - Date.parse(m.t) < 864e5).length;
   if (!equipe && hoje >= 60) return { pulou: "limite diário" };
+  await transcreverPendentes(conv0); // áudios do cliente viram texto antes da Zoe ler
   await salvarRegistro("conversas", wa, { ...conv0, processando: new Date().toISOString() });
 
   const conv = { ...JSON.parse(JSON.stringify(conv0)), id: wa };

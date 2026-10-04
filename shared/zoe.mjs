@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import PC from "./core.mjs";
 import V from "./verif.mjs";
 import { ZOE_PADRAO } from "./zoe-base.mjs";
+import { MODELO_PADRAO, MODELOS_RESERVA, modeloIndisponivel } from "./servidor.mjs";
 
 export const TZ = "-03:00"; // Brasília (sem horário de verão desde 2019)
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -117,6 +118,7 @@ REGRAS INEGOCIÁVEIS
 7. Horários: só ofereça os devolvidos por horarios_livres e confirme o escolhido com dia da semana e data antes de chamar agendar.
 8. Para oferecer até 3 opções de toque, termine a mensagem com uma linha exatamente assim: [[botoes: Opção 1 | Opção 2 | Opção 3]] (cada opção até 20 caracteres).
 9. Se pedirem para parar de receber mensagens, confirme e encerre.
+10. Mensagens que começam com [áudio] são transcrições da voz do cliente: responda normalmente. Se vier [áudio não transcrito] ou [áudio inaudível], peça com gentileza para escrever em texto.
 ${contato ? `\nCONTATO JÁ CADASTRADO: ${[contato.nome, contato.empresa, contato.tipo].filter(Boolean).join(" · ")}` : ""}${conversa?.resumo ? `\nRESUMO DA CONVERSA ANTERIOR: ${conversa.resumo}` : ""}`;
 }
 
@@ -234,7 +236,8 @@ function isoLocal(d) { const l = local(d); return `${l.y}-${String(l.m + 1).padS
 /** Separa botões ([[botoes: A | B]]) do texto e limpa o que não pode sair. */
 export function finalizar(txt) {
   let t = String(txt || "").trim(); let botoes = [];
-  const m = t.match(/\[\[\s*bot[oõ]es\s*:\s*([^\]]+)\]\]\s*$/i);
+  // formato oficial [[botoes: A | B]]; aceita também "[A | B]" no fim (a Zoe às vezes imita o histórico)
+  const m = t.match(/\[\[\s*bot[oõ]es\s*:\s*([^\]]+)\]\]\s*$/i) || t.match(/\n\s*\[([^\[\]\n]{1,80}\|[^\[\]\n]{1,80})\]\s*$/);
   if (m) { botoes = m[1].split("|").map((x) => x.trim().slice(0, 20)).filter(Boolean).slice(0, 3); t = t.slice(0, m.index).trim(); }
   t = t.replace(/\[\[[^\]]*\]\]/g, "").trim().slice(0, 1500);
   return { texto: t, botoes };
@@ -254,18 +257,19 @@ export async function responder(ctx, conv, { equipe = false } = {}) {
   if (!equipe && HUMANO_RE.test(txt)) { executar(ctx, conv, "chamar_equipe", { motivo: "Cliente pediu atendimento humano", urgente: false }, false); conv.modo = "humano"; return { texto: "Certo! Já chamei a equipe — uma pessoa continua o atendimento por aqui" + (dentroHorario(ctx) ? " em instantes." : " no próximo horário de atendimento."), botoes: [], acoes: ["chamar_equipe"] }; }
 
   const client = ctx.cliente || new Anthropic();
-  const model = ctx.modelo || "claude-sonnet-4-5-20250929";
+  const model = ctx.modelo || MODELO_PADRAO;
   const sistema = promptSistema({ zoe: ctx.cfg.zoe, geral: ctx.cfg.geral, agora: ctx.agora, equipe, contato: contatoDe(ctx, conv), conversa: conv });
   const msgs = [];
   for (const m of (conv.msgs || []).slice(-30)) {
-    const role = m.de === "cliente" ? "user" : "assistant"; const content = String(m.texto || (m.midia ? `[${m.midia} enviado]` : "")).slice(0, 2000) || "…";
+    const role = m.de === "cliente" ? "user" : "assistant"; let content = String(m.texto || (m.midia ? `[${m.midia} enviado]` : "")).slice(0, 2000) || "…";
+    if (role === "assistant") content = content.replace(/\n\[([^\[\]\n]+\|[^\[\]\n]+)\]\s*$/, "\n[[botoes: $1]]");
     if (msgs.length && msgs[msgs.length - 1].role === role) msgs[msgs.length - 1].content += "\n" + content; else msgs.push({ role, content });
   }
   while (msgs.length && msgs[0].role !== "user") msgs.shift();
   if (!msgs.length) return { texto: "", botoes: [], acoes: [] };
   const tools = equipe ? FERRAMENTAS_EQUIPE : FERRAMENTAS_CLIENTE; const acoes = [];
-  const fila = [model, "claude-sonnet-4-5", "claude-haiku-4-5"].filter((x, i, a) => a.indexOf(x) === i);
-  const criar = async (body) => { let ult; for (const m of fila) { try { return await client.messages.create({ ...body, model: m }); } catch (e) { ult = e; if (![404, 503, 529].includes(e?.status)) throw e; } } throw ult; };
+  const fila = [model, ...MODELOS_RESERVA].filter((x, i, a) => a.indexOf(x) === i);
+  const criar = async (body) => { let ult; for (const m of fila) { try { return await client.messages.create({ ...body, model: m }); } catch (e) { ult = e; if (!modeloIndisponivel(e)) throw e; } } throw ult; };
   for (let i = 0; i < 6; i++) {
     const r = await criar({ max_tokens: 900, system: sistema, tools, messages: msgs });
     const usos = (r.content || []).filter((c) => c.type === "tool_use");

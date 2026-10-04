@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import dns from "node:dns/promises";
 import net from "node:net";
 
-export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios", "conversas", "agenda"];
+export const COLECOES = ["briefings", "ofertas", "negocios", "contatos", "salas", "pedidos", "config", "usuarios", "anuncios", "conversas", "agenda", "zoe_sugestoes"];
 
 let _db = null;
 export function db() {
@@ -144,7 +144,7 @@ export function extrairJSON(txt) {
 /** IA com imagens (JPEG em base64) + texto. */
 export async function chamarIAImagem(prompt, texto, imagens = [], maxTokens = 1500) {
   const client = new Anthropic();
-  const model = env("MODELO_IA") || "claude-sonnet-4-5-20250929";
+  const model = env("MODELO_IA") || MODELO_PADRAO;
   const content = [
     ...imagens.slice(0, 4).map((b64) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } })),
     { type: "text", text: `${prompt}\n\nFALA DO CORRETOR:\n"""\n${texto || "(sem fala)"}\n"""` },
@@ -154,12 +154,14 @@ export async function chamarIAImagem(prompt, texto, imagens = [], maxTokens = 15
   return extrairJSON(out);
 }
 /** Chama o modelo; se o modelo configurado não existir ou estiver sobrecarregado, tenta os de reserva. */
-export const MODELOS_RESERVA = ["claude-sonnet-4-5", "claude-haiku-4-5"];
+export const MODELO_PADRAO = "claude-sonnet-5-5"; // claude-sonnet-4-5-20250929 sai do ar em 30/11/2026
+export const MODELOS_RESERVA = ["claude-sonnet-5-5", "claude-sonnet-4-5", "claude-haiku-4-5"];
+export const modeloIndisponivel = (e) => { const st = e?.status || 0; return st === 404 || st === 529 || st === 503 || (st === 400 && /model/i.test(String(e?.message || ""))); };
 async function criarComReserva(client, model, maxTokens, messages) {
   const fila = [model, ...MODELOS_RESERVA.filter((m) => m !== model)]; let ult;
   for (const m of fila) {
     try { return await client.messages.create({ model: m, max_tokens: maxTokens, messages }); }
-    catch (e) { ult = e; const st = e?.status || 0; const msg = String(e?.message || ""); if (!(st === 404 || st === 529 || st === 503 || (st === 400 && /model/i.test(msg)))) throw e; }
+    catch (e) { ult = e; if (!modeloIndisponivel(e)) throw e; }
   }
   throw ult;
 }
@@ -191,7 +193,7 @@ REGRAS: NUNCA invente números, materiais ou itens de lazer. Não cite rua, núm
 
 export async function chamarIA(prompt, texto, maxTokens = 4000) {
   const client = new Anthropic(); // credenciais do AI Gateway da Netlify ou ANTHROPIC_API_KEY própria
-  const model = env("MODELO_IA") || "claude-sonnet-4-5-20250929";
+  const model = env("MODELO_IA") || MODELO_PADRAO;
   const r = await criarComReserva(client, model, maxTokens, [{ role: "user", content: `${prompt}\n\nTEXTO:\n"""\n${texto}\n"""` }]);
   const out = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
   return extrairJSON(out);
