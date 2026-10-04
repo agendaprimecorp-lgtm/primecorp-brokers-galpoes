@@ -11,7 +11,7 @@ export async function criarContexto({ base, sandbox = false } = {}) {
     if (!cache[col]) { const rows = await db().sql`SELECT id, dados FROM registros WHERE colecao = ${col} AND excluido = FALSE`; cache[col] = rows.map((r) => ({ ...r.dados, id: r.id })); }
     return cache[col];
   };
-  for (const c of ["ofertas", "anuncios", "briefings", "contatos", "agenda", "negocios", "conversas"]) await carregar(c);
+  for (const c of ["ofertas", "anuncios", "briefings", "contatos", "agenda", "negocios", "conversas", "b2g"]) await carregar(c);
   const cfgRows = await db().sql`SELECT id, dados FROM registros WHERE colecao = 'config' AND excluido = FALSE`;
   const cfg = Object.fromEntries(cfgRows.map((r) => [r.id, r.dados]));
   return {

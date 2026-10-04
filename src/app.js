@@ -1,6 +1,7 @@
 import PC from "../shared/core.mjs";
 import V from "../shared/verif.mjs";
 import { ZOE_PADRAO as ZOE_BASE } from "../shared/zoe-base.mjs";
+import { importarPrimeGov, painelB2G, resumoReservas } from "../shared/b2g.mjs";
 import { jsPDF } from "jspdf";
 import { handleAuthCallback, getUser, login, logout, acceptInvite, updateUser, requestPasswordRecovery } from "@netlify/identity";
 import { tratarFoto, blobB64 } from "./foto.js";
@@ -45,7 +46,7 @@ async function api(path, opts = {}) {
   if (!r.ok) throw new ErroAPI(j.erro || "Erro " + r.status, r.status);
   return j;
 }
-const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [], conversas: [], agenda: [], zoe_sugestoes: [] };
+const S = { briefings: [], ofertas: [], negocios: [], contatos: [], salas: [], pedidos: [], config: [], usuarios: [], anuncios: [], conversas: [], agenda: [], zoe_sugestoes: [], b2g: [] };
 const store = {
   async carregar() { const d = await api("dados"); Object.keys(S).forEach((k) => (S[k] = d[k] || [])); },
   async save(n, o) {
@@ -140,7 +141,7 @@ function qrSVG(txt, tam = 168) { const q = qrcode(0, "M"); q.addData(txt); q.mak
 const cartaoCelular = (titulo, texto) => `<div class="card celular"><div class="qr">${qrSVG(location.origin)}</div><div><span class="k">Use o celular</span><h2>${esc(titulo)}</h2><p class="hint">${esc(texto)}</p><p class="hint">Aponte a câmera do celular para o código ou abra <b>${esc(location.host)}</b>. O que for registrado no celular aparece aqui em segundos.</p></div></div>`;
 // No computador, o painel acompanha o que chega do celular (sincroniza a cada 20 s).
 let ultimaSync = null, assinaturaDados = "";
-const assinatura = () => (S.conversas || []).map((c) => c.id + (c.ultima_em || "") + (c.modo || "")).join("|") + (S.agenda || []).map((a) => a.id + a.status).join("|") + S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + (S.zoe_sugestoes || []).map((g) => g.id + g.status).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
+const assinatura = () => (S.conversas || []).map((c) => c.id + (c.ultima_em || "") + (c.modo || "")).join("|") + (S.agenda || []).map((a) => a.id + a.status).join("|") + S.ofertas.map((o) => o.id + (o.atualizado || "")).join("|") + S.negocios.length + S.pedidos.map((p) => p.id + (p.respondido_em || "")).join("|") + (S.zoe_sugestoes || []).map((g) => g.id + g.status).join("|") + (S.b2g || []).map((g) => g.id + (g.status || "") + (g.importado_em || "")).join("|") + S.salas.map((x) => (x.interesses || []).length).join("");
 async function sincronizar(forcar) {
   if (!usuarioAtual || document.visibilityState !== "visible") return;
   if (editing && !forcar) return;
@@ -1768,22 +1769,23 @@ async function pdfVerificacao(o) {
 /* ================= ZOE · WHATSAPP E AGENDA ================= */
 const CFGZ = () => S.config.find((c) => c.id === "zoe") || {};
 const quandoAg = (iso) => { try { const d = new Date(iso); return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
+const solPend = () => (S.b2g || []).filter((x) => String(x.id).startsWith("sol_") && x.status === "pendente").sort((a, b) => (b.em || "").localeCompare(a.em || ""));
 const sugPend = () => (S.zoe_sugestoes || []).filter((x) => x.status === "pendente").sort((a, b) => (a.id || "").localeCompare(b.id || ""));
 const convReais = () => (S.conversas || []).filter((c) => !c.simulacao).sort((a, b) => (b.ultima_em || "").localeCompare(a.ultima_em || ""));
 const hojeAg = () => { const h = new Date().toDateString(); return (S.agenda || []).filter((a) => a.status !== "cancelado" && new Date(a.inicio).toDateString() === h).sort((a, b) => a.inicio.localeCompare(b.inicio)); };
 function cardZoePainel() {
   const pend = convReais().filter((c) => c.precisa_humano); const hj = hojeAg(); const novas = convReais().filter((c) => c.ultima_de === "cliente" && c.modo === "humano");
-  const sg = sugPend().length;
+  const sg = sugPend().length + solPend().length;
   if (!pend.length && !hj.length && !novas.length && !sg) return "";
   return `<div class="card zoe-p"><div class="row" style="justify-content:space-between"><h3>🤖 Zoe</h3><button class="sm" id="gozoe">Conversas</button></div>
   ${pend.length ? `<div class="list">${pend.slice(0, 5).map((c) => `<button class="item" data-zc="${c.id}"><span class="dot ${c.precisa_humano?.urgente ? "vermelho" : "amarelo"}"></span><span class="t"><b>${esc(c.nome || "+" + c.id)}</b><span>${esc(c.precisa_humano?.motivo || "")}</span></span><span>›</span></button>`).join("")}</div>` : ""}
   ${novas.filter((c) => !c.precisa_humano).length ? `<p class="hint">${novas.filter((c) => !c.precisa_humano).length} conversa(s) com você aguardando resposta.</p>` : ""}
-  ${sg ? `<p class="hint">${sg} sugestão(ões) da revisão semanal aguardando aprovação (Zoe → Revisão).</p>` : ""}
+  ${sg ? `<p class="hint">${sg} pendência(s) da Zoe: sugestões em Zoe → Revisão e pedidos de parceiros em Zoe → Tributário.</p>` : ""}
   ${hj.length ? `<button class="item" id="goagenda" style="width:100%"><span class="t"><b>Hoje: ${hj.length} compromisso(s)</b><span>${esc(hj.map((a) => quandoAg(a.inicio).split(" ").pop() + " " + a.tipo + " · " + a.nome).join(" | "))}</span></span><span>›</span></button>` : ""}</div>`;
 }
 VIEWS.zoe = () => {
   header("Zoe · WhatsApp"); const aba = route.aba || "conversas"; const cfg = CFGZ();
-  $("main").innerHTML = `<div class="seg">${[["conversas", "Conversas"], ["testar", "Testar a Zoe"], ["config", "Conhecimento"], ["revisao", "Revisão" + (sugPend().length ? " (" + sugPend().length + ")" : "")]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
+  $("main").innerHTML = `<div class="seg">${[["conversas", "Conversas"], ["testar", "Testar a Zoe"], ["config", "Conhecimento"], ["trib", "Tributário" + (solPend().length ? " (" + solPend().length + ")" : "")], ["revisao", "Revisão" + (sugPend().length ? " (" + sugPend().length + ")" : "")]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
   document.querySelectorAll("[data-aba]").forEach((b) => (b.onclick = () => { route = { v: "zoe", aba: b.dataset.aba }; render(); }));
   const zb = $("zb");
   if (aba === "conversas") {
@@ -1811,6 +1813,18 @@ VIEWS.zoe = () => {
         ch.insertAdjacentHTML("beforeend", bolha({ de: "zoe", texto: r.resposta + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), t: now(), acoes: r.acoes }) + ((r.simulado || []).length || (r.avisos || []).length ? `<p class="sim">Simulação: ${esc([...(r.simulado || []).map((x) => "gravaria " + x.split("/")[0]), ...(r.avisos || []).map((x) => "avisaria a equipe: " + x)].join(" · "))}</p>` : "")); ch.scrollTop = ch.scrollHeight; $("zst").textContent = "";
       } catch (e) { $("zst").className = "status err"; $("zst").textContent = e.message; } $("zgo").disabled = false; $("ztx").focus(); };
     $("zgo").onclick = () => env(false); $("ztx").onkeydown = (e) => { if (e.key === "Enter") env(false); }; $("zre").onclick = () => env(true);
+  } else if (aba === "trib") {
+    const ps = (S.b2g || []).filter((x) => String(x.id).startsWith("bp_")).sort((a, b) => a.nome.localeCompare(b.nome)); const pn = painelB2G(S.b2g || [], new Date()); const sols = solPend(); const adm = ehAdmin();
+    zb.innerHTML = `<div class="card"><h2>Frente tributária · parceiros e reservas</h2>
+    <p class="hint">A Zoe reconhece o parceiro pelo WhatsApp cadastrado, informa as reservas dele, consulta se um ente está livre (sem revelar outros parceiros), registra pedidos de reserva e andamentos. A carteira vem do backup do PrimeGov.</p>
+    ${adm ? '<label class="btn sm">Importar backup do PrimeGov (.json)<input type="file" id="b2gf" accept=".json,application/json" hidden></label><div class="status" id="b2gs"></div>' : ""}
+    <div class="kpis"><div class="kpi"><b>${pn.parceiros}</b><span>parceiros</span></div><div class="kpi"><b>${pn.reservas_ativas}</b><span>reservas ativas</span></div>${Object.entries(pn.por_status).map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${esc(k)}</span></div>`).join("")}</div>
+    ${pn.vencendo.length ? `<p class="note">Vencendo em 15 dias: ${esc(pn.vencendo.join(" | "))}</p>` : ""}</div>
+    <div class="card"><h3>Pedidos dos parceiros pela Zoe</h3>${sols.map((x) => `<div class="item"><span class="dot amarelo"></span><span class="t"><b>${esc((x.tipo === "reserva" ? "Reserva · " : "Andamento · ") + x.ente)}</b><span>${esc((x.nome || "+" + x.wa) + (x.cadastrado ? "" : " (não cadastrado)") + " · " + fdt(x.em) + (x.texto ? " · " + x.texto : "") + (x.contato_no_ente ? " · contato: " + x.contato_no_ente : ""))}</span></span><button class="sm" data-sol="${x.id}">Tratado</button></div>`).join("") || '<p class="empty">Nenhum pedido pendente.</p>'}
+    <p class="hint">Libere ou atualize no PrimeGov e importe o backup de novo para a Zoe ver a carteira atualizada.</p></div>
+    <div class="card"><h3>Parceiros (${ps.length})</h3><div class="list">${ps.map((p) => `<details><summary><b>${esc(p.nome)}</b> · ${(p.reservas || []).length} ente(s)${(p.telefones || []).length ? " · +" + esc(p.telefones[0]) : " · <span class='tag r'>sem WhatsApp</span>"}</summary>${resumoReservas(p, new Date()).map((r) => `<p class="hint"><b>${esc(r.ente)}</b> · ${esc(r.status)} · ${esc(r.reserva)}${r.ultimo_andamento ? "<br>" + esc(r.ultimo_andamento) : ""}</p>`).join("")}</details>`).join("") || '<p class="empty">Importe o backup do PrimeGov.</p>'}</div></div>`;
+    const f = $("b2gf"); if (f) f.onchange = async () => { const st = $("b2gs"); st.className = "status"; st.textContent = "Lendo…"; try { const j = JSON.parse(await f.files[0].text()); const parceiros = importarPrimeGov(j); const r = await api("b2g/importar", { method: "POST", body: JSON.stringify({ parceiros }) }); st.className = "status ok"; st.textContent = `Importado: ${r.parceiros} parceiros, ${r.reservas} entes.`; await store.carregar(); render(); } catch (e) { st.className = "status err"; st.textContent = e.message; } };
+    zb.querySelectorAll("[data-sol]").forEach((b) => (b.onclick = async () => { b.disabled = true; try { await api("b2g/solicitacao", { method: "POST", body: JSON.stringify({ id: b.dataset.sol }) }); await store.carregar(); render(); } catch (e) { toast(e.message); b.disabled = false; } }));
   } else if (aba === "revisao") {
     const pend = sugPend(); const feitas = (S.zoe_sugestoes || []).filter((x) => x.status !== "pendente").sort((a, b) => (b.decidido_em || "").localeCompare(a.decidido_em || "")).slice(0, 10); const adm = ehAdmin();
     zb.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><h2>Revisão semanal</h2>${adm ? '<button class="sm" id="zrv">Revisar agora</button>' : ""}</div>

@@ -310,5 +310,34 @@ await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebr
   globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR;
 });
 
+await t("frente tributária: importa PrimeGov, reconhece parceiro e protege a carteira", async () => {
+  const B = await import("../shared/b2g.mjs");
+  const backup = { _app: "PrimeGov", central: { parceiros: [
+    { id: "p1", nome: "JOÃO TESTE", tel: "(35) 9 9103-0705", empresa: "", doc: "111", comissao: 4, contrato: { nome: "c.pdf", dataURL: "data:application/pdf;base64,AAAA" }, municipios: [
+      { id: "m1", uf: "MG", nome: "Pouso Alegre", tipo: "municipio", ini: "2026-09-01", fim: "2026-11-30", status: "proposta", mov: [{ data: "30/09/2026 10:00", texto: "Proposta enviada ao procurador" }] },
+      { id: "m2", uf: "MG", nome: "Itajubá", tipo: "municipio", ini: "2026-01-01", fim: "2026-04-01", status: "prospec", mov: [] }] },
+    { id: "p2", nome: "MARIA OUTRA", tel: "11 9 4494-4084", municipios: [{ id: "m3", uf: "SP", nome: "Araraquara", tipo: "municipio", ini: "2026-09-01", fim: "2026-12-01", status: "contato", mov: [{ ts: "2026-09-20T10:00:00Z", txt: "Reunião com secretário" }] }] }] }, cfo: null };
+  const ps = B.importarPrimeGov(backup); assert.equal(ps.length, 2); assert.equal(ps[0].telefones[0], "5535991030705"); assert.ok(!JSON.stringify(ps).includes("base64") && !JSON.stringify(ps).includes('"111"'), "sem anexos nem documento");
+  const r = await J(await api(R("POST", "/api/b2g/importar", { parceiros: ps }), ctx())); assert.equal(r.s, 200); assert.equal(r.j.reservas, 3);
+  assert.equal((await api(R("PUT", "/api/dados/b2g/bp_p1", { nome: "x" }), ctx())).status, 403);
+  const agora = new Date("2026-10-04T12:00:00-03:00"); const lista = (await J(await api(R("GET", "/api/dados"), ctx()))).j.b2g;
+  assert.equal(B.parceirosDoNumero(lista, "553591030705").length, 1, "acha mesmo sem o 9");
+  const outro = B.disponibilidade(lista, "araraquara", "SP", agora, "5535991030705"); assert.equal(outro.livre, false); assert.ok(!JSON.stringify(outro).includes("MARIA"), "não revela outro parceiro");
+  assert.equal(B.disponibilidade(lista, "Itajubá", "MG", agora, "5535991030705").livre, true, "reserva vencida = livre");
+  assert.equal(B.disponibilidade(lista, "Prefeitura de Pouso Alegre", "", agora, "5535991030705").sua_reserva, true);
+  // conversa real do parceiro pelo WhatsApp
+  let sys, tools; globalThis.__zoe = (req) => { const last = req.messages.at(-1); if (typeof last.content === "string") { sys = req.system; tools = req.tools.map((x) => x.name); return passo("solicitar_reserva", { ente: "Varginha", uf: "MG", contato_no_ente: "Secretário de Finanças" }); } return fala("Pedido registrado. A equipe confirma a liberação por aqui."); };
+  const n0 = enviados.length; await W(payload("5535991030705", "Quero reservar Varginha", "wamid.T1"));
+  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5535991030705", espera: 0 }) }));
+  assert.match(sys, /PARCEIRO TRIBUTÁRIO CADASTRADO falando agora: JOÃO TESTE/); assert.ok(tools.includes("minhas_reservas") && tools.includes("consultar_ente"));
+  const d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const sol = d.b2g.find((x) => x.id.startsWith("sol_"));
+  assert.equal(sol.ente, "Varginha/MG"); assert.equal(sol.cadastrado, true); assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /RESERVA · Varginha\/MG/.test(m.text?.body || "")), "equipe avisada");
+  assert.equal((await api(R("POST", "/api/b2g/solicitacao", { id: sol.id }), ctx())).status, 200);
+  const ctxE = { agora, cfg: { zoe: {}, geral: {} }, listar: (c) => (c === "b2g" ? lista : []), salvar: () => {}, avisar: () => {} };
+  const br = Z.executar(ctxE, { id: "5519998051985" }, "buscar_reserva", { termo: "araraquara" }, true); assert.equal(br.resultados[0].parceiro, "MARIA OUTRA", "equipe vê o parceiro");
+  const pn = Z.executar(ctxE, { id: "x" }, "painel_tributario", {}, true); assert.equal(pn.reservas_ativas, 2);
+  const nao = Z.executar(ctxE, { id: "5511900000000" }, "minhas_reservas", {}, false); assert.ok(nao.erro);
+});
+
 console.log(`\n${ok} testes de verificação e Zoe OK`);
 await db.stop(); process.exit(0);

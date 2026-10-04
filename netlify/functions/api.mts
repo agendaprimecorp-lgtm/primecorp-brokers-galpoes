@@ -12,12 +12,13 @@ import { criarContexto } from "../../shared/zoe-run.mjs";
 import { responder, anexarMsg } from "../../shared/zoe.mjs";
 import { enviar, janelaAberta, equipeWA, conectarWebhook360, criarModeloAviso } from "../../shared/whatsapp.mjs";
 import { decidirSugestao } from "../../shared/zoe-revisao.mjs";
+import { importarPrimeGov } from "../../shared/b2g.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_PDF = 4 * 1024 * 1024; // 4 MB
 const MAX_FOTO = 3 * 1024 * 1024; // 3 MB por foto já tratada no celular
 const SO_ADMIN_COL = ["config", "usuarios"];
-const SO_SERVIDOR_COL = ["conversas", "zoe_sugestoes"]; // gravadas só pelo servidor (evita sobrescrever mensagens que chegam)
+const SO_SERVIDOR_COL = ["conversas", "zoe_sugestoes", "b2g"]; // gravadas só pelo servidor (evita sobrescrever mensagens que chegam)
 const MAX_MAT = 4_300_000; // ~4,3 MB (limite de corpo das functions: 6 MB em base64)
 const MAT_TIPOS: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const FOTO_RE = /^fotos\/[A-Za-z0-9_-]{1,80}\/[\w-]{6,40}\.jpg$/;
@@ -272,6 +273,23 @@ export default async (req: Request, context: Context) => {
       if (conv.modo === "humano") conv.modo = "zoe"; // na simulação, segue com a Zoe
       delete conv.id; await salvarRegistro("conversas", id, conv);
       return json({ ok: true, conversa: id, resposta: r.texto, botoes: r.botoes, acoes: r.acoes, simulado: g.simulado, avisos: (g.avisos || []).map((x: any) => x.texto) });
+    }
+    if (rota === "b2g" && a === "importar" && req.method === "POST") {
+      if (!admin) return erro("Somente o administrador importa a carteira tributária.", 403);
+      const body = await req.json().catch(() => null);
+      let novos: any[]; try { novos = Array.isArray(body?.parceiros) && body.parceiros[0]?.id?.startsWith?.("bp_") ? body.parceiros : importarPrimeGov(body); } catch (e) { return erro(e instanceof Error ? e.message : String(e)); }
+      const ids = new Set(novos.map((p) => p.id));
+      for (const p of novos) { const { id, ...dados } = p; if (!/^bp_[A-Za-z0-9_-]{1,77}$/.test(id) || JSON.stringify(dados).length > 300_000) continue; await salvarRegistro("b2g", id, { ...dados, importado_em: new Date().toISOString(), importado_por: u.email }); }
+      const ant = await db().sql`SELECT id FROM registros WHERE colecao = 'b2g' AND excluido = FALSE AND id LIKE 'bp_%'`;
+      let removidos = 0; for (const r of ant) if (!ids.has(r.id)) { await db().sql`UPDATE registros SET excluido = TRUE, atualizado_em = NOW() WHERE colecao = 'b2g' AND id = ${r.id}`; removidos++; }
+      return json({ ok: true, parceiros: novos.length, reservas: novos.reduce((n, p) => n + (p.reservas || []).length, 0), removidos });
+    }
+    if (rota === "b2g" && a === "solicitacao" && req.method === "POST") {
+      const body = await req.json().catch(() => null); const id = String(body?.id || "");
+      if (!/^sol_[A-Za-z0-9_-]{1,76}$/.test(id)) return erro("Solicitação inválida.");
+      const sol: any = await obterRegistro("b2g", id); if (!sol) return erro("Solicitação não encontrada.", 404);
+      await salvarRegistro("b2g", id, { ...sol, status: "tratada", tratada_por: u.email, tratada_em: new Date().toISOString(), nota: String(body?.nota || "").slice(0, 300) });
+      return json({ ok: true });
     }
     if (rota === "zoe" && a === "modelo-aviso" && req.method === "POST") {
       if (!admin) return erro("Somente o administrador cria modelos.", 403);
