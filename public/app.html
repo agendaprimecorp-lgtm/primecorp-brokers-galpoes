@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrimeCorp - Painel Executivo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8f9fa; }
+
+    .navbar {
+      background: linear-gradient(135deg, #C8102E 0%, #a00824 100%);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .navbar-brand { font-size: 20px; font-weight: bold; }
+    .navbar-user { display: flex; gap: 16px; align-items: center; }
+    .logout-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+    .logout-btn:hover { background: rgba(255,255,255,0.3); }
+
+    .container {
+      display: flex;
+      gap: 0;
+      min-height: calc(100vh - 60px);
+    }
+
+    .sidebar {
+      width: 240px;
+      background: #2c3e50;
+      color: white;
+      padding: 20px 0;
+      overflow-y: auto;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    }
+
+    .sidebar-item {
+      padding: 14px 20px;
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      border: none;
+      background: none;
+      color: white;
+      text-align: left;
+      font-size: 14px;
+      transition: all 0.3s;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar-item:hover {
+      background: rgba(200,16,46,0.1);
+      border-left-color: #C8102E;
+    }
+
+    .sidebar-item.active {
+      background: rgba(200,16,46,0.2);
+      border-left-color: #C8102E;
+      font-weight: 600;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border-top: 3px solid #C8102E;
+    }
+
+    .kpi-label {
+      color: #666;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #1a1a1a;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .tab-btn {
+      padding: 12px 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.3s;
+    }
+
+    .tab-btn:hover { color: #C8102E; }
+    .tab-btn.active { color: #C8102E; border-bottom-color: #C8102E; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    th {
+      background: #f5f5f5;
+      padding: 12px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 14px;
+    }
+
+    tr:hover { background: #fafafa; }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-a { background: #e8f5e9; color: #2e7d32; }
+    .badge-b { background: #e3f2fd; color: #1976d2; }
+    .badge-c { background: #fff3e0; color: #e65100; }
+    .badge-d { background: #fce4ec; color: #c2185b; }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+    }
+
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div class="navbar-brand">🏢 PRIMECORP - Painel Executivo</div>
+    <div class="navbar-user">
+      <span id="userDisplay">Rodrigo</span>
+      <button class="logout-btn" onclick="logout()">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="sidebar">
+      <button class="sidebar-item active" onclick="showView('dashboard')">📊 Dashboard</button>
+      <button class="sidebar-item" onclick="showView('leads')">👥 Leads</button>
+      <button class="sidebar-item" onclick="showView('negocios')">💼 Negócios</button>
+      <button class="sidebar-item" onclick="showView('agenda')">📅 Agenda</button>
+      <button class="sidebar-item" onclick="showView('faturamento')">💰 Faturamento</button>
+      <hr style="opacity: 0.3; margin: 16px 0;">
+      <button class="sidebar-item" onclick="showView('painel')">📋 Painel Admin</button>
+      <button class="sidebar-item" onclick="showView('propto')">📸 Propto</button>
+      <button class="sidebar-item" onclick="showView('crm')">📞 CRM</button>
+      <button class="sidebar-item" onclick="showView('pipeline')">🔄 Pipeline</button>
+      <button class="sidebar-item" onclick="showView('radar')">🎯 Radar</button>
+      <hr style="opacity: 0.3; margin: 16px 0;">
+      <button class="sidebar-item" onclick="showView('zoe')">🤖 Zoe IA</button>
+      <button class="sidebar-item" onclick="showView('workflows')">⚙️ Workflows</button>
+    </div>
+
+    <div class="content">
+      <!-- Dashboard View -->
+      <div id="dashboard" class="view active">
+        <h2 class="section-title">Dashboard Executivo</h2>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">MRR (Receita)</div>
+            <div class="kpi-value">R$ 127.430</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Leads Qualificados</div>
+            <div class="kpi-value">43</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Pipeline</div>
+            <div class="kpi-value">R$ 8.5M</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Taxa Conversão</div>
+            <div class="kpi-value">18.6%</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3 class="section-title">Negócios Prioritários (Categoria A)</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Contato</th>
+                <th>Tipo</th>
+                <th>Valor Estimado</th>
+                <th>Status</th>
+                <th>Próximo Passo</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>João Silva</td>
+                <td>Galpão</td>
+                <td>R$ 2.5M</td>
+                <td><span class="badge badge-a">A - Qualificado</span></td>
+                <td>Briefing</td>
+                <td><button style="padding: 6px 12px; background: #C8102E; color: white; border: none; border-radius: 4px; cursor: pointer;">Ver</button></td>
+              </tr>
+              <tr>
+                <td>Maria Costa</td>
+                <td>Comercial</td>
+                <td>R$ 1.8M</td>
+                <td><span class="badge badge-a">A - Qualificado</span></td>
+                <td>Autorização</td>
+                <td><button style="padding: 6px 12px; background: #C8102E; color: white; border: none; border-radius: 4px; cursor: pointer;">Ver</button></td>
+              </tr>
+              <tr>
+                <td>Pedro Oliveira</td>
+                <td>Residencial</td>
+                <td>R$ 3.2M</td>
+                <td><span class="badge badge-a">A - Qualificado</span></td>
+                <td>Negociação</td>
+                <td><button style="padding: 6px 12px; background: #C8102E; color: white; border: none; border-radius: 4px; cursor: pointer;">Ver</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Leads View -->
+      <div id="leads" class="view">
+        <h2 class="section-title">Leads por Categoria</h2>
+
+        <div class="tabs">
+          <button class="tab-btn active" onclick="filterLeads('todos')">Todos (87)</button>
+          <button class="tab-btn" onclick="filterLeads('a')">A (8)</button>
+          <button class="tab-btn" onclick="filterLeads('b')">B (24)</button>
+          <button class="tab-btn" onclick="filterLeads('c')">C (42)</button>
+          <button class="tab-btn" onclick="filterLeads('d')">D (13)</button>
+        </div>
+
+        <div class="section" id="leadsTable">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Pontuação</th>
+                <th>Tipo</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Empresa Tech</td>
+                <td><span class="badge badge-a">A</span></td>
+                <td>85</td>
+                <td>Imóvel</td>
+                <td>2026-10-04</td>
+              </tr>
+              <tr>
+                <td>Negócio Ltda</td>
+                <td><span class="badge badge-b">B</span></td>
+                <td>72</td>
+                <td>Comercial</td>
+                <td>2026-10-03</td>
+              </tr>
+              <tr>
+                <td>Desenvolvimento SA</td>
+                <td><span class="badge badge-c">C</span></td>
+                <td>48</td>
+                <td>Galpão</td>
+                <td>2026-10-02</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Zoe IA View -->
+      <div id="zoe" class="view">
+        <h2 class="section-title">Zoe IA - Dashboard</h2>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Mensagens Respondidas</div>
+            <div class="kpi-value">1.240</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Leads Qualificados</div>
+            <div class="kpi-value">87</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Agendamentos</div>
+            <div class="kpi-value">23</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Negociações</div>
+            <div class="kpi-value">8</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <p style="color: #666;">IA respondendo, qualificando e agendando em tempo real.</p>
+        </div>
+      </div>
+
+      <!-- Faturamento View -->
+      <div id="faturamento" class="view">
+        <h2 class="section-title">Faturamento (Asaas)</h2>
+
+        <div class="section">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+                <th>Comissão</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>2026-10-04</td>
+                <td>Venda Galpão</td>
+                <td>R$ 450.000</td>
+                <td>R$ 27.000</td>
+                <td><span class="badge badge-a">Pago</span></td>
+              </tr>
+              <tr>
+                <td>2026-10-03</td>
+                <td>Locação Comercial</td>
+                <td>R$ 120.000</td>
+                <td>R$ 6.000</td>
+                <td><span class="badge badge-b">Pendente</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Placeholder Views -->
+      <div id="negocios" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="agenda" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="painel" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="propto" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="crm" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="pipeline" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="radar" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+      <div id="workflows" class="view"><div class="section"><p>Seção em desenvolvimento...</p></div></div>
+    </div>
+  </div>
+
+  <script>
+    function showView(viewId) {
+      // Hide all views
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+
+      // Show selected view
+      document.getElementById(viewId).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function filterLeads(category) {
+      event.target.parentElement.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/dashboard.html';
+    }
+
+    // Check authentication
+    if (!localStorage.getItem('token')) {
+      window.location.href = '/dashboard.html';
+    }
+
+    document.getElementById('userDisplay').textContent = localStorage.getItem('user') || 'Usuário';
+  </script>
+</body>
+</html>
