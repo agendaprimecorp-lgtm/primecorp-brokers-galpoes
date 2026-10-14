@@ -79,13 +79,14 @@ function avisoFaltas(f) { const nomes = f.map((x) => (PRAZOS.find((p) => "{{" + 
 let usuarioAtual = null;
 let EU = { papel: "admin", perfil: {} };
 const ehAdmin = () => EU.papel === "admin";
-function telaAuth(html) { $("hdr").innerHTML = ""; $("tabs").innerHTML = ""; $("main").innerHTML = `<div class="auth"><img class="logo d" src="/logo-escuro.png" alt="PrimeCorp Brokers"><img class="logo w" src="/logo-claro.png" alt="PrimeCorp Brokers">${html}</div>`; }
+const MARCA = `<span class="marca"><img class="logo d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="logo w" src="/marca/propto-horizontal-negative.svg" alt="Propto"><span class="marca-sub">Imóveis</span></span>`;
+function telaAuth(html) { $("hdr").innerHTML = ""; $("tabs").innerHTML = ""; $("main").innerHTML = `<div class="auth">${MARCA}${html}</div>`; }
 function telaLogin(msg) {
   usuarioAtual = null;
   telaAuth(`<div class="card"><h2>Entrar</h2>${msg ? `<p class="note">${esc(msg)}</p>` : ""}
   <label>E-mail<input id="le" type="email" autocomplete="username"></label>
   <label>Senha<input id="ls" type="password" autocomplete="current-password"></label>
-  <button class="p" id="lb">Entrar</button><button class="g" id="lr">Esqueci a senha</button><div class="status" id="st"></div></div><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`);
+  <button class="p" id="lb">Entrar</button><button class="g" id="lr">Esqueci a senha</button><div class="status" id="st"></div></div><p class="endosso">Propto Imóveis · propto.com.br</p>`);
   const st = $("st");
   $("lb").onclick = async () => {
     st.className = "status"; st.textContent = "Entrando…";
@@ -174,13 +175,13 @@ function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = "tabs-in c6";
   $("tabs").innerHTML = TABS.map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="${k === "captar" ? "5 7 54 49" : "0 0 24 24"}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
-  if (MODO() === "escritorio") { $("tabs").insertAdjacentHTML("afterbegin", `<div class="side-top"><img class="logo d" src="/logo-escuro.png" alt="PrimeCorp Brokers"><img class="logo w" src="/logo-claro.png" alt="PrimeCorp Brokers"><small>Escritório · gestão</small></div>`); $("tabs").insertAdjacentHTML("beforeend", `<div class="side-foot"><span id="sync" class="sync">${ultimaSync ? "Sincronizado " + ultimaSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}</span><button class="sm" id="syncb">Atualizar agora</button></div>`); $("syncb").onclick = () => sincronizar(true); }
+  if (MODO() === "escritorio") { $("tabs").insertAdjacentHTML("afterbegin", `<div class="side-top">${MARCA}<small>Escritório · gestão</small></div>`); $("tabs").insertAdjacentHTML("beforeend", `<div class="side-foot"><span id="sync" class="sync">${ultimaSync ? "Sincronizado " + ultimaSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}</span><button class="sm" id="syncb">Atualizar agora</button></div>`); $("syncb").onclick = () => sincronizar(true); }
   $("tabs").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { stack.length = 0; go({ v: b.dataset.tab }, false); }));
 }
 function header(title) {
   const top = TOP.includes(route.v);
   $("hdr").innerHTML = top
-    ? `<img class="logo d" src="/logo-escuro.png" alt="PrimeCorp Brokers"><img class="logo w" src="/logo-claro.png" alt="PrimeCorp Brokers"><div class="ttl" style="text-align:right;font-size:15px;color:var(--ink2)">${esc(title)}</div>`
+    ? `${MARCA}<div class="ttl" style="text-align:right;font-size:15px;color:var(--ink2)">${esc(title)}</div>`
     : `<button class="back" id="bk" aria-label="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><span>Voltar</span></button><div class="ttl">${esc(title)}</div>`;
   const bk = $("bk"); if (bk) bk.onclick = () => back();
 }
@@ -240,7 +241,7 @@ VIEWS.painel = () => {
   <p class="hint">${resid ? "Casas e apartamentos: fotografe, fale e o anúncio sai pronto, com a sua assinatura e o seu CRECI." : "Galpões, áreas, terrenos e rurais: leia anúncios por link, cruze com as demandas e capte no local."}</p>
   <div class="bv-passos"><button data-bv="captar"><b>1</b><span>Captar um imóvel</span></button><button data-bv="nova"><b>2</b><span>Ler um anúncio por link</span></button><button data-bv="editb"><b>3</b><span>Cadastrar a demanda de um cliente</span></button></div>
   <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
-  <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>Tecnologia Propto</em></span><span>›</span></button>
+  <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>${capAbertas ? capAbertas + " captação(ões) em andamento" : "Fotos, voz e anúncio no local da visita"}</small><em>O corretor fala, o app faz o resto</em></span><span>›</span></button>
   ${cardZoePainel()}
   <div class="kpis"><div class="kpi"><b>${ativos.length}</b><span>Briefings ativos</span></div><div class="kpi"><b>${S.ofertas.filter((o) => o.status !== "descartada").length}</b><span>Ofertas na base</span></div><div class="kpi"><b>${abertos.length}</b><span>Negócios abertos</span></div></div>
   ${MODO() === "escritorio" ? (() => { const cs = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada").sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || "")).slice(0, 6);
@@ -254,7 +255,7 @@ VIEWS.painel = () => {
   ${cols ? `<div class="kanban">${cols}</div>` : '<p class="empty">Nenhum negócio aberto. Abra um briefing, escolha uma oferta do ranking e envie o teaser ou crie uma Sala do Cliente.</p>'}
   ${S.negocios.some((n) => n.etapa === "perdido") ? `<p class="hint">${S.negocios.filter((n) => n.etapa === "perdido").length} negócio(s) perdido(s) fora do quadro.</p>` : ""}</div>
   <div class="row"><button class="grow" id="qnova">+ Nova oferta</button><button class="grow" id="qbrief">+ Novo briefing</button></div>
-  <p class="foot">PrimeCorp Brokers · ${esc(eu().nome)} · ${esc(eu().creci)}</p>`;
+  <p class="foot">Propto Imóveis · ${esc(eu().nome)} · ${esc(eu().creci)}</p>`;
   document.querySelectorAll("[data-n]").forEach((b) => (b.onclick = () => go({ v: "negocio", id: b.dataset.n })));
   const gn = $("gonovas"); if (gn) gn.onclick = () => go({ v: "ofertas", f: "nova" }, false);
   const gs = $("gosalas"); if (gs) gs.onclick = () => go({ v: "salas" });
@@ -790,7 +791,7 @@ VIEWS.mais = () => {
   <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
   <div class="seg" id="modo">${[["auto", "Automático"], ["campo", "Celular"], ["escritorio", "Computador"]].map(([k, l]) => `<button data-modo="${k}" class="${(lerPref("pc_modo") || "auto") === k ? "on" : ""}">${l}</button>`).join("")}</div><p class="hint">Agora: <b>${MODO() === "escritorio" ? "computador (escritório)" : "celular (campo)"}</b></p></div>
   <div class="card"><h3>SAC · dúvidas, sugestões e reclamações</h3><p class="hint">Este e-mail aparece para clientes, anunciantes e proprietários nas páginas públicas (anúncio, Sala do Cliente e Sala do Anunciante).</p><div class="row"><b class="grow">${esc(PC.SAC)}</b><button class="sm" id="sacc">Copiar</button></div></div>
-  <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Tecnologia <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img class="pt-h d" src="/marca/propto-horizontal.svg" alt="Propto"><img class="pt-h w" src="/marca/propto-horizontal-negative.svg" alt="Propto"></a></p>`;
+  <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Propto Imóveis · propto.com.br</p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
   if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
   $("m8").onclick = () => go({ v: "anuncios" }); $("m10").onclick = () => go({ v: "zoe" }); $("m11").onclick = () => go({ v: "agenda" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
@@ -1186,7 +1187,7 @@ function etapaCap(o) {
 VIEWS.captar = () => {
   header("Captação no local"); const f = route.f || (ehAdmin() ? "todas" : "minhas");
   const caps = S.ofertas.filter((o) => o.origem === "Captação própria" && o.status !== "descartada" && (f === "todas" || o.captador === EU.usuario)).sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
-  $("main").innerHTML = `${MODO() === "escritorio" ? cartaoCelular("No imóvel, use o celular", "A câmera guiada roda no celular e o registro chega aqui sozinho. No computador você também pode montar o anúncio com fotos recebidas (parceiro, proprietário): o app guia ambiente por ambiente, a IA trata as fotos e descreve, e a validação confere tudo antes de publicar.") : ""}<button class="captar-cta ${MODO() === "escritorio" ? "sec" : ""}" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>${MODO() === "escritorio" ? "Novo anúncio com fotos recebidas" : "Iniciar registro fotográfico"}</b><small>${MODO() === "escritorio" ? "Escolha o tipo, envie as fotos de cada ambiente e a IA monta o anúncio" : "Escolha o tipo: o app pede cada foto, você descreve e a IA organiza"}</small><em>Tecnologia Propto · o corretor fala, o Propto faz o resto</em></span><span>›</span></button>
+  $("main").innerHTML = `${MODO() === "escritorio" ? cartaoCelular("No imóvel, use o celular", "A câmera guiada roda no celular e o registro chega aqui sozinho. No computador você também pode montar o anúncio com fotos recebidas (parceiro, proprietário): o app guia ambiente por ambiente, a IA trata as fotos e descreve, e a validação confere tudo antes de publicar.") : ""}<button class="captar-cta ${MODO() === "escritorio" ? "sec" : ""}" id="nc"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>${MODO() === "escritorio" ? "Novo anúncio com fotos recebidas" : "Iniciar registro fotográfico"}</b><small>${MODO() === "escritorio" ? "Escolha o tipo, envie as fotos de cada ambiente e a IA monta o anúncio" : "Escolha o tipo: o app pede cada foto, você descreve e a IA organiza"}</small><em>O corretor fala, o app faz o resto</em></span><span>›</span></button>
   <div class="seg">${[["minhas", "Minhas"], ["todas", "Todas"]].map(([k, l]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${l}</button>`).join("")}</div>
   <div class="card"><div class="list">${caps.map((o) => { const [cor, et] = etapaCap(o); const an = anuncioDe(o); return `<button class="item" data-c="${o.id}"><span class="dot ${cor}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Captação sem título"))}</b><span>${esc([et, fotosDe(o) + " foto(s)", perfilPorEmail(o.captador).nome.split(" ")[0], an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhuma captação ainda.</p>'}</div></div>`;
   document.querySelectorAll(".seg [data-f]").forEach((x) => (x.onclick = () => { route = { v: "captar", f: x.dataset.f }; render(); }));

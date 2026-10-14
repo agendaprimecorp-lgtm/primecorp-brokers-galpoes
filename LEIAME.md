@@ -211,3 +211,11 @@ Depois do deploy: app → Mais → Zoe → **Conectar WhatsApp ao sistema** (o s
 - **Botões:** respostas com opções sempre saem como botões tocáveis (também corrige o formato antigo `[A | B]`).
 - **Modelo:** padrão `claude-sonnet-5-5` com reserva automática (`claude-sonnet-4-5`, `claude-haiku-4-5`). `MODELO_IA` no Netlify sobrepõe.
 - **Revisão semanal:** toda segunda 08:00 (Brasília) a Zoe analisa as conversas da semana e grava sugestões em **Zoe → Revisão**; a equipe recebe aviso no WhatsApp. Nada entra no conhecimento sem **Aprovar** (dá para editar o texto antes). "Revisar agora" roda na hora.
+
+## Identidade Propto Imóveis (out/2026)
+
+- A interface (login, menu, cabeçalho, ícone do app, página pública do anúncio, Sala do Cliente e Sala do Anunciante) usa a marca **Propto Imóveis**: vermelho #CC1B1B (#E8443F no escuro), tinta #0F1720, fundo #F7F8F9, títulos em Sora e texto em Inter.
+- Logos em `public/marca/` (horizontal e negativo); ícones do app copiados de `propto/public/icons`.
+- Documentos com validade jurídica (fichas, termos, contratos de parceria) **continuam com a marca e o CRECI do corretor** (PrimeCorp/Rodrigo/Joselia). A Propto aparece só como tecnologia. Regra em `docs/MARCA.md`.
+- Termos de negócio (participação PrimeCorp na comissão) não mudaram.
+- Depois de publicar, no celular: remova o atalho antigo da tela inicial e adicione de novo para pegar o ícone novo.
