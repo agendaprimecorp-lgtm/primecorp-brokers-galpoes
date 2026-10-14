@@ -219,3 +219,11 @@ Depois do deploy: app → Mais → Zoe → **Conectar WhatsApp ao sistema** (o s
 - Documentos com validade jurídica (fichas, termos, contratos de parceria) **continuam com a marca e o CRECI do corretor** (PrimeCorp/Rodrigo/Joselia). A Propto aparece só como tecnologia. Regra em `docs/MARCA.md`.
 - Termos de negócio (participação PrimeCorp na comissão) não mudaram.
 - Depois de publicar, no celular: remova o atalho antigo da tela inicial e adicione de novo para pegar o ícone novo.
+
+## Página comercial propto.com.br (out/2026)
+
+- `public/propto.html` é a página de vendas (sem preços): captação guiada, verificação, integração com a imobiliária, públicos (imobiliária, corretor, proprietário), FAQ e formulário de inscrição no teste grátis de 90 dias.
+- O formulário grava em "Cadastros do site" (coleção site_leads, linha "Propto · teste …"), avisa a equipe e devolve o link do WhatsApp comercial. Número: variável `PROPTO_WHATSAPP` (padrão (19) 99805-1985).
+- Para publicar no domínio: adicione propto.com.br e www.propto.com.br em Domain management no Netlify; os redirects do netlify.toml já mostram a página na raiz.
+- As contas de teste só devem ser liberadas depois da separação de dados por empresa (multiempresa).
+- Teste: `test/e2e11.mjs`.

@@ -14,7 +14,7 @@ export function normalizarLead(b) {
   const fone = String(b.fone || "").replace(/\D/g, "");
   if (fone.length < 10 || fone.length > 13) throw new Error("WhatsApp inválido.");
   const nome = limpa(b.nome, 120); if (nome.length < 2) throw new Error("Informe o nome.");
-  const form = ["consulta", "indicacao", "imovel"].includes(b.form) ? b.form : "consulta";
+  const form = ["consulta", "indicacao", "imovel", "propto"].includes(b.form) ? b.form : "consulta";
   const extras = {}; for (const [k, v] of Object.entries(b.extras || {}).slice(0, 12)) if (/^[a-z_]{2,30}$/.test(k)) extras[k] = limpa(String(v ?? ""), 600);
   return { form, perfil: limpa(b.perfil, 80), nome, municipio: limpa(b.municipio, 120), wa: waNum(fone), email: limpa(b.email, 120).toLowerCase(), extras, pagina: limpa(b.pagina, 120) };
 }
@@ -22,6 +22,7 @@ export function normalizarLead(b) {
 /** Linha de atendimento sugerida pelo perfil escolhido no site. */
 export function linhaDoPerfil(l) {
   const p = (l.perfil || "").toLowerCase();
+  if (l.form === "propto") return "Propto · teste " + (l.perfil || "geral");
   if (l.form === "imovel") return "imóveis";
   if (l.form === "indicacao") return "indicação de município";
   if (/prefeit|secret|procurad|servidor|vereador/.test(p)) return "setor público";
@@ -33,7 +34,8 @@ export function linhaDoPerfil(l) {
   return "consulta geral";
 }
 
-export const textoWhatsApp = (codigo, linha) => `Olá! Acabei de me cadastrar no site da PrimeCorp (${linha}). Código ${codigo}.`;
+export const textoWhatsApp = (codigo, linha) => linha.startsWith("Propto") ? `Olá! Me inscrevi no teste grátis da Propto Imóveis. Código ${codigo}.` : `Olá! Acabei de me cadastrar no site da PrimeCorp (${linha}). Código ${codigo}.`;
+export const NUMERO_PROPTO = () => (env("PROPTO_WHATSAPP") || "(19) 99805-1985").replace(/\D/g, "").replace(/^(\d{10,11})$/, "55$1");
 
 /** Grava o lead (limite por IP), devolve código e link do WhatsApp da assistente. */
 export async function registrarLead(dados, ip = "") {
@@ -45,7 +47,7 @@ export async function registrarLead(dados, ip = "") {
   const lead = { ...dados, linha, codigo, ip: ipHash, status: "novo", criado: new Date().toISOString() };
   await salvarRegistro("site_leads", "sl_" + codigo, lead);
   await registrarEmissao({ tipo: "site_lead", conteudo: `${dados.nome} · ${linha}${dados.municipio ? " · " + dados.municipio : ""}`, meta: { codigo } }).catch(() => null);
-  const link = `https://wa.me/${NUMERO_ASSISTENTE()}?text=${encodeURIComponent(textoWhatsApp(codigo, linha))}`;
+  const link = `https://wa.me/${dados.form === "propto" ? NUMERO_PROPTO() : NUMERO_ASSISTENTE()}?text=${encodeURIComponent(textoWhatsApp(codigo, linha))}`;
   return { codigo, linha, link, lead };
 }
 

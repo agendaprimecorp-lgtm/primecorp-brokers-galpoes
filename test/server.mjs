@@ -5,7 +5,7 @@ globalThis.__user = { email: 'contato@primecorpconsultoria.com.br' }; process.en
 fs.rmSync('test/www', { recursive: true, force: true }); fs.cpSync('public', 'test/www', { recursive: true });
 await build({ entryPoints: ['src/app.js', 'src/sala.js', 'src/anunciante.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
 const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default; const anun = (await import('./out/anunciante.mjs')).default; const imov = (await import('./out/imovel.mjs')).default;
-const wh = (await import('./out/whatsapp.mjs')).default; const zbg = (await import('./out/zoe-background.mjs')).default; const mbg = (await import('./out/matricula-background.mjs')).default;
+const wh = (await import('./out/whatsapp.mjs')).default; const plead = (await import('./out/propto-lead.mjs')).default; const zbg = (await import('./out/zoe-background.mjs')).default; const mbg = (await import('./out/matricula-background.mjs')).default;
 Object.assign(process.env, { COLETA_SEGREDO: 's'.repeat(40), WHATSAPP_APP_SECRET: 'segredo-app', WHATSAPP_VERIFY_TOKEN: 'tok', WHATSAPP_TOKEN: 'tk', WHATSAPP_PHONE_ID: '999', WHATSAPP_NUMERO: '(19) 99805-1985', ZOE_EQUIPE: '19998051985' });
 globalThis.__fetchWA = async () => new Response(JSON.stringify({ messages: [{ id: 'wamid.' + Date.now() }] }), { status: 200 });
 globalThis.__fetchVerif = async (url) => { const u = String(url); const r = (j, st = 200) => new Response(JSON.stringify(j), { status: st, headers: { 'content-type': 'application/json' } });
@@ -44,6 +44,7 @@ http.createServer(async (req, res) => {
   const m2 = url.pathname.match(/^\/publico\/anunciante\/([^/]+)$/); if (m2) { fn = anun; params = { token: m2[1] }; }
   if (url.pathname.startsWith('/i/')) fn = imov;
   if (url.pathname === '/whatsapp/webhook') fn = wh;
+  if (url.pathname === '/propto/lead') fn = plead;
   const tu = /(?:^|; )tu=([^;]+)/.exec(req.headers.cookie || ''); globalThis.__user = { email: tu ? decodeURIComponent(tu[1]) : 'contato@primecorpconsultoria.com.br' };
   if (url.pathname === '/__documento') { globalThis.__documento = body ? JSON.parse(body.toString() || 'null') : null; res.writeHead(200); res.end('ok'); return; }
   if (fn) {

@@ -3,52 +3,396 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Propto · O corretor fala. O Propto faz o resto.</title>
-<meta name="description" content="Captação de imóveis por voz e foto: o corretor visita, fotografa e fala; o Propto organiza, trata as fotos, escreve o anúncio e publica.">
-<meta property="og:title" content="Propto · O corretor fala. O Propto faz o resto.">
-<meta property="og:description" content="Captação de imóveis por voz e foto, do local da visita ao anúncio no WhatsApp.">
+<title>Propto Imóveis · Capte, confira e anuncie no local da visita</title>
+<meta name="description" content="Tecnologia para imobiliárias, corretores e proprietários: captação guiada com câmera, voz e IA, documentação conferida e anúncio pronto, conectado à estrutura que a sua imobiliária já usa.">
+<meta property="og:title" content="Propto Imóveis · O imóvel captado, conferido e anunciado antes de você sair da visita">
+<meta property="og:description" content="Câmera guiada, voz e IA no celular do corretor. Teste grátis por 90 dias.">
+<meta property="og:image" content="/marca/propto-horizontal-600.png">
 <meta name="theme-color" content="#0B1118">
-<link rel="icon" href="/marca/propto-symbol.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@700&family=Inter:wght@400;500&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap">
 <style>
-/* Tokens Propto (tokens/propto.css). Fundo escuro: só o vermelho #E8443F. Fundo claro: só #CC1B1B. */
-:root{--red:#CC1B1B;--red-dark:#E8443F;--ink:#0F1720;--deep:#141C25;--deeper:#0B1118;--paper:#F7F8F9;--g300:#C2C9D2;--g500:#939DAB;--g700:#626C79}
+/* Tokens Propto: vermelho #CC1B1B no claro, #E8443F no escuro; tinta #0F1720; papel #F7F8F9. */
+:root{--red:#CC1B1B;--red2:#E8443F;--ink:#0F1720;--deep:#141C25;--deeper:#0B1118;--paper:#F7F8F9;--line:#E1E5EA;--g3:#C2C9D2;--g5:#939DAB;--g7:#626C79;--soft:#FBEAEA}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased}
-.hero{background:linear-gradient(180deg,var(--deep),var(--deeper));color:var(--paper);padding:28px 20px 64px}
-.in{max-width:980px;margin:0 auto}
-.hero img.logo{width:168px;height:auto;display:block}
-h1{font-family:Sora,sans-serif;font-weight:700;letter-spacing:-.0324em;font-size:clamp(36px,7vw,64px);line-height:1.05;margin:64px 0 18px;max-width:14ch}
-h1 span{color:var(--red-dark)}
-.hero p{color:var(--g300);font-size:clamp(17px,2.2vw,20px);line-height:1.55;max-width:44ch}
-.cta{display:inline-block;margin-top:30px;background:var(--red-dark);color:var(--deeper);font-weight:500;text-decoration:none;padding:15px 22px;border-radius:12px;font-size:17px}
-.passos{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;padding:56px 20px}
-.passo{background:#fff;border-radius:16px;padding:24px;border-top:3px solid var(--red)}
-.passo b{font-family:Sora,sans-serif;font-size:13px;letter-spacing:.12em;color:var(--red)}
-.passo h2{font-family:Sora,sans-serif;font-size:22px;letter-spacing:-.02em;margin:10px 0 8px}
-.passo p{color:var(--g700);line-height:1.55}
-.endosso{border-top:1px solid #E3E6E9;padding:30px 20px 48px}
-.endosso .in{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:18px}
-.endosso p{color:var(--g700);font-size:14px;line-height:1.5;max-width:52ch}
-.endosso img{height:34px;width:auto}
+html{scroll-behavior:smooth}
+body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;line-height:1.55}
+a{color:inherit}
+img{max-width:100%;display:block}
+.in{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+.k{font:600 12px/1 Inter,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--red)}
+.dk .k{color:var(--red2)}
+h1,h2,h3{font-family:Sora,sans-serif;letter-spacing:-.025em;text-wrap:balance}
+h2{font-size:clamp(28px,4.2vw,44px);line-height:1.1;margin:14px 0 16px;max-width:22ch}
+.lead{font-size:clamp(17px,1.9vw,19px);color:#3a4350;max-width:60ch}
+.dk{background:var(--ink);color:var(--paper)}
+.dk .lead{color:var(--g3)}
+section{padding-block:clamp(64px,9vw,112px)}
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 16px Inter,sans-serif;text-decoration:none;padding:15px 22px;border-radius:12px;border:0;cursor:pointer}
+.btn.p{background:var(--red2);color:#fff}
+.btn.p:hover{background:#d93a35}
+.btn.g{background:transparent;color:var(--paper);border:1px solid #33404f}
+.btn.g:hover{border-color:var(--g3)}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--red2);outline-offset:2px}
+/* topo */
+.nav{position:sticky;top:0;z-index:5;background:rgba(11,17,24,.92);backdrop-filter:blur(10px);border-bottom:1px solid #1f2a37}
+.nav .in{display:flex;align-items:center;gap:16px;height:64px}
+.nav img{height:26px}
+.nav .sub{font:600 10px Inter;letter-spacing:.22em;color:var(--g5);padding-left:12px;border-left:1px solid #2b3746}
+.nav nav{margin-left:auto;display:flex;gap:22px;align-items:center}
+.nav nav a{color:var(--g3);text-decoration:none;font-size:14px}
+.nav nav a:hover{color:#fff}
+.nav .btn{padding:10px 16px;font-size:14px}
+@media (max-width:820px){.nav nav a:not(.btn){display:none}}
+/* hero */
+.hero{background:radial-gradient(ellipse at 78% 20%,#3a1416 0%,#0f1720 52%,#0b1118 100%);color:var(--paper);padding-block:clamp(48px,7vw,96px) 0;overflow:hidden}
+.hero .in{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:end}
+.hero h1{font-size:clamp(38px,6vw,68px);line-height:1.03;margin:18px 0 22px}
+.hero h1 span{color:var(--red2)}
+.hero .lead{font-size:clamp(18px,2vw,21px);color:var(--g3)}
+.hero .acts{display:flex;gap:12px;flex-wrap:wrap;margin:32px 0 22px}
+.hero .para{display:flex;gap:10px;flex-wrap:wrap;padding-bottom:56px}
+.chip{font-size:13px;color:var(--g3);border:1px solid #2b3746;border-radius:99px;padding:6px 12px}
+.fones{position:relative;height:560px}
+.fone{position:absolute;width:250px;border:9px solid #1d2733;border-radius:34px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55);background:#1d2733}
+.fone img{border-radius:24px}
+.fone.a{right:150px;bottom:-120px;transform:rotate(-4deg)}
+.fone.b{right:0;bottom:-40px;transform:rotate(3deg)}
+@media (max-width:900px){.hero .in{grid-template-columns:1fr}.fones{height:420px}.fone{width:200px}.fone.a{left:4%;right:auto}.fone.b{right:4%}}
+/* contraste */
+.duas{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px}
+.cx{border:1px solid var(--line);border-radius:16px;padding:28px}
+.cx h3{font-size:19px;margin-bottom:14px}
+.cx ul{list-style:none;display:grid;gap:10px}
+.cx li{padding-left:26px;position:relative;color:#3a4350}
+.cx.antes li::before{content:"";position:absolute;left:4px;top:.65em;width:10px;height:2px;background:var(--g5)}
+.cx.depois{border-color:var(--red);background:var(--soft)}
+.cx.depois li::before{content:"";position:absolute;left:2px;top:.35em;width:12px;height:7px;border-left:2px solid var(--red);border-bottom:2px solid var(--red);transform:rotate(-45deg)}
+@media (max-width:760px){.duas{grid-template-columns:1fr}}
+/* passos */
+.passos{display:grid;gap:clamp(48px,7vw,88px);margin-top:56px}
+.passo{display:grid;grid-template-columns:1fr 300px;gap:56px;align-items:center}
+.passo:nth-child(even){grid-template-columns:300px 1fr}
+.passo:nth-child(even) .tx{order:2}
+.passo .n{font:700 15px Sora;color:var(--red);letter-spacing:.06em}
+.passo h3{font-size:clamp(24px,3vw,32px);line-height:1.15;margin:8px 0 12px}
+.passo p{color:#3a4350;max-width:52ch}
+.passo ul{margin-top:14px;display:grid;gap:6px;padding-left:18px;color:#3a4350}
+.passo li::marker{color:var(--red)}
+.tela{border:8px solid var(--deep);border-radius:30px;overflow:hidden;box-shadow:0 20px 50px rgba(15,23,32,.18);background:var(--deep);max-width:300px;justify-self:center}
+.tela img{border-radius:22px}
+@media (max-width:760px){.passo,.passo:nth-child(even){grid-template-columns:1fr}.passo:nth-child(even) .tx{order:0}.tela{max-width:240px}}
+/* públicos */
+.pub{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:44px}
+.pc{background:var(--deep);border:1px solid #253041;border-radius:18px;padding:30px;display:flex;flex-direction:column;gap:14px}
+.pc .tag{font:600 11px Inter;letter-spacing:.16em;text-transform:uppercase;color:var(--red2)}
+.pc h3{font-size:23px;line-height:1.2}
+.pc p{color:var(--g3)}
+.pc ul{list-style:none;display:grid;gap:8px;margin-top:4px}
+.pc li{color:#dfe3e8;padding-left:18px;position:relative;font-size:15px}
+.pc li::before{content:"";position:absolute;left:0;top:.62em;width:7px;height:7px;border-radius:2px;background:var(--red2)}
+.pc a{margin-top:auto;color:#fff;font-weight:600;text-decoration:none;font-size:15px}
+.pc a:hover{color:var(--red2)}
+@media (max-width:900px){.pub{grid-template-columns:1fr}}
+/* integração */
+.fluxo{display:grid;grid-template-columns:1fr auto 1.1fr auto 1.3fr;gap:16px;align-items:center;margin-top:48px}
+.no{border:1px solid var(--line);border-radius:16px;padding:22px;background:#fff}
+.no b{font:700 17px Sora;display:block;margin-bottom:6px}
+.no span{color:var(--g7);font-size:14px}
+.no.c{border:2px solid var(--red);background:var(--soft)}
+.seta{width:36px;height:2px;background:var(--g5);position:relative}
+.seta::after{content:"";position:absolute;right:-1px;top:-5px;border:6px solid transparent;border-left:8px solid var(--g5)}
+.destinos{display:grid;gap:10px}
+.destinos .no{padding:14px 18px}
+.destinos .no b{font-size:15px;margin-bottom:2px}
+@media (max-width:900px){.fluxo{grid-template-columns:1fr}.seta{width:2px;height:28px;justify-self:center}.seta::after{right:-5px;top:auto;bottom:-1px;border:6px solid transparent;border-top:8px solid var(--g5)}}
+.modos{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px}
+.modos div{background:var(--paper);border-radius:14px;padding:20px}
+.modos b{display:block;font-weight:600;margin-bottom:4px}
+.modos span{color:var(--g7);font-size:14px}
+@media (max-width:760px){.modos{grid-template-columns:1fr}}
+.nota{font-size:14px;color:var(--g7);margin-top:20px;max-width:70ch}
+/* verificação */
+.ver{display:grid;grid-template-columns:1fr 300px;gap:56px;align-items:center}
+.ver ul{list-style:none;display:grid;gap:12px;margin-top:24px}
+.ver li{display:flex;gap:12px;color:#dfe3e8}
+.ver li i{flex:none;width:10px;height:10px;border-radius:50%;margin-top:.5em}
+@media (max-width:760px){.ver{grid-template-columns:1fr}}
+/* computador */
+.pcimg{margin-top:44px;border:1px solid var(--line);border-top:14px solid var(--deep);border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(15,23,32,.14)}
+/* custo */
+.custo{display:grid;grid-template-columns:1.2fr 1fr;gap:48px;align-items:center}
+.custo .big{font:700 clamp(30px,4.6vw,48px)/1.08 Sora;letter-spacing:-.025em}
+.custo .big span{color:var(--red)}
+.custo ul{list-style:none;display:grid;gap:14px}
+.custo li{border-left:3px solid var(--red);padding:4px 0 4px 16px;color:#3a4350}
+.custo li b{color:var(--ink);display:block}
+@media (max-width:820px){.custo{grid-template-columns:1fr}}
+/* formulário */
+.teste{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:start}
+.teste ol{margin-top:24px;display:grid;gap:12px;padding-left:20px;color:var(--g3)}
+.teste ol li::marker{color:var(--red2);font-weight:700}
+form{background:#fff;color:var(--ink);border-radius:20px;padding:clamp(22px,3vw,34px);display:grid;gap:14px}
+.tipos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tipos label{border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;text-align:center}
+.tipos label{position:relative}
+.tipos input{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none}
+.tipos label:has(input:checked){border-color:var(--red);background:var(--soft);color:var(--red)}
+.tipos label:has(input:focus-visible){outline:2px solid var(--red2)}
+.lin{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fld{display:grid;gap:6px}
+.fld span{font:600 11px Inter;letter-spacing:.08em;text-transform:uppercase;color:var(--g7)}
+input,select,textarea{font:16px Inter,sans-serif;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:12px;color:var(--ink);width:100%}
+textarea{min-height:80px;resize:vertical}
+.ok{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--g7)}
+.ok input{width:auto;margin-top:3px}
+form .btn{justify-content:center}
+.msg{font-size:14px}
+.msg.e{color:var(--red)}
+.feito{text-align:center;padding:24px 8px;display:grid;gap:12px;justify-items:center}
+.feito h3{font-size:24px}
+[hidden]{display:none!important}
+.hp{position:absolute;left:-9999px}
+@media (max-width:900px){.teste{grid-template-columns:1fr}}
+@media (max-width:480px){.lin,.tipos{grid-template-columns:1fr}}
+/* faq */
+.faq{margin-top:36px;display:grid;gap:10px;max-width:820px}
+details{border:1px solid var(--line);border-radius:14px;padding:18px 22px}
+summary{font-weight:600;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:16px}
+summary::after{content:"+";color:var(--red);font-weight:700}
+details[open] summary::after{content:"–"}
+details p{color:#3a4350;margin-top:10px}
+footer{background:var(--deeper);color:var(--g5);padding-block:48px;font-size:14px}
+footer .in{display:flex;gap:24px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+footer img{height:24px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
 <body>
-<header class="hero"><div class="in">
-  <img class="logo" src="/marca/propto-horizontal-negative.svg" alt="Propto">
-  <h1>O corretor fala. <span>O Propto</span> faz o resto.</h1>
-  <p>Na visita ao imóvel, você fotografa cada ambiente e fala sobre ele. O Propto trata as fotos, organiza os ambientes, extrai os números da sua fala, escreve o anúncio e publica uma página pronta para o WhatsApp.</p>
-  <a class="cta" href="https://wa.me/5519998051985?text=Quero%20conhecer%20o%20Propto">Conhecer o Propto</a>
+
+<header class="nav"><div class="in">
+<img src="/marca/propto-horizontal-negative.svg" alt="Propto"><span class="sub">IMÓVEIS</span>
+<nav><a href="#como">Como funciona</a><a href="#imobiliarias">Imobiliárias</a><a href="#corretores">Corretores</a><a href="#proprietarios">Proprietários</a><a class="btn p" href="#teste">Testar 90 dias grátis</a></nav>
 </div></header>
-<main class="in passos">
-  <div class="passo"><b>01 · FOTO</b><h2>Cada ambiente, no local</h2><p>Luz, cor e nitidez corrigidas no próprio celular. Aviso de foto escura ou tremida na hora.</p></div>
-  <div class="passo"><b>02 · VOZ</b><h2>Você descreve, ele organiza</h2><p>Ditado em português. A IA nomeia o ambiente, descreve e preenche dormitórios, vagas, áreas e valores.</p></div>
-  <div class="passo"><b>03 · ANÚNCIO</b><h2>Publicado com autorização</h2><p>Autorização do proprietário pelo celular, página do imóvel sem endereço e contador de visitas.</p></div>
-</main>
-<footer class="endosso"><div class="in">
-  <p>Desenvolvido e operado pela PrimeCorp Brokers, consultoria imobiliária para empresas e investidores. Rodrigo França Viana · CRECI-SP 297692.</p>
-  <img src="/logo-escuro.png" alt="PrimeCorp Brokers">
+
+<section class="hero"><div class="in">
+<div>
+<p class="k">Tecnologia para o mercado imobiliário</p>
+<h1>O imóvel captado, conferido e anunciado <span>antes de você sair da visita.</span></h1>
+<p class="lead">Câmera guiada, voz e inteligência artificial no celular do corretor. A documentação conferida, o anúncio pronto e tudo enviado para a estrutura que a sua imobiliária já usa.</p>
+<div class="acts"><a class="btn p" href="#teste">Quero testar grátis por 90 dias</a><a class="btn g" href="#como">Ver como funciona</a></div>
+<div class="para"><span class="chip">Imobiliárias</span><span class="chip">Corretores autônomos</span><span class="chip">Proprietários</span><span class="chip">Residencial, comercial, galpões e rurais</span></div>
+</div>
+<div class="fones" aria-hidden="true">
+<div class="fone a"><img src="/propto/captacao.jpg" alt=""></div>
+<div class="fone b"><img src="/propto/anuncio.jpg" alt=""></div>
+</div>
+</div></section>
+
+<section><div class="in">
+<p class="k">A rotina do corretor</p>
+<h2>A captação ainda é feita em cinco ferramentas diferentes.</h2>
+<p class="lead">Foto na galeria, anotação no papel, áudio no WhatsApp, documento no e-mail e o anúncio digitado à noite. A Propto junta tudo num fluxo só, no lugar onde o trabalho acontece: dentro do imóvel.</p>
+<div class="duas">
+<div class="cx antes"><h3>Como é hoje</h3><ul>
+<li>Fotos sem ordem, sem saber qual é de qual cômodo</li>
+<li>Descrição escrita depois, de memória</li>
+<li>Matrícula e IPTU conferidos só quando o negócio já está andando</li>
+<li>Anúncio que leva dias para subir no site</li>
+<li>Parceria combinada por mensagem, sem registro</li></ul></div>
+<div class="cx depois"><h3>Com a Propto</h3><ul>
+<li>A câmera pede cada ambiente pelo roteiro do tipo de imóvel</li>
+<li>O corretor fala; a IA descreve cada ambiente e preenche a ficha</li>
+<li>Documentos lidos e cruzados com o anúncio, com pontos de atenção</li>
+<li>Anúncio pronto ao fim da visita, enviado para a sua estrutura</li>
+<li>Termos aceitos com data, hora e registro</li></ul></div>
+</div>
+</div></section>
+
+<section id="como" style="background:var(--paper)"><div class="in">
+<p class="k">Como funciona</p>
+<h2>Do portão ao anúncio, em quatro passos.</h2>
+<div class="passos">
+<div class="passo"><div class="tx"><p class="n">01 · CÂMERA GUIADA</p><h3>O app diz o que fotografar.</h3><p>O corretor escolhe o tipo de imóvel e o roteiro aparece: fachada, sala, cozinha, dormitórios; ou portaria, docas e pé-direito no galpão; ou porteira, sede e água na fazenda. Nenhuma foto fica sem ambiente.</p><ul><li>Roteiros para residencial, comercial, galpões e rurais</li><li>Aviso de foto escura ou tremida na hora</li></ul></div><div class="tela"><img src="/propto/captacao.jpg" alt="Tela da visita guiada com a câmera e o roteiro de ambientes"></div></div>
+<div class="passo"><div class="tx"><p class="n">02 · VOZ E INTELIGÊNCIA ARTIFICIAL</p><h3>O corretor fala. A ficha se preenche.</h3><p>Em cada ambiente, o corretor descreve o que vê. A IA transforma a fala em descrição, destaques e dados da ficha: áreas, dormitórios, vagas, valores. O anúncio só afirma o que foi fotografado, dito ou documentado.</p><ul><li>Mosaico do imóvel com o que falta</li><li>Tudo editável antes de publicar</li></ul></div><div class="tela"><img src="/propto/mosaico.jpg" alt="Mosaico do registro fotográfico por ambiente"></div></div>
+<div class="passo"><div class="tx"><p class="n">03 · DOCUMENTAÇÃO CONFERIDA</p><h3>Matrícula e IPTU lidos e cruzados.</h3><p>Envie a foto ou o PDF. A IA identifica o documento, extrai proprietário, áreas, ônus e débitos, e compara com o anúncio. CEP, mapa e CNPJ são consultados sozinhos.</p><ul><li>Índice de verificação de 0 a 100</li><li>Construção não averbada, penhora e área divergente apontadas</li></ul></div><div class="tela"><img src="/propto/documento.jpg" alt="Verificação do imóvel com pontos de atenção"></div></div>
+<div class="passo"><div class="tx"><p class="n">04 · ANÚNCIO NO AR</p><h3>A página do imóvel pronta para o WhatsApp.</h3><p>Ao concluir, o anúncio está pronto: página com fotos por ambiente, destaques e contato do corretor, ficha em PDF e pacote para portais. Na imobiliária, os dados seguem para o sistema e o site que ela já usa.</p><ul><li>Autorização do proprietário antes de publicar</li><li>Endereço exato nunca aparece no anúncio</li></ul></div><div class="tela"><img src="/propto/anuncio.jpg" alt="Página pública do anúncio do imóvel"></div></div>
+</div>
+</div></section>
+
+<section class="dk" id="publicos"><div class="in">
+<p class="k">Para quem</p>
+<h2>Uma tecnologia, três jeitos de usar.</h2>
+<p class="lead">A imobiliária ganha uma extensão de campo para o que já tem. O corretor autônomo ganha a estrutura inteira. O proprietário ganha um anúncio completo.</p>
+<div class="pub">
+<div class="pc" id="imobiliarias"><span class="tag">Imobiliárias</span><h3>Uma extensão do que você já tem.</h3><p>Seu sistema e seu site continuam os mesmos. A Propto entra no campo e entrega o imóvel captado à sua estrutura.</p><ul><li>Padrão único de captação para toda a equipe</li><li>Dados do imóvel enviados ao seu sistema e ao seu site</li><li>Documentação conferida antes da proposta</li><li>Painel do escritório no computador</li></ul><a href="#integracao">Como conecta com o seu sistema →</a></div>
+<div class="pc" id="corretores"><span class="tag">Corretores autônomos</span><h3>Sua estrutura completa na palma da mão.</h3><p>Cadastro com nome, CRECI, e-mail e WhatsApp. Daí em diante, o app é o seu escritório.</p><ul><li>Página de anúncio com a sua marca e o seu CRECI</li><li>Demandas dos clientes e imóveis cruzados sozinhos</li><li>Sala do Cliente com termo de apresentação</li><li>Parceria e divisão de comissão registradas</li></ul><a href="#teste">Quero testar →</a></div>
+<div class="pc" id="proprietarios"><span class="tag">Proprietários</span><h3>Venda ou alugue com um anúncio completo.</h3><p>Para pessoas e empresas que querem divulgar o próprio imóvel, sem assinatura.</p><ul><li>Roteiro de fotos e descrição guiada por voz</li><li>Página do imóvel para divulgar e PDF completo</li><li>Lista dos documentos que o comprador vai pedir</li><li>Indicação de corretor parceiro, se quiser</li></ul><a href="#teste">Quero anunciar meu imóvel →</a></div>
+</div>
+</div></section>
+
+<section id="integracao"><div class="in">
+<p class="k">Integração com a sua imobiliária</p>
+<h2>O corretor finaliza a captação. O imóvel sobe na sua estrutura.</h2>
+<p class="lead">Ninguém precisa trocar de sistema. A Propto envia o imóvel captado em campo para o banco de dados e o site de anúncios que a imobiliária já usa, pelo caminho que o seu sistema aceita.</p>
+<div class="fluxo" role="img" aria-label="Fluxo: corretor em campo, Propto, e os destinos sistema da imobiliária, site de anúncios e portais">
+<div class="no"><b>Corretor em campo</b><span>Fotos por ambiente, voz, documentos</span></div>
+<div class="seta"></div>
+<div class="no c"><b>Propto Imóveis</b><span>Ficha, anúncio, verificação e autorização</span></div>
+<div class="seta"></div>
+<div class="destinos">
+<div class="no"><b>Sistema da imobiliária</b><span>Imóvel e fotos enviados ao CRM</span></div>
+<div class="no"><b>Site de anúncios</b><span>O imóvel aparece no site da imobiliária</span></div>
+<div class="no"><b>Portais</b><span>Arquivo no padrão aceito pelos portais</span></div>
+</div>
+</div>
+<div class="modos">
+<div><b>Envio direto ao sistema</b><span>Para sistemas com conexão aberta a parceiros: o imóvel e as fotos entram sozinhos ao concluir a captação.</span></div>
+<div><b>Arquivo no padrão dos portais</b><span>Um endereço fixo com os imóveis no formato XML que sites e sistemas imobiliários já sabem ler.</span></div>
+<div><b>Pacote pronto</b><span>Ficha completa, fotos nomeadas por ambiente e texto do anúncio, para o cadastro em qualquer sistema.</span></div>
+</div>
+<p class="nota">As conexões diretas são liberadas sistema a sistema, durante a implantação. Conte no formulário qual sistema e qual site a sua imobiliária usa.</p>
+</div></section>
+
+<section class="dk"><div class="in ver">
+<div>
+<p class="k">Verificação do imóvel</p>
+<h2>Antes de apresentar, o sistema confere.</h2>
+<p class="lead">Cada imóvel ganha um quadro privado com o que está confirmado e o que falta. Ele nunca sai no anúncio: serve para a imobiliária decidir se avança, pede certidão ou chama o jurídico.</p>
+<ul>
+<li><i style="background:#3fa96b"></i><span>Verde: endereço, proprietário e áreas conferidos</span></li>
+<li><i style="background:#e0a23a"></i><span>Amarelo: pontos de atenção ou certidões pendentes</span></li>
+<li><i style="background:var(--red2)"></i><span>Vermelho: impeditivo encontrado, como penhora</span></li>
+</ul>
+<p class="nota" style="color:var(--g5)">A verificação apoia a decisão e não substitui certidão atualizada nem análise jurídica.</p>
+</div>
+<div class="tela"><img src="/propto/verificacao.jpg" alt="Verificação com matrícula lida e penhora detectada"></div>
+</div></section>
+
+<section style="background:var(--paper)"><div class="in">
+<p class="k">No computador</p>
+<h2>O celular registra. O escritório acompanha em tempo real.</h2>
+<p class="lead">No computador, a equipe vê a captação chegar do campo, organiza ofertas, demandas, negócios e documentos. O mesmo sistema, em tela larga.</p>
+<div class="pcimg"><img src="/propto/escritorio.jpg" alt="Painel da Propto no computador"></div>
+</div></section>
+
+<section><div class="in custo">
+<div>
+<p class="k">Investimento</p>
+<p class="big">Ter essa tecnologia custa menos do que <span>perder uma captação.</span></p>
+<p class="lead" style="margin-top:18px">Há planos para corretor, para imobiliária e anúncio avulso para proprietário. Apresentamos na conversa, de acordo com o tamanho da sua operação.</p>
+<div style="margin-top:28px"><a class="btn p" href="#teste">Quero conhecer</a></div>
+</div>
+<ul>
+<li><b>Um imóvel que não vai para o concorrente</b>porque o anúncio ficou pronto na visita.</li>
+<li><b>Um negócio que não cai na documentação</b>porque a matrícula foi lida antes da proposta.</li>
+<li><b>Uma comissão que não se perde</b>porque a parceria ficou registrada.</li>
+<li><b>Horas de digitação por semana</b>devolvidas para atender cliente.</li>
+</ul>
+</div></section>
+
+<section class="dk" id="teste"><div class="in teste">
+<div>
+<p class="k">Teste grátis por 90 dias</p>
+<h2>Use no dia a dia e ajude a ajustar.</h2>
+<p class="lead">Estamos abrindo vagas de teste para imobiliárias, corretores e proprietários, começando por Campinas e região. As contas são liberadas por ordem de inscrição.</p>
+<ol>
+<li>Você se inscreve aqui.</li>
+<li>Nossa equipe chama no WhatsApp e agenda a implantação de 30 minutos.</li>
+<li>Você capta o primeiro imóvel junto com a gente.</li>
+<li>Por 90 dias, usa à vontade e nos conta o que melhorar.</li>
+</ol>
+</div>
+<form id="f" novalidate>
+<div class="tipos" role="radiogroup" aria-label="Você é">
+<label><input type="radio" name="tipo" value="imobiliaria" checked>Imobiliária</label>
+<label><input type="radio" name="tipo" value="corretor">Corretor(a)</label>
+<label><input type="radio" name="tipo" value="proprietario">Proprietário</label>
+</div>
+<div class="lin">
+<label class="fld"><span>Nome completo</span><input id="nome" name="nome" autocomplete="name" required></label>
+<label class="fld" data-t="imobiliaria"><span>Imobiliária</span><input id="empresa" name="empresa" autocomplete="organization"></label>
+<label class="fld" data-t="corretor"><span>CRECI</span><input id="creci" name="creci" placeholder="Ex.: 123456-F"></label>
+<label class="fld" data-t="proprietario"><span>Tipo do imóvel</span><select id="imovel" name="imovel"><option>Casa</option><option>Apartamento</option><option>Terreno</option><option>Comercial</option><option>Galpão</option><option>Rural</option></select></label>
+</div>
+<div class="lin">
+<label class="fld"><span>WhatsApp</span><input id="fone" name="fone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(19) 90000-0000" required></label>
+<label class="fld"><span>E-mail</span><input id="email" name="email" type="email" autocomplete="email"></label>
+</div>
+<div class="lin">
+<label class="fld"><span>Cidade</span><input id="cidade" name="cidade" autocomplete="address-level2"></label>
+<label class="fld" data-t="imobiliaria"><span>Corretores na equipe</span><select id="equipe" name="equipe"><option>1 a 3</option><option>4 a 10</option><option>11 a 30</option><option>Mais de 30</option></select></label>
+<label class="fld" data-t="corretor"><span>Segmento</span><select id="segmento" name="segmento"><option>Residencial</option><option>Comercial e galpões</option><option>Rural</option><option>Vários</option></select></label>
+<label class="fld" data-t="proprietario"><span>Operação</span><select id="operacao" name="operacao"><option>Venda</option><option>Locação</option></select></label>
+</div>
+<div class="lin" data-t="imobiliaria">
+<label class="fld"><span>Sistema que usa hoje</span><input id="sistema" name="sistema" placeholder="Ex.: Kenlo, Jetimob, Imobzi, Vista, próprio"></label>
+<label class="fld"><span>Site da imobiliária</span><input id="site" name="site" type="url" inputmode="url" placeholder="https://"></label>
+</div>
+<label class="fld"><span>O que você mais quer resolver? (opcional)</span><textarea id="obs" name="obs"></textarea></label>
+<input class="hp" tabindex="-1" autocomplete="off" name="hp" aria-hidden="true">
+<label class="ok"><input type="checkbox" id="consentimento" name="consentimento">Autorizo a Propto a me contatar por WhatsApp e e-mail sobre o teste. Meus dados são usados só para isso, conforme a LGPD.</label>
+<button class="btn p" type="submit" id="enviar">Quero minha vaga de teste</button>
+<p class="msg" id="msg" role="status"></p>
+</form>
+<div class="feito" id="feito" hidden>
+<h3>Inscrição recebida.</h3>
+<p>Seu código é <b id="codigo"></b>. Chame a gente no WhatsApp para agendar a implantação.</p>
+<a class="btn p" id="wa" href="#" target="_blank" rel="noopener">Abrir o WhatsApp</a>
+</div>
+</div></section>
+
+<section><div class="in">
+<p class="k">Perguntas frequentes</p>
+<h2>O que perguntam antes de testar.</h2>
+<div class="faq">
+<details><summary>Preciso trocar o sistema que minha imobiliária já usa?</summary><p>Não. A Propto cuida do trabalho de campo e entrega o imóvel captado ao seu sistema e ao seu site, pelo caminho que eles aceitam: envio direto, arquivo no padrão dos portais ou pacote pronto.</p></details>
+<details><summary>A inteligência artificial inventa informação no anúncio?</summary><p>O anúncio só afirma o que foi fotografado, dito pelo corretor ou lido em documento. Tudo é revisado pelo corretor antes de publicar.</p></details>
+<details><summary>Os dados dos meus clientes ficam seguros?</summary><p>Cada empresa tem os seus dados separados. A imobiliária é dona dos dados dos clientes dela, com contrato de tratamento de dados conforme a LGPD, e pode exportar tudo quando quiser.</p></details>
+<details><summary>Funciona no computador?</summary><p>Sim. No celular, o app é feito para o campo. No computador, abre em tela larga para o escritório acompanhar e organizar.</p></details>
+<details><summary>Proprietário sem CRECI pode usar?</summary><p>Pode anunciar o próprio imóvel, de forma avulsa, com página de divulgação e PDF completo. Intermediar imóvel de terceiros continua sendo atividade do corretor com CRECI.</p></details>
+<details><summary>O que acontece depois dos 90 dias?</summary><p>Você escolhe se continua em um dos planos. Nada é cobrado automaticamente durante o teste.</p></details>
+</div>
+</div></section>
+
+<footer><div class="in">
+<img src="/marca/propto-horizontal-negative.svg" alt="Propto">
+<span>Propto Imóveis · propto.com.br · WhatsApp (19) 99805-1985</span>
+<span>Tecnologia para imobiliárias, corretores e proprietários.</span>
 </div></footer>
+
+<script>
+(() => {
+  const f = document.getElementById('f'), msg = document.getElementById('msg');
+  const tipo = () => (f.querySelector('input[name=tipo]:checked') || {}).value || 'imobiliaria';
+  const sync = () => f.querySelectorAll('[data-t]').forEach((el) => { el.hidden = el.dataset.t !== tipo(); });
+  f.querySelectorAll('input[name=tipo]').forEach((r) => r.addEventListener('change', sync)); sync();
+  document.querySelectorAll('a[href="#proprietarios"] , #proprietarios a').forEach((a) => a.addEventListener('click', () => { const r = f.querySelector('input[value=proprietario]'); r.checked = true; sync(); }));
+  document.querySelectorAll('#corretores a').forEach((a) => a.addEventListener('click', () => { f.querySelector('input[value=corretor]').checked = true; sync(); }));
+  const v = (id) => (document.getElementById(id).value || '').trim();
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault(); msg.className = 'msg'; msg.textContent = '';
+    const t = tipo(); const fone = v('fone').replace(/\D/g, '');
+    if (v('nome').length < 2) { msg.className = 'msg e'; msg.textContent = 'Informe o seu nome.'; return; }
+    if (fone.length < 10) { msg.className = 'msg e'; msg.textContent = 'Informe um WhatsApp com DDD.'; return; }
+    if (!document.getElementById('consentimento').checked) { msg.className = 'msg e'; msg.textContent = 'Marque a autorização de contato para continuar.'; return; }
+    const extras = { tipo: t, obs: v('obs') };
+    if (t === 'imobiliaria') Object.assign(extras, { empresa: v('empresa'), equipe: v('equipe'), sistema: v('sistema'), site: v('site') });
+    if (t === 'corretor') Object.assign(extras, { creci: v('creci'), segmento: v('segmento') });
+    if (t === 'proprietario') Object.assign(extras, { imovel: v('imovel'), operacao: v('operacao') });
+    const btn = document.getElementById('enviar'); btn.disabled = true; btn.textContent = 'Enviando…';
+    try {
+      const r = await fetch('/propto/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ form: 'propto', perfil: { imobiliaria: 'Imobiliária', corretor: 'Corretor(a)', proprietario: 'Proprietário' }[t], nome: v('nome'), fone, email: v('email'), municipio: v('cidade'), consentimento: true, hp: f.hp.value, pagina: location.pathname, extras }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar agora. Tente de novo em instantes.');
+      document.getElementById('codigo').textContent = j.codigo; document.getElementById('wa').href = j.whatsapp;
+      f.hidden = true; document.getElementById('feito').hidden = false;
+    } catch (err) { msg.className = 'msg e'; msg.textContent = err.message; btn.disabled = false; btn.textContent = 'Quero minha vaga de teste'; }
+  });
+})();
+</script>
 </body>
 </html>
