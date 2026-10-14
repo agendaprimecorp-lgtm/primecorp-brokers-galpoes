@@ -68,7 +68,7 @@ V.ehRural = (tipo) => /fazenda|s[ií]tio|ch[áa]cara|rancho|haras|rural/i.test(t
  * Cada item: {k, rotulo, peso, st: 'ok'|'a'|'v'|'pend', msg}. 'pend' = ainda sem informação.
  */
 V.avaliar = function (o) {
-  const vr = o.verificacao || {}; const f = vr.fontes || {}; const m = vr.matricula || null; const rural = V.ehRural(o.tipo);
+  const vr = o.verificacao || {}; const f = vr.fontes || {}; const m = vr.matricula || null; const rural = V.ehRural(o.tipo); const ip = vr.iptu || null; const ru = vr.rural || null;
   const it = []; const add = (k, rotulo, peso, st, msg) => it.push({ k, rotulo, peso, st, msg });
 
   // 1. Identificação no registro
@@ -78,8 +78,16 @@ V.avaliar = function (o) {
   // 2. Cadastro fiscal (IPTU urbano; CAR/CCIR/georreferenciamento rural)
   if (rural) {
     const ha = num(o.area_ha); const falta = [!o.car && "CAR", !o.ccir && "CCIR", !(o.nirf) && "NIRF", ha >= 25 && !(o.sigef || o.georref) && "georreferenciamento SIGEF"].filter(Boolean);
-    add("fiscal", "Cadastros rurais (CAR, CCIR, NIRF, SIGEF)", 10, falta.length ? (falta.length > 2 ? "pend" : "a") : "ok", falta.length ? "Falta: " + falta.join(", ") + "." : "CAR, CCIR e NIRF informados.");
-  } else add("fiscal", "Inscrição imobiliária (IPTU)", 10, o.inscricao ? "ok" : "pend", o.inscricao ? `Inscrição ${o.inscricao}` : "Informe a inscrição imobiliária (carnê do IPTU).");
+    const carRuim = ru && ru.situacao_car && !/ativ/i.test(ru.situacao_car); const dRu = ru ? dif(ha, num(ru.area_ha)) : null;
+    const extras = [carRuim && `CAR com situação "${ru.situacao_car}"`, dRu != null && dRu > 0.05 && `área do ${ru.tipo_documento || "cadastro"} (${ru.area_ha} ha) difere ${Math.round(dRu * 100)}% da oferta`].filter(Boolean);
+    add("fiscal", "Cadastros rurais (CAR, CCIR, NIRF, SIGEF)", 10, extras.length ? "a" : falta.length ? (falta.length > 2 ? "pend" : "a") : "ok",
+      [falta.length ? "Falta: " + falta.join(", ") + "." : "CAR, CCIR e NIRF informados.", ru ? `${ru.tipo_documento || "Cadastro"} lido pela IA${ru.titular ? " · titular " + ru.titular : ""}.` : "", extras.length ? extras.join("; ").replace(/^./, (c) => c.toUpperCase()) + "." : ""].filter(Boolean).join(" "));
+  } else if (ip) {
+    const insOk = !o.inscricao || !ip.inscricao || dig(o.inscricao) === dig(ip.inscricao);
+    const st = !insOk ? "v" : ip.debitos === true ? "a" : "ok";
+    add("fiscal", "Inscrição imobiliária (IPTU)", 10, st, !insOk ? `Inscrição lida no IPTU (${ip.inscricao}) difere da informada (${o.inscricao}).`
+      : `IPTU${ip.exercicio ? " " + ip.exercicio : ""} lido pela IA · inscrição ${ip.inscricao || o.inscricao || "?"}${ip.contribuinte ? " · contribuinte " + ip.contribuinte : ""}${ip.debitos === true ? " · CONSTAM DÉBITOS: exigir quitação" : ip.debitos === false ? " · sem débitos" : ""}${ip.valor_venal_total ? " · valor venal R$ " + Math.round(ip.valor_venal_total).toLocaleString("pt-BR") : ""}.`);
+  } else add("fiscal", "Inscrição imobiliária (IPTU)", 10, o.inscricao ? "ok" : "pend", o.inscricao ? `Inscrição ${o.inscricao} (envie o carnê ou a certidão para a IA conferir áreas e débitos)` : "Informe a inscrição imobiliária ou envie o carnê do IPTU.");
 
   // 3. Endereço pelo CEP (Correios via BrasilAPI/ViaCEP)
   if (!o.cep) add("cep", "Endereço confirmado pelo CEP", 10, "pend", "Informe o CEP.");
@@ -108,7 +116,7 @@ V.avaliar = function (o) {
   } else add("prop", "Proprietário identificado", 10, "ok", `${o.proprietario} · CPF válido (conferir com a matrícula)`);
 
   // 6. Matrícula lida (certidão) e atualidade
-  if (!m) add("mat", "Certidão da matrícula lida", 16, "pend", "Envie a certidão/visualização da matrícula (PDF ou foto): a IA lê proprietários, áreas e ônus.");
+  if (!m) add("mat", "Certidão da matrícula lida", 16, "pend", "Envie a certidão/visualização da matrícula (PDF ou foto) ou peça ao anunciante pela Sala do Anunciante: a IA lê proprietários, áreas e ônus.");
   else {
     const numOk = !o.matricula || !m.numero || dig(o.matricula) === dig(m.numero);
     add("mat", "Certidão da matrícula lida", 10, numOk ? "ok" : "v", numOk ? `Matrícula ${m.numero || o.matricula}${m.cartorio ? " · " + m.cartorio : ""}` : `Número lido na certidão (${m.numero}) difere do informado (${o.matricula}).`);
@@ -140,7 +148,15 @@ V.avaliar = function (o) {
     if (dT != null && dT > 0.05) msgs.push(`área ${rural ? "total" : "do terreno"} difere ${Math.round(dT * 100)}% da matrícula`);
     if (!avOk) msgs.push("construção não averbada na matrícula (risco para financiamento e escritura)");
     else if (dC != null && dC > 0.1) msgs.push(`área construída difere ${Math.round(dC * 100)}% da averbada`);
+    if (ip && num(ip.area_construida)) {
+      if (m.construcao_averbada === false) msgs.push(`a prefeitura cadastra ${Math.round(num(ip.area_construida))} m² construídos que não estão averbados`);
+      else if (num(m.area_construida_averbada) && dif(num(ip.area_construida), num(m.area_construida_averbada)) > 0.1) msgs.push(`IPTU (${Math.round(num(ip.area_construida))} m²) difere da área averbada (${Math.round(num(m.area_construida_averbada))} m²): ampliação sem averbação?`);
+    }
     add("areas", "Áreas e construção averbada", 10, msgs.length ? (dT != null && dT > 0.2 ? "v" : "a") : dT == null && !cons ? "a" : "ok", msgs.length ? msgs.join("; ").replace(/^./, (c) => c.toUpperCase()) + "." : dT == null ? "Sem área para comparar." : "Áreas conferem com a matrícula.");
+  } else if (ip && (num(ip.area_construida) || num(ip.area_terreno))) {
+    const dc = dif(num(o.construida), num(ip.area_construida)); const dt = dif(num(o.terreno), num(ip.area_terreno));
+    const msgs = [dc != null && dc > 0.1 && `área construída da oferta difere ${Math.round(dc * 100)}% do IPTU (${Math.round(num(ip.area_construida))} m²)`, dt != null && dt > 0.05 && `terreno difere ${Math.round(dt * 100)}% do IPTU (${Math.round(num(ip.area_terreno))} m²)`].filter(Boolean);
+    add("areas", "Áreas e construção averbada", 10, msgs.length ? "a" : "a", (msgs.length ? msgs.join("; ").replace(/^./, (c) => c.toUpperCase()) + ". " : "Áreas conferem com o IPTU. ") + "A averbação só se confirma na matrícula.");
   } else add("areas", "Áreas e construção averbada", 10, "pend", "Depende da leitura da matrícula.");
 
   // Pontuação: ok = peso cheio; 'a' = metade; 'v' e 'pend' = zero.

@@ -27,6 +27,7 @@ await p.fill('#url', 'https://93.184.215.14/galpao-fotos'); await p.click('#bx')
 ok(await esperar(async () => (await p.$('[data-f="tipo"]')) && (await p.$eval('[data-f="tipo"]', (x) => x.value)) === 'Galpão'), 'link lido: galpão');
 ok(/\(19\) 98765-4321/.test(await txt()), 'contato do anunciante extraído do anúncio (WhatsApp)');
 ok(/4 foto\(s\) encontrada/.test(await txt()), 'fotos do anúncio encontradas (sem logo)');
+await p.$eval('.thumbs', (el) => el.scrollIntoView()); // as miniaturas usam loading=lazy
 ok(await esperar(async () => (await p.$$eval('.thumbs img', (xs) => xs.filter((i) => i.complete && i.naturalWidth > 0).length)) >= 4), 'fotos de referência carregadas pelo proxy');
 ok(/Uso interno/.test(await txt()) && !(await p.$('#guardar')), 'aviso de uso interno; sem botão de guardar antes da autorização');
 ok(/2\.\d{3}|mil m²/.test(await p.textContent('#tzt')) && !/Horizonte/.test(await p.textContent('#tzt')), 'teaser em faixas e sem o nome do anunciante');

@@ -97,6 +97,58 @@ const assinar = (corpo, seg = "segredo-app") => "sha256=" + crypto.createHmac("s
 const payload = (de, texto, id) => JSON.stringify({ object: "whatsapp_business_account", entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "999" }, contacts: [{ wa_id: de, profile: { name: "Carlos" } }], messages: [{ from: de, id, timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body: texto } }] } }] }] });
 const W = (corpo, sig) => wh(new Request("https://pc.test/whatsapp/webhook", { method: "POST", headers: { "x-hub-signature-256": sig ?? assinar(corpo), "content-type": "application/json" }, body: corpo }), ctx());
 
+await t("documento: IA identifica IPTU, completa a oferta, cruza áreas e roda a varredura sozinha", async () => {
+  await api(R("PUT", "/api/dados/ofertas/o3", { id: "o3", codigo: "PC-0003", tipo: "Galpão", operacao: "Venda", cidade: "Sumaré", uf: "SP", terreno: "10.000", construida: "6.000", venda: "9.000.000", status: "revisada" }), ctx());
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(800, 32)]).toString("base64");
+  const r = await J(await api(R("POST", "/api/documento/o3", { tipo: "application/pdf", base64: pdf }), ctx())); assert.equal(r.s, 200);
+  globalThis.__documento = { doc: "iptu", tipo_documento: "carnê", exercicio: "2026", inscricao: "34.0021.0450.000", contribuinte: "Indústria X Ltda", endereco: "Rua Dom Barreto, 120", cep: "13170-000", area_terreno: 10000, area_construida: 7400, valor_venal_total: 4500000, debitos: true, alertas: [] };
+  await mbg(new Request("https://pc.test/.netlify/functions/matricula-background", { method: "POST", headers: SEG, body: JSON.stringify({ oferta: "o3", chave: r.j.chave, tipo: "application/pdf", usuario: "x" }) }));
+  const o = (await J(await api(R("GET", "/api/dados"), ctx()))).j.ofertas.find((x) => x.id === "o3");
+  assert.equal(o.verificacao.leitura.doc, "iptu"); assert.equal(o.inscricao, "34.0021.0450.000"); assert.equal(o.cep, "13170-000"); assert.equal(o.endereco, "Rua Dom Barreto"); assert.equal(o.numero, "120");
+  assert.equal(o.construida, "6.000", "não sobrescreve o que o corretor digitou");
+  assert.equal(o.verificacao.fontes.cep.cidade, "Sumaré", "varredura automática após o documento trazer o CEP"); assert.match(o.verificacao.varrido_por, /automático/);
+  const it = Object.fromEntries(V.avaliar(o).itens.map((x) => [x.k, x]));
+  assert.equal(it.fiscal.st, "a"); assert.match(it.fiscal.msg, /DÉBITOS/); assert.match(it.fiscal.msg, /4\.500\.000/);
+  assert.equal(it.areas.st, "a"); assert.match(it.areas.msg, /difere 19% do IPTU/);
+  // com matrícula sem construção averbada, o IPTU denuncia a área não averbada
+  globalThis.__documento = { doc: "matricula", numero: "999", cartorio: "CRI Sumaré", area_terreno: 10000, construcao_averbada: false, proprietarios: [{ nome: "Indústria X Ltda" }], onus: [] };
+  const r2 = await J(await api(R("POST", "/api/documento/o3", { tipo: "application/pdf", base64: pdf }), ctx()));
+  await mbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ oferta: "o3", chave: r2.j.chave, tipo: "application/pdf", usuario: "x" }) }));
+  const o2 = (await J(await api(R("GET", "/api/dados"), ctx()))).j.ofertas.find((x) => x.id === "o3");
+  assert.equal(o2.verificacao.matricula.numero, "999"); assert.ok(o2.verificacao.iptu, "IPTU preservado");
+  assert.match(Object.fromEntries(V.avaliar(o2).itens.map((x) => [x.k, x])).areas.msg, /prefeitura cadastra 7400 m² construídos que não estão averbados/);
+  globalThis.__documento = { doc: "rural", tipo_documento: "recibo do CAR", car: "SP-3552403-ABC", situacao_car: "pendente", area_ha: 60 };
+  await api(R("PUT", "/api/dados/ofertas/o4", { id: "o4", codigo: "PC-0004", tipo: "Fazenda", operacao: "Venda", cidade: "Itapetininga", area_ha: "48,4", status: "revisada" }), ctx());
+  const r3 = await J(await api(R("POST", "/api/documento/o4", { tipo: "application/pdf", base64: pdf }), ctx()));
+  await mbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ oferta: "o4", chave: r3.j.chave, tipo: "application/pdf", usuario: "x" }) }));
+  const o4 = (await J(await api(R("GET", "/api/dados"), ctx()))).j.ofertas.find((x) => x.id === "o4");
+  assert.equal(o4.car, "SP-3552403-ABC"); const f4 = V.avaliar(o4).itens.find((x) => x.k === "fiscal"); assert.equal(f4.st, "a"); assert.match(f4.msg, /CAR com situação "pendente"/); assert.match(f4.msg, /\(60 ha\) difere 19% da oferta/);
+  globalThis.__documento = null;
+});
+await t("Sala do Anunciante: dados documentais e envio de matrícula/IPTU com leitura automática", async () => {
+  const anun = (await import("./out/anunciante.mjs")).default;
+  const tk = "TOKENANUNCIANTE1234567890";
+  await api(R("PUT", "/api/dados/ofertas/o5", { id: "o5", codigo: "PC-0005", tipo: "Galpão", operacao: "Venda", cidade: "Sumaré", uf: "SP", status: "revisada" }), ctx());
+  await api(R("PUT", "/api/dados/pedidos/" + tk, { id: tk, oferta: "o5", codigo: "PC-0005", titulo: "Galpão", operacao: "Locação", tipo_termo: "parceria", faltam: [], status: "aberto", expira: new Date(Date.now() + 9e8).toISOString() }), ctx());
+  const pc = (m, body) => anun(new Request("https://pc.test/publico/anunciante/" + tk, { method: m, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined }), { params: { token: tk }, ip: "200.1.1.1" });
+  const g = await J(await pc("GET")); assert.deepEqual(g.j.docs_campos.map((x) => x.campo), ["matricula", "cartorio", "inscricao", "cep"]); assert.equal(g.j.documentos.length, 0);
+  assert.equal((await pc("POST", { acao: "responder", docs: { cep: "123" } })).status, 400, "CEP inválido");
+  const r = await J(await pc("POST", { acao: "responder", docs: { matricula: "45.678", cep: "13170-000", inexistente: "x" } })); assert.equal(r.s, 200); assert.equal(r.j.docs_campos.find((x) => x.campo === "matricula").resposta, "45.678");
+  let o = (await J(await api(R("GET", "/api/dados"), ctx()))).j.ofertas.find((x) => x.id === "o5");
+  assert.equal(o.matricula, "45.678"); assert.equal(o.fontes.matricula, "anunciante"); assert.equal(o.inexistente, undefined); assert.equal(o.verificacao.fontes.cep.cidade, "Sumaré", "CEP do anunciante dispara a varredura");
+  assert.equal((await pc("POST", { acao: "documento", tipo: "text/html", base64: "PGh0bWw+" })).status, 400);
+  assert.equal((await pc("POST", { acao: "documento", tipo: "application/pdf", base64: Buffer.alloc(900, 65).toString("base64") })).status, 400, "não é PDF");
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(800, 32)]).toString("base64");
+  const d = await J(await pc("POST", { acao: "documento", tipo: "application/pdf", nome: "matricula<script>.pdf", base64: pdf })); assert.equal(d.s, 200); assert.equal(d.j.documentos.length, 1); assert.doesNotMatch(d.j.documentos[0].nome, /[<>]/);
+  o = (await J(await api(R("GET", "/api/dados"), ctx()))).j.ofertas.find((x) => x.id === "o5"); assert.equal(o.verificacao.leitura.status, "lendo"); assert.equal(o.verificacao.leitura.origem, "anunciante");
+  const ped = (await J(await api(R("GET", "/api/dados"), ctx()))).j.pedidos.find((x) => x.id === tk); assert.match(ped.documentos[0].chave, /^mat\/o5\/an-/);
+  globalThis.__documento = { doc: "matricula", numero: "45678", cartorio: "CRI Sumaré", proprietarios: [{ nome: "Fulano" }], onus: [] };
+  await mbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ oferta: "o5", chave: ped.documentos[0].chave, tipo: "application/pdf", usuario: "anunciante" }) }));
+  o = (await J(await api(R("GET", "/api/dados"), ctx()))).j.ofertas.find((x) => x.id === "o5"); assert.equal(o.verificacao.matricula.numero, "45678"); assert.equal(V.avaliar(o).itens.find((x) => x.k === "mat").st, "ok");
+  for (let i = 0; i < 5; i++) await pc("POST", { acao: "documento", tipo: "application/pdf", base64: pdf });
+  assert.equal((await pc("POST", { acao: "documento", tipo: "application/pdf", base64: pdf })).status, 400, "limite de documentos por pedido");
+  globalThis.__documento = null;
+});
 await t("webhook: verificação GET e assinatura obrigatória", async () => {
   assert.equal(await (await wh(new Request("https://pc.test/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=tok-verif&hub.challenge=42"), ctx())).text(), "42");
   assert.equal((await wh(new Request("https://pc.test/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=errado&hub.challenge=42"), ctx())).status, 403);

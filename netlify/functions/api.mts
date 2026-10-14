@@ -67,7 +67,7 @@ export default async (req: Request, context: Context) => {
         delete (dados as Record<string, unknown>)._atualizado;
         const ant = await obterRegistro(a, b);
         if (a === "ofertas" && ant?.verificacao) { // a varredura e a leitura da matrícula gravam no servidor: não deixe uma tela antiga apagar
-          const carimbo = (v: any) => [v?.varrido_em, v?.matricula?.lida_em, v?.leitura?.em].filter(Boolean).sort().pop() || "";
+          const carimbo = (v: any) => [v?.varrido_em, v?.matricula?.lida_em, v?.iptu?.lida_em, v?.rural?.lida_em, v?.leitura?.em].filter(Boolean).sort().pop() || "";
           if (carimbo(ant.verificacao) > carimbo((dados as any).verificacao)) (dados as any).verificacao = ant.verificacao;
         }
         (dados as Record<string, unknown>).criado_por = (ant && ant.criado_por) || (dados as Record<string, unknown>).criado_por || u.email;
@@ -237,7 +237,7 @@ export default async (req: Request, context: Context) => {
       await salvarRegistro("ofertas", a, novo);
       return json({ ok: true, verificacao, avaliacao: V.avaliar(novo) });
     }
-    if (rota === "matricula" && a && req.method === "POST") {
+    if ((rota === "matricula" || rota === "documento") && a && req.method === "POST") {
       if (!ID_RE.test(a)) return erro("Oferta inválida.");
       const o = await obterRegistro("ofertas", a); if (!o) return erro("Oferta não encontrada.", 404);
       const body = await req.json().catch(() => null);
@@ -245,12 +245,12 @@ export default async (req: Request, context: Context) => {
       if (!ext) return erro("Envie PDF, JPG, PNG ou WEBP.");
       const bin = Buffer.from(String(body?.base64 || ""), "base64");
       if (bin.length < 500) return erro("Arquivo vazio.");
-      if (bin.length > MAX_MAT) return erro("Arquivo acima de 4 MB: gere a matrícula em PDF só com as páginas da certidão ou envie fotos.");
+      if (bin.length > MAX_MAT) return erro("Arquivo acima de 4 MB: envie só as páginas necessárias em PDF ou fotos de cada página.");
       if (ext === "pdf" && bin.subarray(0, 4).toString() !== "%PDF") return erro("Arquivo não é PDF.");
       if (ext === "jpg" && !(bin[0] === 0xff && bin[1] === 0xd8)) return erro("Arquivo não é JPEG.");
       if (ext === "png" && bin.subarray(1, 4).toString() !== "PNG") return erro("Arquivo não é PNG.");
       const chave = `mat/${a}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
-      await getStore("arquivos").set(chave, new Blob([bin], { type: tipo }), { metadata: { nome: `Matricula_${o.codigo || a}.${ext}`, tipo, por: u.email } });
+      await getStore("arquivos").set(chave, new Blob([bin], { type: tipo }), { metadata: { nome: `Documento_${o.codigo || a}.${ext}`, tipo, por: u.email } });
       await salvarRegistro("ofertas", a, { ...o, verificacao: { ...(o.verificacao || {}), leitura: { status: "lendo", em: new Date().toISOString(), arquivo: chave } }, atualizado: new Date().toISOString() });
       const r = await fetch(new URL("/.netlify/functions/matricula-background", env("URL") || url.origin), { method: "POST", headers: { "x-coleta-segredo": env("COLETA_SEGREDO") || "", "content-type": "application/json" }, body: JSON.stringify({ oferta: a, chave, tipo, usuario: u.email }) }).catch(() => null);
       return json({ ok: true, chave, status: "lendo", acionado: !!(r && (r.status === 202 || r.ok)) });

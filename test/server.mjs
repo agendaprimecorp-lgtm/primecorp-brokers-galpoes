@@ -45,6 +45,7 @@ http.createServer(async (req, res) => {
   if (url.pathname.startsWith('/i/')) fn = imov;
   if (url.pathname === '/whatsapp/webhook') fn = wh;
   const tu = /(?:^|; )tu=([^;]+)/.exec(req.headers.cookie || ''); globalThis.__user = { email: tu ? decodeURIComponent(tu[1]) : 'contato@primecorpconsultoria.com.br' };
+  if (url.pathname === '/__documento') { globalThis.__documento = body ? JSON.parse(body.toString() || 'null') : null; res.writeHead(200); res.end('ok'); return; }
   if (fn) {
     const h = { ...req.headers }; if (h.origin) h.origin = 'https://pc.test';
     const r = await fn(new Request('https://pc.test' + url.pathname + url.search, { method: req.method, headers: h, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), { params, ip: '127.0.0.1', site: { url: 'http://localhost:8899' } });

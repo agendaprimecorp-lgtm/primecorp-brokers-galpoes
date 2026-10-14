@@ -99,6 +99,58 @@ export function limparMatricula(r) {
   };
 }
 
+/* ---------------- Outros documentos: IPTU e cadastros rurais ---------------- */
+const SCHEMA_IPTU = `{"doc":"iptu","tipo_documento":"carnê|certidão negativa|certidão positiva|certidão positiva com efeito de negativa|espelho cadastral|outro","municipio":"","exercicio":"ano|null","data_documento":"AAAA-MM-DD|null","inscricao":"inscrição imobiliária / cadastro municipal","contribuinte":"nome do contribuinte/compromissário|null","endereco":"logradouro e número como consta|null","bairro":"|null","cep":"|null","area_terreno":m²|null,"area_construida":m²|null,"valor_venal_terreno":R$|null,"valor_venal_construcao":R$|null,"valor_venal_total":R$|null,"uso":"residencial|comercial|industrial|territorial|null","debitos":true|false|null,"alertas":["divergências ou ressalvas da certidão"]}`;
+const SCHEMA_RURAL = `{"doc":"rural","tipo_documento":"CCIR|recibo do CAR|demonstrativo do CAR|ITR/DITR|certidão SIGEF|outro","data_documento":"AAAA-MM-DD|null","denominacao":"nome do imóvel|null","municipio":"|null","titular":"declarante/titular|null","codigo_incra":"|null","ccir":"nº do CCIR|null","car":"código do CAR|null","situacao_car":"ativo|pendente|cancelado|suspenso|null","nirf":"|null","sigef":"código da parcela/certificação|null","area_ha":hectares|null,"modulos_fiscais":número|null,"reserva_legal_ha":número|null,"app_ha":número|null,"alertas":["sobreposições, pendências, área divergente"]}`;
+export const PROMPT_DOCUMENTO = `Você classifica e lê UM documento de imóvel brasileiro. Identifique o tipo e responda SOMENTE um JSON conforme o caso:
+1) MATRÍCULA do Registro de Imóveis (certidão ou visualização): siga as instruções abaixo e acrescente "doc":"matricula".
+${PROMPT_MATRICULA.replace('Se o documento não for uma matrícula, responda {"erro":"não é matrícula"}.', "")}
+2) IPTU (carnê, certidão de débitos, espelho/ficha cadastral municipal): ${SCHEMA_IPTU}
+3) Cadastro RURAL (CCIR, recibo/demonstrativo do CAR, ITR/DITR, certidão SIGEF): ${SCHEMA_RURAL}
+4) Outro documento (escritura, contrato, habite-se, planta…): {"doc":"outro","tipo_documento":"","resumo":"1 frase","alertas":[]}
+Valores em R$ e áreas como números puros. Nunca invente: use null quando não constar.`;
+
+export function limparIPTU(r) {
+  const deb = r?.debitos === true ? true : r?.debitos === false ? false : null;
+  return {
+    tipo_documento: s(r?.tipo_documento, 60), municipio: s(r?.municipio, 80), exercicio: s(String(r?.exercicio ?? ""), 4) || null, data_documento: /^\d{4}-\d{2}-\d{2}$/.test(r?.data_documento || "") ? r.data_documento : null,
+    inscricao: s(r?.inscricao, 60), contribuinte: s(r?.contribuinte, 160), endereco: s(r?.endereco, 200), bairro: s(r?.bairro, 80), cep: s(r?.cep, 12),
+    area_terreno: n(r?.area_terreno), area_construida: n(r?.area_construida), valor_venal_terreno: n(r?.valor_venal_terreno), valor_venal_construcao: n(r?.valor_venal_construcao), valor_venal_total: n(r?.valor_venal_total),
+    uso: s(r?.uso, 30), debitos: deb, alertas: (Array.isArray(r?.alertas) ? r.alertas : []).filter((x) => typeof x === "string").slice(0, 8).map((x) => x.slice(0, 240)),
+  };
+}
+export function limparRural(r) {
+  return {
+    tipo_documento: s(r?.tipo_documento, 60), data_documento: /^\d{4}-\d{2}-\d{2}$/.test(r?.data_documento || "") ? r.data_documento : null, denominacao: s(r?.denominacao, 120), municipio: s(r?.municipio, 80), titular: s(r?.titular, 160),
+    codigo_incra: s(r?.codigo_incra, 40), ccir: s(r?.ccir, 40), car: s(r?.car, 80), situacao_car: s(r?.situacao_car, 30), nirf: s(r?.nirf, 30), sigef: s(r?.sigef, 80),
+    area_ha: n(r?.area_ha), modulos_fiscais: n(r?.modulos_fiscais), reserva_legal_ha: n(r?.reserva_legal_ha), app_ha: n(r?.app_ha),
+    alertas: (Array.isArray(r?.alertas) ? r.alertas : []).filter((x) => typeof x === "string").slice(0, 8).map((x) => x.slice(0, 240)),
+  };
+}
+/** Normaliza a leitura de qualquer documento: {doc:'matricula'|'iptu'|'rural'|'outro', dados} ou {erro}. Sem "doc" = matrícula (compatibilidade). */
+export function limparDocumento(r) {
+  if (!r || typeof r !== "object") return { erro: "leitura vazia" };
+  if (r.erro) return { erro: s(r.erro, 120) };
+  const doc = ["matricula", "iptu", "rural", "outro"].includes(r.doc) ? r.doc : "matricula";
+  if (doc === "matricula") { const m = limparMatricula(r); return m.erro ? m : { doc, dados: m }; }
+  if (doc === "iptu") return { doc, dados: limparIPTU(r) };
+  if (doc === "rural") return { doc, dados: limparRural(r) };
+  return { doc, dados: { tipo_documento: s(r.tipo_documento, 60), resumo: s(r.resumo, 300), alertas: (Array.isArray(r.alertas) ? r.alertas : []).filter((x) => typeof x === "string").slice(0, 6) } };
+}
+async function chamarDoc(b64, tipo, prompt) {
+  const client = new Anthropic();
+  const model = env("MODELO_IA") || MODELO_PADRAO;
+  const doc = tipo === "application/pdf"
+    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
+    : { type: "image", source: { type: "base64", media_type: tipo, data: b64 } };
+  const fila = [model, ...MODELOS_RESERVA].filter((x, i, a) => a.indexOf(x) === i); let r, ult;
+  for (const m of fila) { try { r = await client.messages.create({ model: m, max_tokens: 4000, messages: [{ role: "user", content: [doc, { type: "text", text: prompt }] }] }); break; } catch (e) { ult = e; if (!modeloIndisponivel(e)) throw e; } }
+  if (!r) throw ult;
+  return extrairJSON((r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n"));
+}
+/** Lê qualquer documento do imóvel (a IA identifica se é matrícula, IPTU ou cadastro rural). */
+export async function lerDocumento(b64, tipo) { return limparDocumento(await chamarDoc(b64, tipo, PROMPT_DOCUMENTO)); }
+
 /** Lê a matrícula enviada (PDF ou foto JPEG/PNG em base64). */
 export async function lerMatricula(b64, tipo) {
   const client = new Anthropic();

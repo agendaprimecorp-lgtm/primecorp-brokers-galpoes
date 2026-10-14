@@ -12,3 +12,24 @@ export function aplicarMatricula(o, m, chave) {
   const preenchidos = Object.keys(p);
   return { ...o, ...p, verificacao: { ...(o.verificacao || {}), matricula: { ...m, arquivo: chave, lida_em: new Date().toISOString(), preencheu: preenchidos } } };
 }
+
+/** Aplica qualquer documento lido (matrícula, IPTU, cadastro rural). Completa só campos vazios e guarda a leitura. */
+export function aplicarDocumento(o, r, chave) {
+  if (r.doc === "matricula") return aplicarMatricula(o, r.dados, chave);
+  const p = {}; const set = (k, v) => { if (vazio(o[k]) && !vazio(v)) p[k] = v; };
+  const vr = { ...(o.verificacao || {}) }; const quando = new Date().toISOString();
+  if (r.doc === "iptu") {
+    const d = r.dados;
+    set("inscricao", d.inscricao); set("cep", d.cep); set("endereco", d.endereco ? d.endereco.replace(/,?\s*n?º?\s*\d+[\w\s/-]*$/i, "").trim() : ""); set("bairro", d.bairro);
+    const nm = String(d.endereco || "").match(/,\s*(?:n[ºo°.]?\s*)?(\d{1,6})\b/i); if (nm) set("numero", nm[1]);
+    set("terreno", fmt(d.area_terreno)); set("construida", fmt(d.area_construida));
+    vr.iptu = { ...d, arquivo: chave, lida_em: quando, preencheu: Object.keys(p) };
+  } else if (r.doc === "rural") {
+    const d = r.dados;
+    set("car", d.car); set("ccir", d.ccir); set("nirf", d.nirf); set("sigef", d.sigef); set("area_ha", fmt(d.area_ha));
+    vr.rural = { ...d, arquivo: chave, lida_em: quando, preencheu: Object.keys(p) };
+  } else {
+    vr.outros = [...(vr.outros || []).slice(-9), { ...r.dados, arquivo: chave, lida_em: quando }];
+  }
+  return { ...o, ...p, verificacao: vr };
+}
