@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { getStore } from "@netlify/blobs";
-import { env, obterRegistro, salvarRegistro, registrarEmissao } from "../../shared/servidor.mjs";
+import { env, obterRegistro as obterR, salvarRegistro as salvarR, registrarEmissao } from "../../shared/servidor.mjs";
 import { lerDocumento, varrer } from "../../shared/varredura.mjs";
 import { aplicarDocumento } from "../../shared/aplicar.mjs";
+import { obterDaConta, salvarDaConta } from "../../shared/contas.mjs";
 
 // Leitura de documento do imóvel por IA em segundo plano (matrícula, IPTU ou cadastro rural; PDF longo pode levar mais de 30 s).
 function segredoOk(req: Request) {
@@ -11,7 +12,11 @@ function segredoOk(req: Request) {
 }
 export default async (req: Request) => {
   if (!segredoOk(req)) { console.log("Matrícula: chamada sem segredo recusada."); return; }
-  const { oferta, chave, tipo, usuario } = await req.json().catch(() => ({}));
+  const { oferta, chave, tipo, usuario, conta } = await req.json().catch(() => ({}));
+  // Cliente da Propto: lê e grava só nos registros da própria conta.
+  const ct = typeof conta === "string" && /^ct_[a-f0-9]{12}$/.test(conta) ? conta : null;
+  const obterRegistro = (col: string, id: string) => (ct ? obterDaConta(ct, col, id) : obterR(col, id));
+  const salvarRegistro = (col: string, id: string, d: any) => (ct ? salvarDaConta(ct, col, id, d) : salvarR(col, id, d));
   const o = await obterRegistro("ofertas", String(oferta || ""));
   if (!o || !/^mat\/[\w-]+\/[\w.-]+$/.test(String(chave || ""))) return;
   const marcar = async (leitura: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
@@ -35,7 +40,7 @@ export default async (req: Request) => {
     const resumo = r.doc === "matricula" ? `Matrícula ${d.numero || ""} · ${d.cartorio || ""} · ${(d.proprietarios || []).map((p: any) => p.nome).join("; ")} · ${(d.onus || []).filter((x: any) => !x.cancelado).length} ônus ativo(s)`
       : r.doc === "iptu" ? `IPTU ${d.exercicio || ""} · inscrição ${d.inscricao || "?"} · ${d.area_construida ? d.area_construida + " m² construídos" : ""}${d.debitos === true ? " · COM DÉBITOS" : ""}`
       : r.doc === "rural" ? `${d.tipo_documento || "Cadastro rural"} · ${d.car || d.ccir || d.nirf || ""} · ${d.area_ha || "?"} ha` : `${d.tipo_documento || "Documento"}: ${d.resumo || ""}`;
-    await registrarEmissao({ tipo: r.doc === "matricula" ? "matricula_lida" : "documento_lido", oferta_id: oferta, conteudo: `${NOME[r.doc] || "Documento"} lido(a) pela IA · ${resumo}`, meta: { usuario, chave, doc: r.doc } });
+    await registrarEmissao({ tipo: r.doc === "matricula" ? "matricula_lida" : "documento_lido", oferta_id: oferta, conteudo: `${NOME[r.doc] || "Documento"} lido(a) pela IA · ${resumo}`, conta: ct, meta: { usuario, chave, doc: r.doc } });
   } catch (e) {
     console.error(e); await marcar({ status: "erro", msg: String((e as Error)?.message || e).slice(0, 200), em: new Date().toISOString() });
   }

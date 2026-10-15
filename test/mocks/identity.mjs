@@ -1,2 +1,3 @@
 export const getUser = async () => globalThis.__user || null;
 export const verifyRequestOrigin = (req) => { const o = req.headers.get('origin'); if (o && o !== 'https://pc.test') { const e = new Error('Forbidden'); e.status = 403; throw e; } };
+export const admin = { createUser: async ({ email, password }) => { globalThis.__usuariosCriados = globalThis.__usuariosCriados || {}; if (globalThis.__usuariosCriados[email] || email === 'contato@primecorpconsultoria.com.br') throw new Error('A user with this email address has already been registered'); globalThis.__usuariosCriados[email] = password; return { id: 'id_' + email, email }; } };

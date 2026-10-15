@@ -222,8 +222,45 @@ Depois do deploy: app → Mais → Zoe → **Conectar WhatsApp ao sistema** (o s
 
 ## Página comercial propto.com.br (out/2026)
 
-- `public/propto.html` é a página de vendas (sem preços): captação guiada, verificação, integração com a imobiliária, públicos (imobiliária, corretor, proprietário), FAQ e formulário de inscrição no teste grátis de 30 dias (corretor: 5 imóveis; imobiliária: 3 usuários e 15 imóveis; aviso 5 dias antes do fim; sem cartão).
+- `public/propto.html` é a página de vendas (sem preços): captação guiada, verificação, integração com a imobiliária, públicos (imobiliária, corretor, proprietário), FAQ e cadastro com senha que cria a conta e entra no app (imobiliária/corretor) ou inscrição de proprietário (lead) (corretor: 5 imóveis; imobiliária: 3 usuários e 15 imóveis; aviso 5 dias antes do fim; sem cartão).
 - O formulário grava em "Cadastros do site" (coleção site_leads, linha "Propto · teste …"), avisa a equipe e devolve o link do WhatsApp comercial. Número: variável `PROPTO_WHATSAPP` (padrão (19) 99805-1985).
 - Para publicar no domínio: adicione propto.com.br e www.propto.com.br em Domain management no Netlify; os redirects do netlify.toml já mostram a página na raiz.
 - As contas de teste só devem ser liberadas depois da separação de dados por empresa (multiempresa).
 - Teste: `test/e2e11.mjs`.
+
+## Contas Propto: cadastro, teste de 30 dias, planos e cobrança (out/2026)
+Clientes da Propto (corretores e imobiliárias) criam a conta sozinhos na página `propto.com.br` e entram direto no app. **Cada conta tem os seus dados separados** (tabela `registros_conta`); a operação da PrimeCorp continua na tabela `registros` e nunca se mistura.
+
+**Como funciona para o cliente**
+- Cadastro: nome, imobiliária (se for o caso), CRECI, WhatsApp, e-mail e senha. Sem cartão. O acesso nasce confirmado no Identity, com o papel `propto_cliente`.
+- Teste de 30 dias: corretor 1 usuário, 5 imóveis, 3 leituras de documento; imobiliária 3 usuários, 15 imóveis, 3 leituras. Os limites são conferidos no servidor.
+- App do cliente: Painel, Captar, Imóveis, CRM e Mais (Plano e assinatura, Equipe, Meu perfil, Anúncios, Ler anúncio por link, Relatórios, Exportar dados). Briefings, Salas, pedidos ao anunciante, Zoe, agenda, B2G, backup e configurações são só da PrimeCorp.
+- Anúncio público `/i/…`: com o nome, CRECI e WhatsApp do cliente e da imobiliária dele; nunca com PrimeCorp.
+- Planos (mensal/anual): Corretor R$ 197/R$ 1.970 · Imobiliária R$ 490/R$ 4.900 · Imobiliária Plus R$ 890/R$ 8.900. Quem assina o mensal durante o teste tem 40% de desconto por 12 meses e a 1ª cobrança vence no fim do teste. Valores em `shared/contas.mjs` (PLANOS, TESTE, FUNDADOR).
+- Situação calculada pelas datas: teste → expirada (só consulta; anúncios no ar por mais 7 dias) · ativa → pagamento pendente (3 dias normais) → só consulta (até 15 dias) → suspensa (anúncios fora do ar) · cancelada (acesso até o fim do período pago).
+- Termos: `public/termos-propto.html` (aceite gravado na conta com a versão).
+
+**Operação PrimeCorp**: Mais → **Contas Propto (clientes)**: lista com situação, uso e WhatsApp do responsável; +7 dias de teste, suspender/reativar, pagamento manual (Pix fora do Asaas). Cada conta nova e cada pagamento avisa a equipe pelo WhatsApp da Zoe.
+
+**Rotina diária** (`contas-diario`, 09:10): avisos de fim do teste (5 e 2 dias antes e no fim), atraso, e volta ao preço cheio no fim do desconto de fundador.
+
+### Ligar a cobrança (Asaas)
+1. Criar a conta no Asaas no **CNPJ da empresa** e começar pelo **sandbox** (sandbox.asaas.com).
+2. Netlify → Environment variables:
+
+| Variável | Valor |
+|---|---|
+| `ASAAS_API_KEY` | Chave da API (Integrações → Chave de API). Sandbox e produção têm chaves diferentes |
+| `ASAAS_AMBIENTE` | `producao` só quando for cobrar de verdade (vazio = sandbox) |
+| `ASAAS_WEBHOOK_TOKEN` | Frase aleatória com 32+ caracteres, sem espaços |
+| `ADMIN_EMAILS` | **Obrigatório preencher**: `contato@primecorpconsultoria.com.br` (e quem mais for administrador) |
+| `PROPTO_WHATSAPP` | WhatsApp do suporte Propto (padrão (19) 99805-1985) |
+| `PROPTO_MODELO_TESTE` | Opcional: modelo aprovado na Meta com 2 variáveis (nome, texto) para avisar o cliente do fim do teste |
+
+3. No Asaas: Integrações → Webhooks → novo webhook com URL `https://SEU-SITE/asaas/webhook`, token = `ASAAS_WEBHOOK_TOKEN`, eventos de **Cobranças**, fila ativa.
+4. Nota fiscal: configurar a emissão automática de NFS-e no painel do Asaas (dados da prefeitura de Sumaré).
+5. Testar no sandbox: criar uma conta pela página, escolher o plano, pagar a fatura de teste no sandbox e ver a conta ficar "Ativa". Depois trocar para a chave de produção e `ASAAS_AMBIENTE=producao`.
+
+Sem `ASAAS_API_KEY`, o botão de assinar mostra "fale com a equipe pelo WhatsApp" e o pagamento pode ser registrado à mão em Contas Propto.
+
+Testes: `node test/contas.mjs` (15 testes: cadastro, isolamento, limites, assinatura, webhook, situação, rotina) e `node test/e2e12.mjs` (cadastro → app do cliente → plano → equipe → limite → painel de contas).

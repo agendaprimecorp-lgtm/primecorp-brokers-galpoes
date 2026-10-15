@@ -24,10 +24,12 @@ ok(await p.evaluate(() => document.documentElement.scrollWidth) <= 390, 'sem rol
 await p.screenshot({ path: `${OUT}/04_cel_inteira.png`, fullPage: true });
 await p.click('text=Quero testar grátis por 30 dias'); await p.waitForTimeout(500);
 await p.click('label:has(input[value=corretor])');
-ok(await p.locator('#creci').isVisible() && !(await p.locator('#empresa').isVisible()), 'campos mudam conforme o perfil (corretor pede CRECI)');
+ok(await p.locator('#creci').isVisible() && await p.locator('#senha').isVisible() && !(await p.locator('#empresa').isVisible()), 'corretor: pede CRECI e senha (cria a conta)');
+await p.click('label:has(input[value=proprietario])');
+ok(!(await p.locator('#senha').isVisible()) && await p.locator('#imovel').isVisible() && /anunciar/.test(await p.locator('#enviar').innerText()), 'proprietário: inscrição sem senha');
 await p.click('#enviar'); await p.waitForTimeout(300);
 ok(/nome/.test(await p.locator('#msg').innerText()), 'valida nome antes de enviar');
-await p.fill('#nome', 'Marina Teste Corretora'); await p.fill('#creci', '123456-F'); await p.fill('#fone', '(19) 98888-1234'); await p.fill('#email', 'marina@exemplo.com'); await p.fill('#cidade', 'Campinas'); await p.selectOption('#segmento', 'Residencial'); await p.fill('#obs', 'Quero agilizar a captação');
+await p.fill('#nome', 'Marina Teste Proprietária'); await p.fill('#fone', '(19) 98888-1234'); await p.fill('#email', 'marina@exemplo.com'); await p.fill('#cidade', 'Campinas'); await p.selectOption('#imovel', 'Casa'); await p.selectOption('#operacao', 'Venda');
 await p.click('#enviar'); await p.waitForTimeout(300);
 ok(/autoriza/.test(await p.locator('#msg').innerText()), 'exige autorização LGPD');
 await p.check('#consentimento'); await p.click('#enviar');
@@ -38,6 +40,6 @@ await p.locator('#feito').scrollIntoViewIfNeeded(); await p.screenshot({ path: `
 const r = await p.evaluate(async () => (await fetch('/api/dados')).json()).catch(() => null);
 const leads = r?.site_leads || r?.dados?.site_leads || [];
 const meu = leads.find((l) => l.codigo === cod);
-ok(meu && meu.form === 'propto' && meu.extras?.creci === '123456-F' && /Propto · teste Corretor/.test(meu.linha), 'lead gravado no sistema com perfil e CRECI');
+ok(meu && meu.form === 'propto' && meu.extras?.imovel === 'Casa' && /Propto · teste Propriet/.test(meu.linha), 'lead do proprietário gravado no sistema');
 console.log(errs.length ? 'ERROS: ' + JSON.stringify(errs) : 'sem erros');
 await b.close(); process.exit(errs.length ? 1 : 0);

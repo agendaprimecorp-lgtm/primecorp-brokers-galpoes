@@ -1,13 +1,14 @@
 import type { Config, Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { obterRegistro, db, env } from "../../shared/servidor.mjs";
+import { anuncioDeConta, obterConta, situacao } from "../../shared/contas.mjs";
 
 // Landing pública do anúncio (link para WhatsApp). Mostra só o que foi publicado (instantâneo), nunca o endereço.
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 const soDig = (s: unknown) => String(s ?? "").replace(/\D/g, "");
 
-function pagina(a: Record<string, any>, base: string, token: string) {
+function pagina(a: Record<string, any>, base: string, token: string, marca: { nome: string; sac: string } = { nome: "PrimeCorp Brokers", sac: "sac@primecorpconsultoria.com.br" }) {
   const fotos: any[] = a.fotos || [];
   const url = `${base}/i/${token}`;
   const img = (i: number) => `/i/${token}/f/${i}.jpg`;
@@ -60,8 +61,8 @@ ${(a.fatos || []).length ? `<div class="fatos">${a.fatos.map((v: any) => `<div><
 <div class="txt">${desc}</div>
 ${(a.destaques || []).length ? `<h2>Destaques</h2><ul class="dest">${a.destaques.map((d: string) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
 ${grupos.length ? `<h2>Ambientes</h2>${grupos.map((g) => `<div class="amb"><h3>${esc(g.nome)}</h3>${ambDesc[g.nome] ? `<p>${esc(ambDesc[g.nome])}</p>` : ""}<div class="gal">${g.itens.map((x) => `<img loading="lazy" src="${img(x.i)}" alt="${esc(g.nome)}" data-i="${x.i}">`).join("")}</div></div>`).join("")}` : ""}
-<div class="cor" id="contato"><b>${esc(a.corretor?.nome || "PrimeCorp Brokers")}</b><span>Corretor(a) de imóveis${a.corretor?.creci ? " · " + esc(a.corretor.creci) : ""} · PrimeCorp Brokers</span>${a.corretor?.whatsapp ? `<span>WhatsApp ${esc(a.corretor.whatsapp)}</span>` : ""}</div>
-<p class="nota">Informações fornecidas pelo proprietário e sujeitas a confirmação em visita e na documentação do imóvel. Endereço informado no agendamento da visita. Ref. ${esc(a.codigo || "")}.<br>Dúvidas, sugestões ou reclamações: <a href="mailto:sac@primecorpconsultoria.com.br">sac@primecorpconsultoria.com.br</a></p>
+<div class="cor" id="contato"><b>${esc(a.corretor?.nome || marca.nome)}</b><span>Corretor(a) de imóveis${a.corretor?.creci ? " · " + esc(a.corretor.creci) : ""}${marca.nome ? " · " + esc(marca.nome) : ""}</span>${a.corretor?.whatsapp ? `<span>WhatsApp ${esc(a.corretor.whatsapp)}</span>` : ""}</div>
+<p class="nota">Informações fornecidas pelo proprietário e sujeitas a confirmação em visita e na documentação do imóvel. Endereço informado no agendamento da visita. Ref. ${esc(a.codigo || "")}.<br>${marca.sac ? `Dúvidas, sugestões ou reclamações: <a href="mailto:${esc(marca.sac)}">${esc(marca.sac)}</a>` : ""}</p>
 <p class="feito">Propto Imóveis · <a href="https://www.propto.com.br" target="_blank" rel="noopener"><img src="/marca/propto-horizontal.svg" alt="Propto"></a></p>
 </div>
 ${wa ? `<div class="cta"><a href="${wa}" target="_blank" rel="noopener">Agendar visita pelo WhatsApp</a></div>` : ""}
@@ -74,14 +75,22 @@ export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
   const m = url.pathname.match(/^\/i\/([^/]+)(?:\/f\/(\d{1,3})\.jpg)?\/?$/);
   if (!m || !TOKEN_RE.test(m[1])) return new Response("Página não encontrada.", { status: 404 });
-  const a = await obterRegistro("anuncios", m[1]);
-  if (!a || a.status !== "ativo") return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Arial;padding:40px;color:#0F1720"><h2>Anúncio indisponível</h2><p>Este imóvel não está mais em divulgação. Fale com a PrimeCorp Brokers para conhecer outras opções.</p>`, { status: 404, headers: { "content-type": "text/html; charset=utf-8" } });
+  let a: any = await obterRegistro("anuncios", m[1]);
+  // Anúncio de cliente da Propto: só fica no ar enquanto a conta estiver em dia (ou nos 7 dias após o fim do teste).
+  let conta: any = null;
+  if (!a) { const ac = await anuncioDeConta(m[1]); if (ac) { conta = await obterConta(ac.conta); a = conta && situacao(conta).anuncios ? ac.anuncio : null; } }
+  if (!a || a.status !== "ativo") return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Arial;padding:40px;color:#0F1720"><h2>Anúncio indisponível</h2><p>Este imóvel não está mais em divulgação. Fale com o corretor para conhecer outras opções.</p>`, { status: 404, headers: { "content-type": "text/html; charset=utf-8" } });
   if (m[2] !== undefined) {
     const f = (a.fotos || [])[Number(m[2])];
     if (!f || !/^fotos\//.test(f.k)) return new Response("Foto não encontrada.", { status: 404 });
     const data = await getStore("fotos").get(f.k, { type: "arrayBuffer" });
     if (!data) return new Response("Foto não encontrada.", { status: 404 });
     return new Response(data as ArrayBuffer, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=3600" } });
+  }
+  if (conta) {
+    try { await db().sql`UPDATE registros_conta SET dados = jsonb_set(dados, '{visitas}', to_jsonb(COALESCE((dados->>'visitas')::int, 0) + 1)) WHERE conta = ${conta.id} AND colecao = 'anuncios' AND id = ${m[1]}`; } catch {}
+    const dono = (conta.membros || []).find((x: any) => x.papel === "admin") || {};
+    return new Response(pagina(a, url.origin, m[1], { nome: conta.tipo === "imobiliaria" ? conta.empresa || conta.nome || "" : "", sac: dono.email || "" }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY" } });
   }
   try { await db().sql`UPDATE registros SET dados = jsonb_set(dados, '{visitas}', to_jsonb(COALESCE((dados->>'visitas')::int, 0) + 1)) WHERE colecao = 'anuncios' AND id = ${m[1]}`; } catch {}
   // "Tenho interesse" cai no WhatsApp da Zoe (lead entra no CRM e na agenda), salvo se desligado em Mais → Zoe

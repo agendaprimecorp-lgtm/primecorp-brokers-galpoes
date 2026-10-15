@@ -7,13 +7,16 @@ import { db, listarTudo } from "../../shared/servidor.mjs";
 export default async () => {
   const registros = await listarTudo(true);
   const emissoes = await db().sql`SELECT * FROM emissoes ORDER BY id`;
+  // Clientes da Propto: contas e registros de cada conta entram no mesmo backup.
+  const contas = await db().sql`SELECT * FROM contas ORDER BY criado_em`;
+  const registros_conta = await db().sql`SELECT * FROM registros_conta ORDER BY conta, colecao, id`;
   const hoje = new Date().toISOString().slice(0, 10);
   const store = getStore("backups");
-  await store.set(`backup-${hoje}.json`, JSON.stringify({ versao: 1, gerado_em: new Date().toISOString(), registros, emissoes }));
+  await store.set(`backup-${hoje}.json`, JSON.stringify({ versao: 2, gerado_em: new Date().toISOString(), registros, emissoes, contas, registros_conta }));
   const { blobs } = await store.list();
   const chaves = blobs.map((b) => b.key).filter((k) => /^backup-\d{4}-\d{2}-\d{2}\.json$/.test(k)).sort();
   for (const k of chaves.slice(0, Math.max(0, chaves.length - 30))) await store.delete(k);
-  console.log(`Backup ${hoje}: ${registros.length} registros, ${emissoes.length} emissões.`);
+  console.log(`Backup ${hoje}: ${registros.length} registros, ${emissoes.length} emissões, ${contas.length} contas Propto.`);
 };
 
 export const config: Config = { schedule: "15 6 * * *" };

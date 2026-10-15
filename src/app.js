@@ -43,6 +43,7 @@ async function api(path, opts = {}) {
   const r = await fetch("/api/" + path, { credentials: "same-origin", ...opts, headers: { "content-type": "application/json", ...(opts.headers || {}) } });
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) { telaLogin("Sua sessão expirou. Entre novamente."); throw new ErroAPI("Sessão expirada", 401); }
+  if (r.status === 402 && typeof recarregarConta === "function") recarregarConta();
   if (!r.ok) throw new ErroAPI(j.erro || "Erro " + r.status, r.status);
   return j;
 }
@@ -125,7 +126,7 @@ async function iniciar() {
 }
 async function abrir() {
   $("main").innerHTML = `<div class="card"><p class="hint">Carregando dados…</p></div>`;
-  try { await store.carregar(); try { EU = await api("status"); } catch {} }
+  try { await store.carregar(); try { EU = await api("status"); } catch {} if (CLIENTE()) await logosCliente(); }
   catch (e) { if (e.status !== 401) $("main").innerHTML = `<div class="card"><p class="status err">Não foi possível carregar: ${esc(e.message)}</p><button id="rt">Tentar de novo</button></div>`; const rt = $("rt"); if (rt) rt.onclick = abrir; return; }
   route = { v: "painel" }; stack.length = 0; assinaturaDados = assinatura(); ultimaSync = new Date(); render();
 }
@@ -170,11 +171,11 @@ const TABS = [
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
 ];
-const PAI = { iniciar: "captar", visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
+const PAI = { plano: "mais", time: "mais", perfil: "mais", contasPropto: "mais", iniciar: "captar", visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
-  $("tabs").className = "tabs-in c6";
-  $("tabs").innerHTML = TABS.map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="${k === "captar" ? "5 7 54 49" : "0 0 24 24"}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
+  $("tabs").className = CLIENTE() ? "tabs-in c5" : "tabs-in c6";
+  $("tabs").innerHTML = TABS.filter(([k]) => !(CLIENTE() && k === "briefings")).map(([k, l0, p]) => [k, CLIENTE() && k === "ofertas" ? "Imóveis" : l0, p]).map(([k, l, p]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}"><svg viewBox="${k === "captar" ? "5 7 54 49" : "0 0 24 24"}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${p}</svg>${l}</button>`).join("");
   if (MODO() === "escritorio") { $("tabs").insertAdjacentHTML("afterbegin", `<div class="side-top">${MARCA}<small>Escritório · gestão</small></div>`); $("tabs").insertAdjacentHTML("beforeend", `<div class="side-foot"><span id="sync" class="sync">${ultimaSync ? "Sincronizado " + ultimaSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}</span><button class="sm" id="syncb">Atualizar agora</button></div>`); $("syncb").onclick = () => sincronizar(true); }
   $("tabs").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { stack.length = 0; go({ v: b.dataset.tab }, false); }));
 }
@@ -192,7 +193,8 @@ function render() {
   document.documentElement.classList.toggle("foco", route.v === "visita");
   renderTabs();
   if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe", "visita"].includes(route.v)) return;
-  try { (VIEWS[route.v] || VIEWS.painel)(); }
+  if (CLIENTE() && SO_PC_VIEWS.includes(route.v)) { header("Indisponível"); $("main").innerHTML = `<div class="card"><p class="hint">Esta área faz parte da operação PrimeCorp e não está no seu plano.</p></div>`; return; }
+  try { (VIEWS[route.v] || VIEWS.painel)(); aplicarModoCliente(); }
   catch (e) { console.error(e); $("main").innerHTML = `<div class="card"><p class="status err">Erro ao exibir esta tela: ${esc(e.message)}</p></div>`; }
 }
 
@@ -221,6 +223,7 @@ function confirmar2(btn, txt, fn) { let armed = false; btn.onclick = async () =>
 
 /* ================= PAINEL ================= */
 VIEWS.painel = () => {
+  if (CLIENTE()) return painelCliente();
   header(EU.perfil?.nome || usuarioAtual?.email || "");
   const abertos = S.negocios.filter((n) => n.etapa !== "perdido" && n.etapa !== "fechado");
   const ativos = S.briefings.filter((b) => (b.status || "ativo") === "ativo");
@@ -783,10 +786,11 @@ VIEWS.nova = () => {
 
 /* ================= MAIS: relatórios, backup, configurações ================= */
 VIEWS.mais = () => {
+  if (CLIENTE()) return maisCliente();
   header("Mais");
   $("main").innerHTML = `<div class="card"><div class="menu">
   <button id="m10">Assistente · atendimento no WhatsApp <span>›</span></button><button id="m11">Agenda <span>›</span></button>
-  <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button>' : ""}
+  <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button><button id="m12">Contas Propto (clientes) <span>›</span></button>' : ""}
   <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
   <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
   <div class="seg" id="modo">${[["auto", "Automático"], ["campo", "Celular"], ["escritorio", "Computador"]].map(([k, l]) => `<button data-modo="${k}" class="${(lerPref("pc_modo") || "auto") === k ? "on" : ""}">${l}</button>`).join("")}</div><p class="hint">Agora: <b>${MODO() === "escritorio" ? "computador (escritório)" : "celular (campo)"}</b></p></div>
@@ -794,7 +798,7 @@ VIEWS.mais = () => {
   <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Propto Imóveis · propto.com.br</p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
   if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
-  $("m8").onclick = () => go({ v: "anuncios" }); $("m10").onclick = () => go({ v: "zoe" }); $("m11").onclick = () => go({ v: "agenda" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" });
+  $("m8").onclick = () => go({ v: "anuncios" }); $("m10").onclick = () => go({ v: "zoe" }); $("m11").onclick = () => go({ v: "agenda" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" }); if ($("m12")) $("m12").onclick = () => go({ v: "contasPropto" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
   $("sacc").onclick = () => copiar(PC.SAC);
   document.querySelectorAll("#modo [data-modo]").forEach((b) => (b.onclick = () => { gravarPref("pc_modo", b.dataset.modo === "auto" ? null : b.dataset.modo); aplicarModo(); render(); }));
@@ -1116,6 +1120,7 @@ function perfilPorEmail(email) {
   const e = String(email || "").toLowerCase(); const cfg = CFG();
   const u = S.usuarios.find((x) => String(x.email || "").toLowerCase() === e);
   if (u) return { nome: u.nome || e, creci: creciFmt(u.creci), whatsapp: u.telefone || "", email: u.email, foco: u.foco || "comercial", papel: u.papel, titulo: u.titulo || "" };
+  if (CLIENTE()) { const p = EU.perfil || {}; return { nome: p.nome || e, creci: creciFmt(p.creci), whatsapp: p.telefone || "", email: p.email || e, foco: "residencial" }; }
   return { nome: cfg.corretor_nome || "Rodrigo França Viana", creci: cfg.corretor_creci || "CRECI-SP 297692", whatsapp: cfg.corretor_whatsapp || "(19) 99805-1985", email: cfg.corretor_email || "contato@primecorpconsultoria.com.br" };
 }
 const eu = () => perfilPorEmail(EU.usuario || usuarioAtual?.email);
@@ -1134,6 +1139,7 @@ const EQUIPE_INICIAL = [
 ];
 const idUsuario = (email) => "u_" + String(email).toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 60);
 VIEWS.equipe = () => {
+  if (CLIENTE()) return go({ v: "time" }, false);
   header("Equipe e permissões");
   if (!ehAdmin()) { $("main").innerHTML = `<div class="card"><p class="status err">Somente o administrador acessa esta área.</p></div>`; return; }
   const us = [...S.usuarios].sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
@@ -1925,6 +1931,187 @@ VIEWS.agenda = () => {
   $("asv").onclick = async () => { const v = $("aini").value; if (!v) return toast("Informe data e hora."); const ini = new Date(v); const dur = Number(CFGZ().horario?.duracao) || 60;
     const iso = (d) => { const x = new Date(d.getTime() - 3 * 3600e3); return x.toISOString().slice(0, 19) + "-03:00"; };
     await store.save("agenda", { id: uid("ag"), criado: now(), inicio: iso(ini), fim: iso(new Date(ini.getTime() + dur * 60e3)), tipo: $("atip").value, nome: $("anom").value.trim(), assunto: $("aass").value.trim(), status: "marcado", criado_por: EU.usuario || "" }); toast("Compromisso salvo."); };
+};
+
+/* ================= CONTA PROPTO (clientes: corretores e imobiliárias) ================= */
+const CLIENTE = () => !!EU.conta;
+const CT = () => EU.conta || {};
+const SO_PC_VIEWS = ["briefings", "briefing", "editb", "teaser", "novasala", "salas", "sala", "negocio", "comissao", "pedidos", "pedido", "novopedido", "zoe", "conversa", "agenda", "backup", "config", "contasPropto"];
+const OCULTAR_CLIENTE = ["verde", "solic", "paut", "qbrief", "csv"];
+const brlC = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(Number(v)) ? 0 : 2, maximumFractionDigits: 2 });
+const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "");
+const waSuporte = (txt) => waLink(EU.suporte || "(19) 99805-1985", txt || `Olá! Preciso de ajuda com a Propto. Conta: ${CT().nome || ""}.`);
+async function recarregarConta() { try { EU = await api("status"); } catch {} }
+function usoLinha(rot, usado, lim) { const p = lim ? Math.min(100, Math.round((usado / lim) * 100)) : 0; return `<div class="uso"><div class="row" style="justify-content:space-between"><span>${esc(rot)}</span><b>${usado} de ${lim}</b></div><div class="meter"><i class="${p >= 100 ? "" : p >= 80 ? "mid" : "ok"}" style="width:${p}%"></i></div></div>`; }
+function faixaConta() {
+  if (!CLIENTE()) return "";
+  const c = CT(); const s = c.situacao || {};
+  if (s.codigo === "ativa" && !(c.uso && c.limites && c.uso.imoveis >= c.limites.imoveis)) return "";
+  const cheio = c.uso && c.limites && c.uso.imoveis >= c.limites.imoveis;
+  const cls = s.codigo === "teste" ? (s.dias <= 5 || cheio ? "alerta" : "") : s.escrita ? "alerta" : "erro";
+  const txt = s.codigo === "teste" ? `<b>Teste grátis · ${s.dias} dia(s) restante(s)</b><span>${c.uso?.imoveis || 0} de ${c.limites?.imoveis || 0} imóveis usados${cheio ? " · limite do teste atingido" : ""}${c.assinatura ? " · plano escolhido" : " · assine no teste e ganhe 40% por 12 meses"}</span>`
+    : s.codigo === "ativa" ? `<b>Limite do mês atingido</b><span>${c.uso.imoveis} de ${c.limites.imoveis} imóveis captados neste mês.</span>`
+    : `<b>${esc(s.rotulo || "Conta")}</b><span>${esc(s.msg || "")}</span>`;
+  return `<button class="faixa-conta ${cls}" id="fxc">${txt}<em>${c.assinatura && s.codigo !== "teste" ? "Pagar" : "Ver planos"} ›</em></button>`;
+}
+function aplicarModoCliente() {
+  document.documentElement.classList.toggle("cliente", CLIENTE());
+  if (!CLIENTE()) return;
+  if (route.v !== "plano") { const fx = faixaConta(); if (fx) { $("main").insertAdjacentHTML("afterbegin", fx); $("fxc").onclick = () => go({ v: "plano" }); } }
+  OCULTAR_CLIENTE.forEach((id) => { const el = $(id); if (!el) return; el.hidden = true; el.style.display = "none"; const nx = el.nextElementSibling; if (nx && nx.classList.contains("hint") && id === "verde") nx.style.display = "none"; });
+}
+async function logosCliente() {
+  const toData = async (u) => { const b = await (await fetch(u)).blob(); return await new Promise((r) => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }); };
+  try { LOGOS.dark = await toData("/marca/propto-horizontal-600.png"); LOGOS.white = await toData("/marca/propto-horizontal-negative-600.png"); LOGOS.ratio = 600 / 176; } catch {}
+}
+
+function painelCliente() {
+  const me = eu(); const c = CT(); const s = c.situacao || {};
+  const caps = S.ofertas.filter((o) => o.status !== "descartada").sort((a, b) => (b.atualizado || "").localeCompare(a.atualizado || ""));
+  const anAtivos = S.anuncios.filter((a) => a.status === "ativo"); const visitas = S.anuncios.reduce((n, a) => n + (a.visitas || 0), 0);
+  const verificados = S.ofertas.filter((o) => { try { return V.avaliar(o).pct >= 70; } catch { return false; } }).length;
+  const chaveBV = "pt_boasvindas_" + (EU.usuario || ""); let bv = false; try { bv = !localStorage.getItem(chaveBV); } catch {}
+  header(c.nome || me.nome);
+  $("main").innerHTML = `
+  ${bv ? `<div class="card boasvindas"><span class="k">Bem-vindo(a) à Propto</span><h2>${esc((me.nome || "").split(" ")[0])}, vamos captar o primeiro imóvel?</h2>
+  <p class="hint">No imóvel, toque em Captar: o app guia as fotos ambiente por ambiente, você fala o que vê e a inteligência artificial monta o anúncio. Depois, confira a documentação e publique o link.</p>
+  <div class="bv-passos"><button data-bv="captar"><b>1</b><span>Captar um imóvel</span></button><button data-bv="nova"><b>2</b><span>Ler um anúncio por link</span></button><button data-bv="plano"><b>3</b><span>Ver o seu plano</span></button></div>
+  <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
+  <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>Fotos, voz e anúncio no local da visita</small><em>O corretor fala, o app faz o resto</em></span><span>›</span></button>
+  <div class="kpis"><div class="kpi"><b>${caps.length}</b><span>Imóveis</span></div><div class="kpi"><b>${anAtivos.length}</b><span>Anúncios no ar</span></div><div class="kpi"><b>${visitas}</b><span>Visitas nos anúncios</span></div></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h2>${esc(c.plano_nome && c.situacao?.codigo === "ativa" ? "Plano " + c.plano_nome : s.rotulo || "Sua conta")}</h2><button class="sm" id="gplano">Plano e assinatura</button></div>
+  ${usoLinha("Imóveis captados" + (c.limites?.fonte === "teste" ? " no teste" : " neste mês"), c.uso?.imoveis || 0, c.limites?.imoveis || 0)}
+  ${usoLinha("Leituras de documento pela IA", c.uso?.docs || 0, c.limites?.docs || 0)}
+  ${usoLinha("Usuários", c.uso?.usuarios || 1, c.limites?.usuarios || 1)}
+  <p class="hint">${verificados} imóvel(is) com documentação conferida (índice ≥ 70%).</p></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h2>Últimos imóveis</h2><button class="sm" id="gofs">Ver todos</button></div>
+  <div class="list">${caps.slice(0, 6).map((o) => { const an = anuncioDe(o); return `<button class="item" data-cap="${o.id}"><span class="dot ${an && an.status === "ativo" ? "verde" : o.descricao ? "amarelo" : ""}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Imóvel sem título"))}</b><span>${esc([an && an.status === "ativo" ? "Anúncio no ar" : o.descricao ? "Anúncio gerado" : "Em captação", an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhum imóvel ainda. Toque em Captar imóvel.</p>'}</div></div>
+  <a class="btn" href="${esc(waSuporte())}" target="_blank" rel="noopener">Falar com o suporte Propto no WhatsApp</a>
+  <p class="foot">Propto Imóveis · ${esc(me.nome)}${me.creci ? " · " + esc(me.creci) : ""}</p>`;
+  $("qcap").onclick = () => go({ v: "captar" }, false); $("gplano").onclick = () => go({ v: "plano" }); $("gofs").onclick = () => go({ v: "ofertas" }, false);
+  document.querySelectorAll("[data-cap]").forEach((b) => (b.onclick = () => { const o = O(b.dataset.cap); go(o && o.origem === "Captação própria" ? { v: "captacao", id: o.id } : { v: "oferta", id: b.dataset.cap }); }));
+  document.querySelectorAll("[data-bv]").forEach((b) => (b.onclick = () => go({ v: b.dataset.bv }, b.dataset.bv !== "captar")));
+  const bx = $("bvx"); if (bx) bx.onclick = () => { try { localStorage.setItem(chaveBV, "1"); } catch {} render(); };
+}
+
+function maisCliente() {
+  header("Mais"); const dono = ehAdmin(); const c = CT();
+  $("main").innerHTML = `<div class="card"><div class="menu">
+  <button id="cm1">Plano e assinatura <span>›</span></button>${dono && c.tipo === "imobiliaria" ? '<button id="cm2">Equipe da imobiliária <span>›</span></button>' : ""}<button id="cm3">Meu perfil <span>›</span></button>
+  <button id="cm4">Anúncios publicados <span>›</span></button><button id="cm5">Ler anúncio por link <span>›</span></button><button id="cm6">Relatórios emitidos <span>›</span></button>
+  ${dono ? '<button id="cm7">Exportar meus dados <span>›</span></button>' : ""}<button id="cm8">Sair <span>›</span></button></div></div>
+  <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
+  <div class="seg" id="modo">${[["auto", "Automático"], ["campo", "Celular"], ["escritorio", "Computador"]].map(([k, l]) => `<button data-modo="${k}" class="${(lerPref("pc_modo") || "auto") === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
+  <div class="card"><h3>Suporte</h3><p class="hint">Dúvidas, sugestões ou problemas: fale com a equipe Propto no WhatsApp, em horário comercial.</p><a class="btn" href="${esc(waSuporte())}" target="_blank" rel="noopener">Abrir o WhatsApp</a>
+  <p class="hint"><a href="/termos-propto.html" target="_blank" rel="noopener">Termos de uso e privacidade</a></p></div>
+  <p class="foot">Conectado como ${esc(EU.usuario || "")} · ${dono ? "responsável pela conta" : "corretor(a)"} · ${esc(c.nome || "")}</p><p class="endosso">Propto Imóveis · propto.com.br</p>`;
+  $("cm1").onclick = () => go({ v: "plano" }); if ($("cm2")) $("cm2").onclick = () => go({ v: "time" }); $("cm3").onclick = () => go({ v: "perfil" });
+  $("cm4").onclick = () => go({ v: "anuncios" }); $("cm5").onclick = () => go({ v: "nova" }); $("cm6").onclick = () => go({ v: "relatorios" });
+  if ($("cm7")) $("cm7").onclick = async () => { try { const r = await fetch("/api/conta/exportar", { credentials: "same-origin" }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || "Falhou"); await compartilharOuBaixar(await r.blob(), `Propto_dados_${new Date().toISOString().slice(0, 10)}.json`); } catch (e) { toast(e.message); } };
+  $("cm8").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
+  document.querySelectorAll("#modo [data-modo]").forEach((b) => (b.onclick = () => { gravarPref("pc_modo", b.dataset.modo === "auto" ? null : b.dataset.modo); aplicarModo(); render(); }));
+}
+
+VIEWS.plano = async () => {
+  header("Plano e assinatura");
+  if (!CLIENTE()) return back();
+  await recarregarConta();
+  const c = CT(); const s = c.situacao || {}; const P = EU.planos || {}; const dono = ehAdmin();
+  const atual = c.assinatura ? c.plano : null; const fund = Object.values(P).some((p) => p.fundador);
+  const sugerido = c.tipo === "imobiliaria" ? "imobiliaria" : "corretor";
+  const cartao = (k) => { const p = P[k]; const promo = p.fundador; return `<div class="plano ${k === sugerido ? "dest" : ""} ${atual === k ? "atual" : ""}">${k === sugerido ? '<span class="tag r">Indicado para você</span>' : ""}<h3>${esc(p.nome)}</h3>
+    ${atual === k && c.valor ? `<p class="preco">${c.valor < p.preco && c.ciclo !== "anual" ? `<s>${brlC(p.preco)}</s> ` : ""}<b>${brlC(c.valor)}</b><span>/${c.ciclo === "anual" ? "ano" : "mês"}</span></p><p class="hint">${c.fundador_ate ? `Preço de fundador até ${esc(dataBR(c.fundador_ate))}` : "Seu valor atual"}</p>`
+    : `<p class="preco">${promo ? `<s>${brlC(p.preco)}</s> ` : ""}<b>${brlC(promo ? p.preco_fundador : p.preco)}</b><span>/mês</span></p>${promo ? `<p class="hint">Preço de fundador por 12 meses · depois ${brlC(p.preco)}/mês</p>` : `<p class="hint">ou ${brlC(p.anual)} por ano (2 meses grátis)</p>`}`}
+    <p>${esc(p.resumo)}</p>${dono ? `<button class="${k === sugerido ? "p" : ""}" data-pl="${k}">${atual === k ? "Plano atual" : "Escolher " + esc(p.nome)}</button>` : ""}</div>`; };
+  $("main").innerHTML = `<div class="card"><span class="k">Sua conta</span><h2>${esc(s.rotulo || "")}</h2>${s.msg ? `<p class="hint">${esc(s.msg)}</p>` : ""}
+  ${c.situacao?.codigo === "teste" ? `<p class="hint">O teste termina em <b>${esc(dataBR(c.teste_fim))}</b>. Não pedimos cartão e nada é cobrado automaticamente durante o teste.</p>` : ""}
+  ${c.pago_ate && s.codigo === "ativa" ? `<p class="hint">Plano <b>${esc(c.plano_nome || "")}</b> em dia até <b>${esc(dataBR(c.pago_ate))}</b>${c.valor ? ` · ${brlC(c.valor)}/${c.ciclo === "anual" ? "ano" : "mês"}` : ""}.</p>` : ""}
+  ${c.fatura?.link ? `<a class="btn p" href="${esc(c.fatura.link)}" target="_blank" rel="noopener">Pagar fatura de ${brlC(c.fatura.valor)} · vence ${esc(dataBR(c.fatura.vencimento + "T12:00:00"))}</a><p class="hint">Na fatura você escolhe Pix, boleto ou cartão. A confirmação chega aqui sozinha.</p>` : ""}
+  ${usoLinha("Imóveis captados" + (c.limites?.fonte === "teste" ? " no teste" : " neste mês"), c.uso?.imoveis || 0, c.limites?.imoveis || 0)}
+  ${usoLinha("Leituras de documento pela IA", c.uso?.docs || 0, c.limites?.docs || 0)}
+  ${usoLinha("Usuários", c.uso?.usuarios || 1, c.limites?.usuarios || 1)}</div>
+  ${fund ? `<div class="card fundador"><span class="k">Desconto de fundador</span><h2>Assine durante o teste e pague 40% a menos por 12 meses.</h2><p class="hint">A primeira cobrança vence só no fim do teste (${esc(dataBR(c.teste_fim))}). Você escolhe o plano agora e continua testando.</p></div>` : ""}
+  ${!dono ? `<div class="card"><p class="hint">Somente o responsável pela conta escolhe e paga o plano.</p></div>` : ""}
+  <div class="planos">${["corretor", "imobiliaria", "plus"].filter((k) => P[k]).map(cartao).join("")}</div>
+  <div class="card" id="fass" hidden><h2>Dados para a nota fiscal</h2><p class="hint" id="fassr"></p><div class="grid">
+  <label class="full">Nome ou razão social<input id="anf" value="${esc(c.empresa || eu().nome || "")}"></label>
+  <label>CPF ou CNPJ<input id="adoc" inputmode="numeric" placeholder="Somente números"></label>
+  <label>Pagamento<select id="aci"><option value="mensal">Mensal</option><option value="anual">Anual (2 meses grátis)</option></select></label></div>
+  <button class="p" id="aok">Confirmar e gerar a fatura</button><div class="status" id="ast"></div></div>
+  ${c.assinatura && dono ? `<div class="card"><h3>Cancelar assinatura</h3><p class="hint">O acesso continua até o fim do período pago. Seus imóveis ficam disponíveis para consulta e exportação.</p><button class="g" id="acan">Cancelar assinatura</button></div>` : ""}
+  ${EU.cobranca && !EU.cobranca.configurada ? `<div class="card"><p class="note">A cobrança online está sendo ativada. Para assinar agora, fale com a equipe Propto.</p><a class="btn" href="${esc(waSuporte("Olá! Quero assinar a Propto. Conta: " + (c.nome || "")))}" target="_blank" rel="noopener">Assinar pelo WhatsApp</a></div>` : ""}
+  ${EU.cobranca && EU.cobranca.configurada && !EU.cobranca.producao ? `<p class="hint">Ambiente de testes de cobrança (sandbox): nenhuma cobrança é real.</p>` : ""}
+  <p class="hint">Valores sem impostos adicionais. Nota fiscal emitida para o CPF ou CNPJ informado. <a href="/termos-propto.html" target="_blank" rel="noopener">Termos de uso</a>.</p>`;
+  let escolhido = null;
+  document.querySelectorAll("[data-pl]").forEach((b) => (b.onclick = () => {
+    escolhido = b.dataset.pl; const p = P[escolhido]; const f = $("fass"); f.hidden = false;
+    $("fassr").textContent = `Plano ${p.nome}: ${brlC(p.fundador ? p.preco_fundador : p.preco)}/mês${p.fundador ? " por 12 meses (fundador)" : ""} ou ${brlC(p.anual)}/ano. ${c.situacao?.codigo === "teste" ? "A primeira cobrança vence no fim do teste." : "A fatura vence hoje."}`;
+    f.scrollIntoView({ behavior: "smooth" });
+  }));
+  if ($("aok")) $("aok").onclick = async () => {
+    const st = $("ast"); st.className = "status"; st.textContent = "Gerando a fatura…"; $("aok").disabled = true;
+    try {
+      const r = await api("conta/assinar", { method: "POST", body: JSON.stringify({ plano: escolhido, ciclo: $("aci").value, documento: $("adoc").value, nome_fatura: $("anf").value }) });
+      await recarregarConta(); st.textContent = "Plano escolhido.";
+      if (r.fatura?.link) { st.innerHTML = `Plano escolhido. <a href="${esc(r.fatura.link)}" target="_blank" rel="noopener">Abrir a fatura</a>`; try { window.open(r.fatura.link, "_blank", "noopener"); } catch {} }
+      setTimeout(() => VIEWS.plano(), 1200);
+    } catch (e) { st.className = "status err"; st.textContent = e.message; $("aok").disabled = false; }
+  };
+  const ac = $("acan"); if (ac) confirmar2(ac, "Toque de novo para cancelar", async () => {
+    const motivo = ""; try { await api("conta/cancelar", { method: "POST", body: JSON.stringify({ confirmacao: "CANCELAR", motivo }) }); toast("Assinatura cancelada."); VIEWS.plano(); } catch (e) { toast(e.message); }
+  });
+  aplicarModoCliente();
+};
+
+VIEWS.time = () => {
+  header("Equipe da imobiliária");
+  if (!CLIENTE() || !ehAdmin()) return back();
+  const c = CT(); const ms = c.membros || [];
+  $("main").innerHTML = `<div class="card"><h2>Quem usa a Propto na ${esc(c.nome || "imobiliária")}</h2><p class="hint">${c.uso?.usuarios || ms.length} de ${c.limites?.usuarios || 1} usuário(s) do seu plano. Cada corretor tem login próprio e assina os anúncios com o próprio CRECI.</p>
+  <div class="list">${ms.map((m) => `<div class="item" style="cursor:default"><span class="dot ${m.ativo ? "verde" : ""}"></span><span class="t"><b>${esc(m.nome || m.email)}</b><span>${esc([m.email, m.creci && "CRECI " + m.creci, m.papel === "admin" ? "Responsável" : "Corretor(a)", m.ativo ? "" : "INATIVO"].filter(Boolean).join(" · "))}</span></span>${m.email !== EU.usuario ? `<button class="sm" data-at="${esc(m.email)}" data-v="${m.ativo ? 0 : 1}">${m.ativo ? "Desativar" : "Reativar"}</button>` : ""}</div>`).join("")}</div></div>
+  <div class="card"><h2>Incluir corretor(a)</h2><div class="grid"><label class="full">Nome completo<input id="tn"></label><label class="full">E-mail<input id="te" type="email" autocomplete="off"></label>
+  <label>CRECI<input id="tc"></label><label>WhatsApp<input id="tt" type="tel"></label></div><button class="p" id="tok">Incluir e enviar acesso</button><div class="status" id="tst"></div>
+  <p class="hint">A pessoa recebe um e-mail para criar a própria senha. Senhas nunca passam por aqui.</p></div>`;
+  $("tok").onclick = async () => {
+    const st = $("tst"); st.className = "status"; st.textContent = "Incluindo…"; const email = $("te").value.trim().toLowerCase();
+    try {
+      await api("conta/membros", { method: "POST", body: JSON.stringify({ nome: $("tn").value, email, creci: $("tc").value, telefone: $("tt").value }) });
+      try { await requestPasswordRecovery(email); } catch {}
+      await recarregarConta(); await store.carregar(); toast("Corretor(a) incluído(a). O e-mail para criar a senha foi enviado."); VIEWS.time();
+    } catch (e) { st.className = "status err"; st.textContent = e.message; }
+  };
+  document.querySelectorAll("[data-at]").forEach((b) => (b.onclick = async () => { try { await api("conta/membros/" + encodeURIComponent(b.dataset.at), { method: "PUT", body: JSON.stringify({ ativo: b.dataset.v === "1" }) }); await recarregarConta(); await store.carregar(); VIEWS.time(); } catch (e) { toast(e.message); } }));
+  aplicarModoCliente();
+};
+
+VIEWS.perfil = () => {
+  header("Meu perfil"); if (!CLIENTE()) return back();
+  const p = EU.perfil || {}; const c = CT(); const dono = ehAdmin();
+  $("main").innerHTML = `<div class="card"><h2>Como você aparece nos anúncios e PDFs</h2><div class="grid">
+  <label class="full">Nome completo<input id="pn" value="${esc(p.nome || "")}"></label><label>CRECI<input id="pc" value="${esc(p.creci || "")}"></label><label>WhatsApp<input id="pt" type="tel" value="${esc(p.telefone || "")}"></label>
+  ${dono && c.tipo === "imobiliaria" ? `<label class="full">Nome da imobiliária<input id="pe" value="${esc(c.empresa || c.nome || "")}"></label>` : ""}</div>
+  <button class="p" id="pok">Salvar</button><div class="status" id="pst"></div><p class="hint">E-mail de acesso: ${esc(EU.usuario || "")}. Para trocar a senha, use “Esqueci a senha” na tela de entrada.</p></div>`;
+  $("pok").onclick = async () => { const st = $("pst"); try { await api("conta/perfil", { method: "PUT", body: JSON.stringify({ nome: $("pn").value, creci: $("pc").value, telefone: $("pt").value, ...($("pe") ? { empresa: $("pe").value } : {}) }) }); await recarregarConta(); await store.carregar(); st.className = "status"; st.textContent = "Salvo."; } catch (e) { st.className = "status err"; st.textContent = e.message; } };
+};
+
+/* ---------- Administração das contas de clientes (operação PrimeCorp) ---------- */
+VIEWS.contasPropto = async () => {
+  header("Contas Propto (clientes)");
+  if (CLIENTE() || !ehAdmin()) return back();
+  $("main").innerHTML = `<div class="card"><p class="hint">Carregando contas…</p></div>`;
+  let d; try { d = await api("contas"); } catch (e) { $("main").innerHTML = `<div class="card"><p class="status err">${esc(e.message)}</p></div>`; return; }
+  const cs = d.contas || []; const cont = (k) => cs.filter((c) => c.situacao.codigo === k).length;
+  const mrr = cs.filter((c) => c.situacao.codigo === "ativa" && c.valor).reduce((n, c) => n + (c.valor || 0), 0);
+  $("main").innerHTML = `<div class="kpis"><div class="kpi"><b>${cont("teste")}</b><span>Em teste</span></div><div class="kpi"><b>${cont("ativa")}</b><span>Pagantes</span></div><div class="kpi"><b>${brlC(mrr)}</b><span>Receita mensal</span></div></div>
+  <div class="card"><h2>Clientes</h2><div class="list">${cs.map((c) => `<div class="item" style="cursor:default;flex-wrap:wrap"><span class="dot ${c.situacao.codigo === "ativa" ? "verde" : c.situacao.codigo === "teste" ? "amarelo" : ""}"></span><span class="t"><b>${esc(c.nome)} · ${esc(c.situacao.rotulo)}${c.situacao.codigo === "teste" ? " · " + c.situacao.dias + " dia(s)" : ""}</b>
+  <span>${esc([c.tipo === "imobiliaria" ? "Imobiliária" : "Corretor(a)", c.responsavel?.nome, c.responsavel?.creci && "CRECI " + c.responsavel.creci, c.municipio, `${c.uso.imoveis}/${c.limites.imoveis} imóveis`, `${c.usuarios} usuário(s)`, c.valor ? brlC(c.valor) + (c.fundador ? " fundador" : "") : "", "desde " + dataBR(c.criado_em)].filter(Boolean).join(" · "))}</span></span>
+  <span class="row" style="gap:6px">${c.responsavel?.telefone ? `<a class="btn sm" href="${esc(waLink(c.responsavel.telefone, `Olá, ${(c.responsavel.nome || "").split(" ")[0]}! Aqui é da Propto Imóveis.`))}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<button class="sm" data-pr="${c.id}">+7 dias</button>${c.situacao.codigo === "suspensa" ? `<button class="sm" data-re="${c.id}">Reativar</button>` : `<button class="sm" data-su="${c.id}">Suspender</button>`}<button class="sm" data-pm="${c.id}">Pagamento manual</button></span></div>`).join("") || '<p class="empty">Nenhuma conta ainda. As contas nascem no cadastro da página propto.com.br.</p>'}</div></div>
+  <p class="hint">Pagamentos pelo Asaas atualizam as contas sozinhos. “Pagamento manual” serve para Pix ou transferência recebidos fora do Asaas.</p>`;
+  const acao = async (id, body, msg) => { try { await api("contas/" + id, { method: "POST", body: JSON.stringify(body) }); toast(msg); VIEWS.contasPropto(); } catch (e) { toast(e.message); } };
+  document.querySelectorAll("[data-pr]").forEach((b) => (b.onclick = () => acao(b.dataset.pr, { acao: "prorrogar", dias: 7 }, "Teste prorrogado.")));
+  document.querySelectorAll("[data-su]").forEach((b) => confirmar2(b, "Confirmar", () => acao(b.dataset.su, { acao: "suspender" }, "Conta suspensa.")));
+  document.querySelectorAll("[data-re]").forEach((b) => (b.onclick = () => acao(b.dataset.re, { acao: "reativar" }, "Conta reativada.")));
+  document.querySelectorAll("[data-pm]").forEach((b) => confirmar2(b, "1 mês, plano da conta?", () => { const c = cs.find((x) => x.id === b.dataset.pm); return acao(b.dataset.pm, { acao: "pago_manual", plano: c.plano || (c.tipo === "imobiliaria" ? "imobiliaria" : "corretor"), meses: 1 }, "Pagamento registrado."); }));
 };
 
 iniciar();

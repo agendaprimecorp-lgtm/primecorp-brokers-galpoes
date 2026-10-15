@@ -3,10 +3,14 @@ import { build } from 'esbuild'; import { NetlifyDB } from "@netlify/database-de
 const db = new NetlifyDB(); process.env.NETLIFY_DB_URL = await db.start(); await db.applyMigrations("./netlify/database/migrations");
 globalThis.__user = { email: 'contato@primecorpconsultoria.com.br' }; process.env.ADMIN_EMAILS = process.env.ADMIN_EMAILS || 'contato@primecorpconsultoria.com.br';
 fs.rmSync('test/www', { recursive: true, force: true }); fs.cpSync('public', 'test/www', { recursive: true });
-await build({ entryPoints: ['src/app.js', 'src/sala.js', 'src/anunciante.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
+await build({ entryPoints: ['src/app.js', 'src/sala.js', 'src/anunciante.js', 'src/cadastro.js'], bundle: true, format: 'esm', outdir: 'test/www', alias: { '@netlify/identity': './test/mocks/identity-client.mjs' }, external: ['html2canvas', 'dompurify', 'canvg'], logLevel: 'warning' });
 const api = (await import('./out/api.mjs')).default; const sala = (await import('./out/sala.mjs')).default; const anun = (await import('./out/anunciante.mjs')).default; const imov = (await import('./out/imovel.mjs')).default;
-const wh = (await import('./out/whatsapp.mjs')).default; const plead = (await import('./out/propto-lead.mjs')).default; const zbg = (await import('./out/zoe-background.mjs')).default; const mbg = (await import('./out/matricula-background.mjs')).default;
+const wh = (await import('./out/whatsapp.mjs')).default; const plead = (await import('./out/propto-lead.mjs')).default; const pcad = (await import('./out/propto-cadastro.mjs')).default; const awh = (await import('./out/asaas-webhook.mjs')).default; const zbg = (await import('./out/zoe-background.mjs')).default; const mbg = (await import('./out/matricula-background.mjs')).default;
 Object.assign(process.env, { COLETA_SEGREDO: 's'.repeat(40), WHATSAPP_APP_SECRET: 'segredo-app', WHATSAPP_VERIFY_TOKEN: 'tok', WHATSAPP_TOKEN: 'tk', WHATSAPP_PHONE_ID: '999', WHATSAPP_NUMERO: '(19) 99805-1985', ZOE_EQUIPE: '19998051985' });
+process.env.ASAAS_API_KEY = '$aact_e2e'; process.env.ASAAS_WEBHOOK_TOKEN = 'w'.repeat(40); const _subs = {};
+globalThis.__fetchAsaas = async (url, o) => { const u = String(url); const r = (j) => new Response(JSON.stringify(j), { status: 200, headers: { 'content-type': 'application/json' } }); const b = o.body ? JSON.parse(o.body) : {};
+  if (u.endsWith('/customers')) return r({ id: 'cus_e2e' }); if (u.endsWith('/subscriptions') && o.method === 'POST') { const id = 'sub_' + Date.now().toString(36); _subs[id] = b; return r({ id }); }
+  const m = u.match(/subscriptions\/(sub_[a-z0-9]+)\/payments/); if (m) { const s = _subs[m[1]] || {}; return r({ data: [{ id: 'pay_' + m[1], status: 'PENDING', dueDate: s.nextDueDate, value: s.value, invoiceUrl: 'https://sandbox.asaas.com/i/' + m[1] }] }); } return r({}); };
 globalThis.__fetchWA = async () => new Response(JSON.stringify({ messages: [{ id: 'wamid.' + Date.now() }] }), { status: 200 });
 globalThis.__fetchVerif = async (url) => { const u = String(url); const r = (j, st = 200) => new Response(JSON.stringify(j), { status: st, headers: { 'content-type': 'application/json' } });
   if (u.includes('/cep/v2/13170')) return r({ state: 'SP', city: 'Sumaré', neighborhood: 'Jardim Bom Retiro', street: 'Rua Dom Barreto', location: { coordinates: { latitude: '-22.82', longitude: '-47.27' } } });
@@ -45,6 +49,8 @@ http.createServer(async (req, res) => {
   if (url.pathname.startsWith('/i/')) fn = imov;
   if (url.pathname === '/whatsapp/webhook') fn = wh;
   if (url.pathname === '/propto/lead') fn = plead;
+  if (url.pathname === '/propto/cadastro') fn = pcad;
+  if (url.pathname === '/asaas/webhook') fn = awh;
   const tu = /(?:^|; )tu=([^;]+)/.exec(req.headers.cookie || ''); globalThis.__user = { email: tu ? decodeURIComponent(tu[1]) : 'contato@primecorpconsultoria.com.br' };
   if (url.pathname === '/__documento') { globalThis.__documento = body ? JSON.parse(body.toString() || 'null') : null; res.writeHead(200); res.end('ok'); return; }
   if (fn) {

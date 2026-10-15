@@ -398,3 +398,18 @@ h1,h2,h3,.ttl{color:var(--ink)}
 button.p,.btn.p{box-shadow:0 1px 0 rgba(15,23,32,.08)}
 .auth .marca{align-self:center}.auth .marca .logo{margin:0}
 :root[data-modo="escritorio"] .top .marca{display:none}
+
+/* ===== Conta Propto (clientes) ===== */
+.faixa-conta{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid var(--line);border-left:4px solid var(--ok);background:var(--card);border-radius:12px;padding:10px 12px;cursor:pointer;color:var(--ink);font:inherit;position:relative}
+.faixa-conta b{font:700 14.5px/1.25 Inter,system-ui,sans-serif}.faixa-conta span{font-size:13px;color:var(--ink2)}
+.faixa-conta em{font-style:normal;font-weight:700;font-size:13px;color:var(--red);margin-top:2px}
+.faixa-conta.alerta{border-left-color:var(--warn);background:var(--warn-bg)}.faixa-conta.erro{border-left-color:var(--bad);background:var(--bad-bg)}
+.uso{display:flex;flex-direction:column;gap:5px;font-size:14px}.uso b{font-variant-numeric:tabular-nums}
+.planos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:720px){.planos{grid-template-columns:1fr}}
+.plano{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.plano.dest{border-top-color:var(--red);box-shadow:0 6px 24px rgba(204,27,27,.10)}.plano.atual{outline:2px solid var(--ok)}
+.plano h3{font:700 18px/1.2 Sora,system-ui,sans-serif}.plano .preco{margin:0;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.plano .preco b{font:700 28px/1 Sora,system-ui,sans-serif;letter-spacing:-.02em}.plano .preco s{color:var(--ink2);font-size:14px}.plano .preco span{color:var(--ink2);font-size:13px}
+.plano p{margin:0;font-size:14px}.plano .tag{align-self:flex-start}.plano button{margin-top:auto}
+.card.fundador{background:linear-gradient(135deg,#141c25,#0b1118);color:#f7f8f9;border-color:#253041}.card.fundador .hint{color:#c2c9d2}.card.fundador h2{color:#f7f8f9}.card.fundador .k{color:#e8443f}

@@ -46,11 +46,23 @@ export async function papelDe(u) {
   if (!u || !u.email) return null;
   const email = String(u.email).toLowerCase();
   const lista = (env("ADMIN_EMAILS") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  if (!lista.length || lista.includes(email)) return "admin";
+  if (Array.isArray(u.roles) && u.roles.includes("propto_cliente")) return null;
+  if (lista.includes(email)) return "admin";
+  // Clientes da Propto (contas) nunca entram na operação da PrimeCorp, nem com ADMIN_EMAILS vazio.
+  if ((await db().sql`SELECT 1 FROM contas WHERE dados->'membros' @> ${JSON.stringify([{ email }])}::jsonb LIMIT 1`).length) return null;
+  if (!lista.length) return "admin";
   const rows = await db().sql`SELECT dados FROM registros WHERE colecao = 'usuarios' AND excluido = FALSE`;
   const m = rows.map((r) => r.dados).find((d) => String(d.email || "").toLowerCase() === email && d.ativo !== false);
   if (!m) return null;
   return m.papel === "admin" ? "admin" : "corretor";
+}
+/** E-mail da equipe PrimeCorp (ADMIN_EMAILS ou cadastro de equipe)? */
+export async function ehEquipePrimeCorp(email) {
+  const e = String(email || "").trim().toLowerCase(); if (!e) return false;
+  const lista = (env("ADMIN_EMAILS") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (lista.includes(e)) return true;
+  const rows = await db().sql`SELECT dados FROM registros WHERE colecao = 'usuarios' AND excluido = FALSE`;
+  return rows.some((r) => String(r.dados?.email || "").toLowerCase() === e);
 }
 export async function perfilDe(u) {
   const email = String(u?.email || "").toLowerCase();
@@ -94,10 +106,10 @@ export async function registrarEmissao(e) {
   const seq = await db().sql`SELECT nextval('codigo_em') AS n`;
   const codigo = e.codigo || "EM-" + String(seq[0].n).padStart(5, "0");
   const rows = await db().sql`
-    INSERT INTO emissoes (codigo, tipo, negocio_id, oferta_id, briefing_id, contato_id, sala_id, destinatario, conteudo, arquivo, meta)
+    INSERT INTO emissoes (codigo, tipo, negocio_id, oferta_id, briefing_id, contato_id, sala_id, destinatario, conteudo, arquivo, meta, conta)
     VALUES (${codigo}, ${e.tipo}, ${e.negocio_id || null}, ${e.oferta_id || null}, ${e.briefing_id || null},
             ${e.contato_id || null}, ${e.sala_id || null}, ${e.destinatario || null}, ${e.conteudo || null},
-            ${e.arquivo || null}, ${JSON.stringify(e.meta || {})}::jsonb)
+            ${e.arquivo || null}, ${JSON.stringify(e.meta || {})}::jsonb, ${e.conta || null})
     RETURNING id, codigo, criado_em`;
   return rows[0];
 }
@@ -186,7 +198,7 @@ Responda SOMENTE um objeto JSON:
 {"ambiente":"nome curto do ambiente (ex.: 'Sala de estar', 'Cozinha', 'Suíte master', 'Fachada', 'Área de lazer', 'Galpão – área operacional', 'Docas', 'Sede', 'Curral', 'Pastagem', 'Represa', 'Vista do terreno')","descricao":"1 a 2 frases objetivas sobre o ambiente, 3ª pessoa, só o que se vê nas fotos ou o corretor disse","caracteristicas":["até 6 itens curtos, ex.: 'Piso porcelanato', 'Armários planejados'"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"pe_direito":número|null,"docas":número|null,"area_ha":número em hectares|null,"aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null},"foto":{"ok":true|false,"problemas":["ex.: 'escura', 'tremida', 'torta', 'objetos pessoais à vista', 'pessoa na foto', 'placa de carro visível'"]}}
 REGRAS: em "dados" só números DITOS pelo corretor (nunca estime pela foto); null quando não falou. Não invente materiais que não dá para ver. Não cite endereço.`;
 
-export const PROMPT_ANUNCIO = `Você redige o anúncio de um imóvel captado diretamente por um corretor de imóveis brasileiro (PrimeCorp Brokers), a partir dos dados da ficha, dos ambientes registrados no local e das falas do corretor.
+export const PROMPT_ANUNCIO = `Você redige o anúncio de um imóvel captado diretamente por um corretor de imóveis brasileiro, a partir dos dados da ficha, dos ambientes registrados no local e das falas do corretor.
 Responda SOMENTE um objeto JSON:
 {"titulo":"até 70 caracteres, ex.: 'Casa com 3 dormitórios e piscina no Jardim X, Sumaré'","subtitulo":"até 90 caracteres com o principal atrativo","descricao":"2 parágrafos, 500 a 800 caracteres no total, 3ª pessoa, tom profissional e acolhedor, só fatos fornecidos","destaques":["4 a 8 itens curtos"],"dados":{"dormitorios":número|null,"suites":número|null,"banheiros":número|null,"vagas":número|null,"construida":número|null,"terreno":número|null,"area_ha":número em hectares (alqueire paulista = 2,42 ha)|null,"aptidao":"texto|null","agua":"texto|null","benfeitorias":"texto|null","aluguel":número|null,"venda":número|null,"condominio":número|null,"iptu":número|null,"iptu_periodo":"mensal|anual|null","disponibilidade":"texto|null","documentacao":"texto|null"},"pendencias":["até 5 informações que faltam para um anúncio completo"]}
 REGRAS: NUNCA invente números, materiais ou itens de lazer. Não cite rua, número, nome do proprietário nem telefone. Bairro e cidade podem aparecer. Em "dados", só números informados nas falas ou na ficha.`;

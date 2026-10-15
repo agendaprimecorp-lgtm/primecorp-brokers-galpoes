@@ -13,6 +13,8 @@ import { responder, anexarMsg } from "../../shared/zoe.mjs";
 import { enviar, janelaAberta, equipeWA, conectarWebhook360, criarModeloAviso } from "../../shared/whatsapp.mjs";
 import { decidirSugestao } from "../../shared/zoe-revisao.mjs";
 import { importarPrimeGov } from "../../shared/b2g.mjs";
+import { contaDoEmail, listarContas, obterConta, gravarConta, situacao, usoDe, periodoUso, limites, PLANOS } from "../../shared/contas.mjs";
+import { apiConta } from "../../shared/api-conta.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_PDF = 4 * 1024 * 1024; // 4 MB
@@ -31,6 +33,13 @@ export default async (req: Request, context: Context) => {
   // Toda rota daqui é privada (a Sala do Cliente tem function própria).
   const u = await usuario();
   if (!u) return erro("Faça login.", 401);
+  // Cliente da Propto: só a API da própria conta, com dados separados.
+  const cx = await contaDoEmail(u.email).catch(() => null);
+  if (cx) {
+    if (req.method !== "GET") { try { verifyRequestOrigin(req); } catch { return erro("Origem não permitida.", 403); } }
+    try { return await apiConta({ req, url, partes, u, cx }); }
+    catch (e: any) { console.error(e); return erro(e?.status && e.status < 600 ? e.message : "Erro interno: " + (e?.message || String(e)), e?.status && e.status < 600 ? e.status : 500); }
+  }
   const papel = await papelDe(u);
   if (!papel) return erro("Usuário sem permissão.", 403);
   const admin = papel === "admin";
@@ -91,7 +100,7 @@ export default async (req: Request, context: Context) => {
     /* ---------- emissões (histórico de relatórios) ---------- */
     if (rota === "emissoes" && req.method === "GET") {
       const lim = Math.min(1000, Math.max(1, Number(url.searchParams.get("limite")) || 300));
-      const rows = await db().sql`SELECT id, codigo, tipo, negocio_id, oferta_id, briefing_id, contato_id, sala_id, destinatario, conteudo, arquivo, meta, criado_em FROM emissoes ORDER BY criado_em DESC LIMIT ${lim}`;
+      const rows = await db().sql`SELECT id, codigo, tipo, negocio_id, oferta_id, briefing_id, contato_id, sala_id, destinatario, conteudo, arquivo, meta, criado_em FROM emissoes WHERE conta IS NULL ORDER BY criado_em DESC LIMIT ${lim}`;
       return json({ emissoes: rows });
     }
     if (rota === "emissoes" && req.method === "POST") {
@@ -195,7 +204,9 @@ export default async (req: Request, context: Context) => {
       const registros = await listarTudo(true);
       const emissoes = await db().sql`SELECT * FROM emissoes ORDER BY id`;
       const nome = `PrimeCorp_Backup_${new Date().toISOString().slice(0, 10)}.json`;
-      return new Response(JSON.stringify({ versao: 1, gerado_em: new Date().toISOString(), registros, emissoes }), {
+      const contas = await db().sql`SELECT * FROM contas ORDER BY criado_em`;
+      const registros_conta = await db().sql`SELECT * FROM registros_conta ORDER BY conta, colecao, id`;
+      return new Response(JSON.stringify({ versao: 2, gerado_em: new Date().toISOString(), registros, emissoes, contas, registros_conta }), {
         headers: { "content-type": "application/json", "content-disposition": `attachment; filename="${nome}"`, "cache-control": "no-store" },
       });
     }
@@ -337,6 +348,35 @@ export default async (req: Request, context: Context) => {
       anexarMsg(conv, { id: id || "h" + Date.now().toString(36), de: "humano", por: perfil.nome || u.email, t: new Date().toISOString(), texto });
       await salvarRegistro("conversas", wa, { ...conv, modo: "humano", precisa_humano: null });
       return json({ ok: true });
+    }
+
+    /* ---------- contas de clientes da Propto (administração) ---------- */
+    if (rota === "contas" && !admin) return erro("Somente o administrador gerencia as contas de clientes.", 403);
+    if (rota === "contas" && req.method === "GET" && !a) {
+      const agora = new Date();
+      const lista = await listarContas();
+      const out = [];
+      for (const c of lista) {
+        const dono = (c.membros || []).find((m: any) => m.papel === "admin") || (c.membros || [])[0] || {};
+        out.push({ id: c.id, nome: c.nome, tipo: c.tipo, empresa: c.empresa || "", plano: c.plano || null, ciclo: c.ciclo || null, criado_em: c.criado_em, teste_fim: c.teste_fim, pago_ate: c.pago_ate || null,
+          situacao: situacao(c, agora), uso: await usoDe(c.id, periodoUso(c, agora)), limites: limites(c), usuarios: (c.membros || []).filter((m: any) => m.ativo !== false).length,
+          responsavel: { nome: dono.nome, email: dono.email, telefone: dono.telefone, creci: dono.creci }, municipio: c.municipio || "", sistema: c.sistema || "",
+          valor: c.asaas?.valor || null, fundador: !!c.asaas?.fundador, assinatura: !!c.asaas?.assinatura, ultimo_pagamento: c.ultimo_pagamento || null });
+      }
+      return json({ contas: out, planos: PLANOS });
+    }
+    if (rota === "contas" && a && req.method === "POST") {
+      const c: any = await obterConta(a); if (!c) return erro("Conta não encontrada.", 404);
+      const body = await req.json().catch(() => null) || {};
+      const agora = new Date(); let novo: any = { ...c }; let txt = "";
+      if (body.acao === "prorrogar") { const d = Math.min(60, Math.max(1, Number(body.dias) || 7)); const base = Math.max(Date.parse(c.teste_fim) || 0, agora.getTime()); novo.teste_fim = new Date(base + d * 864e5).toISOString(); txt = `Teste prorrogado por ${d} dia(s)`; }
+      else if (body.acao === "suspender") { novo.suspensa = true; txt = "Conta suspensa"; }
+      else if (body.acao === "reativar") { novo.suspensa = false; novo.cancelamento_em = null; txt = "Conta reativada"; }
+      else if (body.acao === "pago_manual") { const meses = Math.min(24, Math.max(1, Number(body.meses) || 1)); if (!PLANOS[body.plano]) return erro("Plano inválido."); const base = Math.max(Date.parse(c.pago_ate) || 0, agora.getTime()); const d = new Date(base); d.setUTCMonth(d.getUTCMonth() + meses); novo = { ...novo, plano: body.plano, pago_ate: d.toISOString(), ultimo_pagamento: { em: agora.toISOString(), forma: "manual", por: u.email } }; txt = `Pagamento manual registrado: plano ${PLANOS[body.plano].nome}, ${meses} mês(es)`; }
+      else return erro("Ação inválida.");
+      await gravarConta(a, novo);
+      await registrarEmissao({ tipo: "conta_admin", conta: a, conteudo: `${txt} · ${c.nome}`, meta: { usuario: u.email } });
+      return json({ ok: true, situacao: situacao(novo, agora) });
     }
 
     /* ---------- status / coleta ---------- */
