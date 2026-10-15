@@ -222,7 +222,7 @@ Depois do deploy: app → Mais → Zoe → **Conectar WhatsApp ao sistema** (o s
 
 ## Página comercial propto.com.br (out/2026)
 
-- `public/propto.html` é a página de vendas (sem preços): captação guiada, verificação, integração com a imobiliária, públicos (imobiliária, corretor, proprietário), FAQ e formulário de inscrição no teste grátis de 90 dias.
+- `public/propto.html` é a página de vendas (sem preços): captação guiada, verificação, integração com a imobiliária, públicos (imobiliária, corretor, proprietário), FAQ e formulário de inscrição no teste grátis de 30 dias (corretor: 5 imóveis; imobiliária: 3 usuários e 15 imóveis; aviso 5 dias antes do fim; sem cartão).
 - O formulário grava em "Cadastros do site" (coleção site_leads, linha "Propto · teste …"), avisa a equipe e devolve o link do WhatsApp comercial. Número: variável `PROPTO_WHATSAPP` (padrão (19) 99805-1985).
 - Para publicar no domínio: adicione propto.com.br e www.propto.com.br em Domain management no Netlify; os redirects do netlify.toml já mostram a página na raiz.
 - As contas de teste só devem ser liberadas depois da separação de dados por empresa (multiempresa).

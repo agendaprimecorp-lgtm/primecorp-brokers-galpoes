@@ -22,7 +22,7 @@ const p = await abrir({ width: 390, height: 844 });
 await p.screenshot({ path: `${OUT}/03_cel_topo.png` });
 ok(await p.evaluate(() => document.documentElement.scrollWidth) <= 390, 'sem rolagem lateral no celular');
 await p.screenshot({ path: `${OUT}/04_cel_inteira.png`, fullPage: true });
-await p.click('text=Quero testar grátis por 90 dias'); await p.waitForTimeout(500);
+await p.click('text=Quero testar grátis por 30 dias'); await p.waitForTimeout(500);
 await p.click('label:has(input[value=corretor])');
 ok(await p.locator('#creci').isVisible() && !(await p.locator('#empresa').isVisible()), 'campos mudam conforme o perfil (corretor pede CRECI)');
 await p.click('#enviar'); await p.waitForTimeout(300);
