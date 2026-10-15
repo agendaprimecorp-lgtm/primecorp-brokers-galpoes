@@ -46,7 +46,9 @@ section{padding-block:clamp(64px,9vw,112px)}
 .nav nav a{color:var(--g3);text-decoration:none;font-size:14px}
 .nav nav a:hover{color:#fff}
 .nav .btn{padding:10px 16px;font-size:14px}
-@media (max-width:820px){.nav nav a:not(.btn){display:none}}
+.nav nav .sm{display:none}.nav .btn.entrar{background:transparent;color:#fff;border:1px solid #3a4656}.nav .btn.entrar:hover{border-color:#fff}
+@media (max-width:820px){.nav nav a:not(.btn){display:none}.nav nav{gap:8px}.nav nav .lg{display:none}.nav nav .sm{display:inline}.nav .btn{padding:9px 12px}}
+@media (max-width:420px){.nav .sub{display:none}}
 /* hero */
 .hero{background:radial-gradient(ellipse at 78% 20%,#3a1416 0%,#0f1720 52%,#0b1118 100%);color:var(--paper);padding-block:clamp(48px,7vw,96px) 0;overflow:hidden}
 .hero .in{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:end}
@@ -175,7 +177,7 @@ footer img{height:24px}
 
 <header class="nav"><div class="in">
 <img src="/marca/propto-horizontal-negative.svg" alt="Propto"><span class="sub">IMÓVEIS</span>
-<nav><a href="#como">Como funciona</a><a href="#imobiliarias">Imobiliárias</a><a href="#corretores">Corretores</a><a href="#proprietarios">Proprietários</a><a href="/app">Entrar</a><a class="btn p" href="#teste">Testar 30 dias grátis</a></nav>
+<nav><a href="#como">Como funciona</a><a href="#imobiliarias">Imobiliárias</a><a href="#corretores">Corretores</a><a href="#proprietarios">Proprietários</a><a class="btn g entrar" href="/app"><span class="lg">Área do cliente</span><span class="sm">Entrar</span></a><a class="btn p" href="#teste"><span class="lg">Testar 30 dias grátis</span><span class="sm">Testar grátis</span></a></nav>
 </div></header>
 
 <section class="hero"><div class="in">
