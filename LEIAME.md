@@ -269,3 +269,17 @@ Testes: `node test/contas.mjs` (15 testes: cadastro, isolamento, limites, assina
 - `propto.com.br` mostra a página comercial; o app fica em **propto.com.br/app** (também funciona em `.netlify.app/app`). O ícone instalado no celular abre `/app`.
 - Links de convite e de nova senha que caírem na página comercial são levados para `/app` sozinhos.
 - Depois de definir propto.com.br como domínio principal no Netlify, reconectar o WhatsApp (Mais → Zoe → Conectar) para o webhook passar ao endereço novo.
+
+### Boas-vindas por e-mail, instalação no celular e senha (out/2026)
+- Ao criar a conta, o cliente recebe um e-mail com o login (e-mail), o link do sistema (`/app`), o site, o passo a passo para instalar no celular e o WhatsApp do suporte. **Nenhum e-mail leva senha**: o envio é bloqueado se o texto tiver "senha:". Corretor incluído pela imobiliária recebe um e-mail de boas-vindas e, à parte, o e-mail do Identity para criar a própria senha.
+- Envio pelo Resend (grátis até 3.000 e-mails/mês, 100/dia). Sem a chave, nada é enviado e o cadastro funciona normalmente.
+
+| Variável | Valor |
+|---|---|
+| `RESEND_API_KEY` | Chave da API do Resend |
+| `EMAIL_REMETENTE` | Opcional, padrão `Propto Imóveis <contato@propto.com.br>` (domínio verificado no Resend) |
+| `EMAIL_RESPOSTA` | Opcional: e-mail que recebe as respostas dos clientes |
+| `PROPTO_SITE` | Opcional, padrão `https://propto.com.br` |
+
+- Verificar o domínio no Resend: criar a conta, adicionar `propto.com.br` em Domains e cadastrar no Registro.br (zona DNS) os registros TXT/MX que o Resend mostrar.
+- App: Mais → **Instalar no celular** (Android instala com um toque quando o Chrome permite; iPhone mostra o passo a passo; computador mostra QR). Mais → **Alterar senha** (a troca vai direto ao Identity; a senha não passa pelo nosso servidor).

@@ -171,7 +171,7 @@ const TABS = [
   ["contatos", "CRM", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>'],
   ["mais", "Mais", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'],
 ];
-const PAI = { plano: "mais", time: "mais", perfil: "mais", contasPropto: "mais", iniciar: "captar", visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
+const PAI = { instalar: "mais", senha: "mais", plano: "mais", time: "mais", perfil: "mais", contasPropto: "mais", iniciar: "captar", visita: "captar", captacao: "captar", equipe: "mais", anuncios: "mais", briefing: "briefings", editb: "briefings", teaser: "briefings", novasala: "briefings", oferta: "ofertas", nova: "ofertas", novopedido: "ofertas", pedido: "mais", pedidos: "mais", negocio: "painel", comissao: "painel", contato: "contatos", editc: "contatos", sala: "mais", salas: "mais", relatorios: "mais", backup: "mais", config: "mais" };
 function renderTabs() {
   const cur = TOP.includes(route.v) ? route.v : PAI[route.v] || "";
   $("tabs").className = CLIENTE() ? "tabs-in c5" : "tabs-in c6";
@@ -192,7 +192,7 @@ function render() {
   if (route.v !== "visita") pararCamera();
   document.documentElement.classList.toggle("foco", route.v === "visita");
   renderTabs();
-  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe", "visita"].includes(route.v)) return;
+  if (editing && ["editb", "oferta", "teaser", "nova", "editc", "novasala", "config", "novopedido", "comissao", "captacao", "equipe", "visita", "senha"].includes(route.v)) return;
   if (CLIENTE() && SO_PC_VIEWS.includes(route.v)) { header("Indisponível"); $("main").innerHTML = `<div class="card"><p class="hint">Esta área faz parte da operação PrimeCorp e não está no seu plano.</p></div>`; return; }
   try { (VIEWS[route.v] || VIEWS.painel)(); aplicarModoCliente(); }
   catch (e) { console.error(e); $("main").innerHTML = `<div class="card"><p class="status err">Erro ao exibir esta tela: ${esc(e.message)}</p></div>`; }
@@ -791,14 +791,14 @@ VIEWS.mais = () => {
   $("main").innerHTML = `<div class="card"><div class="menu">
   <button id="m10">Assistente · atendimento no WhatsApp <span>›</span></button><button id="m11">Agenda <span>›</span></button>
   <button id="m8">Anúncios publicados <span>›</span></button>${ehAdmin() ? '<button id="m9">Equipe e permissões <span>›</span></button><button id="m12">Contas Propto (clientes) <span>›</span></button>' : ""}
-  <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m6">Sair <span>›</span></button></div></div>
+  <button id="m1">Nova oferta <span>›</span></button><button id="m2">Salas do Cliente <span>›</span></button><button id="m7">Anunciantes (pedidos e autorizações) <span>›</span></button><button id="m3">Relatórios emitidos <span>›</span></button>${ehAdmin() ? '<button id="m4">Backup <span>›</span></button><button id="m5">Configurações <span>›</span></button>' : ""}<button id="m13">Instalar no celular <span>›</span></button><button id="m14">Alterar senha <span>›</span></button><button id="m6">Sair <span>›</span></button></div></div>
   <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
   <div class="seg" id="modo">${[["auto", "Automático"], ["campo", "Celular"], ["escritorio", "Computador"]].map(([k, l]) => `<button data-modo="${k}" class="${(lerPref("pc_modo") || "auto") === k ? "on" : ""}">${l}</button>`).join("")}</div><p class="hint">Agora: <b>${MODO() === "escritorio" ? "computador (escritório)" : "celular (campo)"}</b></p></div>
   <div class="card"><h3>SAC · dúvidas, sugestões e reclamações</h3><p class="hint">Este e-mail aparece para clientes, anunciantes e proprietários nas páginas públicas (anúncio, Sala do Cliente e Sala do Anunciante).</p><div class="row"><b class="grow">${esc(PC.SAC)}</b><button class="sm" id="sacc">Copiar</button></div></div>
   <p class="foot">Conectado como ${esc(EU.usuario || usuarioAtual?.email || "")} · ${ehAdmin() ? "administrador" : "corretor(a)"}</p><p class="endosso">Propto Imóveis · propto.com.br</p>`;
   $("m1").onclick = () => go({ v: "nova" }); $("m2").onclick = () => go({ v: "salas" }); $("m3").onclick = () => go({ v: "relatorios" });
   if ($("m4")) $("m4").onclick = () => go({ v: "backup" }); if ($("m5")) $("m5").onclick = () => go({ v: "config" }); $("m7").onclick = () => go({ v: "pedidos" });
-  $("m8").onclick = () => go({ v: "anuncios" }); $("m10").onclick = () => go({ v: "zoe" }); $("m11").onclick = () => go({ v: "agenda" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" }); if ($("m12")) $("m12").onclick = () => go({ v: "contasPropto" });
+  $("m8").onclick = () => go({ v: "anuncios" }); $("m10").onclick = () => go({ v: "zoe" }); $("m11").onclick = () => go({ v: "agenda" }); if ($("m9")) $("m9").onclick = () => go({ v: "equipe" }); if ($("m12")) $("m12").onclick = () => go({ v: "contasPropto" }); $("m13").onclick = () => go({ v: "instalar" }); $("m14").onclick = () => go({ v: "senha" });
   $("m6").onclick = async () => { try { await logout(); } catch {} telaLogin("Você saiu."); };
   $("sacc").onclick = () => copiar(PC.SAC);
   document.querySelectorAll("#modo [data-modo]").forEach((b) => (b.onclick = () => { gravarPref("pc_modo", b.dataset.modo === "auto" ? null : b.dataset.modo); aplicarModo(); render(); }));
@@ -1978,6 +1978,7 @@ function painelCliente() {
   <div class="bv-passos"><button data-bv="captar"><b>1</b><span>Captar um imóvel</span></button><button data-bv="nova"><b>2</b><span>Ler um anúncio por link</span></button><button data-bv="plano"><b>3</b><span>Ver o seu plano</span></button></div>
   <button class="g sm" id="bvx">Entendi, não mostrar de novo</button></div>` : ""}
   <button class="captar-cta" id="qcap"><img class="pt-sym" src="/marca/propto-symbol-negative.svg" alt="Propto"><span><b>Captar imóvel</b><small>Fotos, voz e anúncio no local da visita</small><em>O corretor fala, o app faz o resto</em></span><span>›</span></button>
+  ${cartaoInstalar()}
   <div class="kpis"><div class="kpi"><b>${caps.length}</b><span>Imóveis</span></div><div class="kpi"><b>${anAtivos.length}</b><span>Anúncios no ar</span></div><div class="kpi"><b>${visitas}</b><span>Visitas nos anúncios</span></div></div>
   <div class="card"><div class="row" style="justify-content:space-between"><h2>${esc(c.plano_nome && c.situacao?.codigo === "ativa" ? "Plano " + c.plano_nome : s.rotulo || "Sua conta")}</h2><button class="sm" id="gplano">Plano e assinatura</button></div>
   ${usoLinha("Imóveis captados" + (c.limites?.fonte === "teste" ? " no teste" : " neste mês"), c.uso?.imoveis || 0, c.limites?.imoveis || 0)}
@@ -1988,6 +1989,7 @@ function painelCliente() {
   <div class="list">${caps.slice(0, 6).map((o) => { const an = anuncioDe(o); return `<button class="item" data-cap="${o.id}"><span class="dot ${an && an.status === "ativo" ? "verde" : o.descricao ? "amarelo" : ""}"></span><span class="t"><b>${esc((o.codigo ? o.codigo + " · " : "") + (o.titulo || [o.tipo, o.regiao || o.cidade].filter(Boolean).join(" · ") || "Imóvel sem título"))}</b><span>${esc([an && an.status === "ativo" ? "Anúncio no ar" : o.descricao ? "Anúncio gerado" : "Em captação", an ? (an.visitas || 0) + " visita(s)" : ""].filter(Boolean).join(" · "))}</span></span><span>›</span></button>`; }).join("") || '<p class="empty">Nenhum imóvel ainda. Toque em Captar imóvel.</p>'}</div></div>
   <a class="btn" href="${esc(waSuporte())}" target="_blank" rel="noopener">Falar com o suporte Propto no WhatsApp</a>
   <p class="foot">Propto Imóveis · ${esc(me.nome)}${me.creci ? " · " + esc(me.creci) : ""}</p>`;
+  const gi = $("ginst"); if (gi) gi.onclick = () => go({ v: "instalar" });
   $("qcap").onclick = () => go({ v: "captar" }, false); $("gplano").onclick = () => go({ v: "plano" }); $("gofs").onclick = () => go({ v: "ofertas" }, false);
   document.querySelectorAll("[data-cap]").forEach((b) => (b.onclick = () => { const o = O(b.dataset.cap); go(o && o.origem === "Captação própria" ? { v: "captacao", id: o.id } : { v: "oferta", id: b.dataset.cap }); }));
   document.querySelectorAll("[data-bv]").forEach((b) => (b.onclick = () => go({ v: b.dataset.bv }, b.dataset.bv !== "captar")));
@@ -1997,7 +1999,7 @@ function painelCliente() {
 function maisCliente() {
   header("Mais"); const dono = ehAdmin(); const c = CT();
   $("main").innerHTML = `<div class="card"><div class="menu">
-  <button id="cm1">Plano e assinatura <span>›</span></button>${dono && c.tipo === "imobiliaria" ? '<button id="cm2">Equipe da imobiliária <span>›</span></button>' : ""}<button id="cm3">Meu perfil <span>›</span></button>
+  <button id="cm1">Plano e assinatura <span>›</span></button>${dono && c.tipo === "imobiliaria" ? '<button id="cm2">Equipe da imobiliária <span>›</span></button>' : ""}<button id="cm3">Meu perfil <span>›</span></button><button id="cm9">Instalar no celular <span>›</span></button><button id="cm10">Alterar senha <span>›</span></button>
   <button id="cm4">Anúncios publicados <span>›</span></button><button id="cm5">Ler anúncio por link <span>›</span></button><button id="cm6">Relatórios emitidos <span>›</span></button>
   ${dono ? '<button id="cm7">Exportar meus dados <span>›</span></button>' : ""}<button id="cm8">Sair <span>›</span></button></div></div>
   <div class="card"><h3>Modo de tela</h3><p class="hint">Celular: registro de campo (câmera, voz, captação). Computador: gestão (painel largo, menu lateral, acompanha em tempo real o que chega do celular).</p>
@@ -2005,6 +2007,7 @@ function maisCliente() {
   <div class="card"><h3>Suporte</h3><p class="hint">Dúvidas, sugestões ou problemas: fale com a equipe Propto no WhatsApp, em horário comercial.</p><a class="btn" href="${esc(waSuporte())}" target="_blank" rel="noopener">Abrir o WhatsApp</a>
   <p class="hint"><a href="/termos-propto.html" target="_blank" rel="noopener">Termos de uso e privacidade</a></p></div>
   <p class="foot">Conectado como ${esc(EU.usuario || "")} · ${dono ? "responsável pela conta" : "corretor(a)"} · ${esc(c.nome || "")}</p><p class="endosso">Propto Imóveis · propto.com.br</p>`;
+  $("cm9").onclick = () => go({ v: "instalar" }); $("cm10").onclick = () => go({ v: "senha" });
   $("cm1").onclick = () => go({ v: "plano" }); if ($("cm2")) $("cm2").onclick = () => go({ v: "time" }); $("cm3").onclick = () => go({ v: "perfil" });
   $("cm4").onclick = () => go({ v: "anuncios" }); $("cm5").onclick = () => go({ v: "nova" }); $("cm6").onclick = () => go({ v: "relatorios" });
   if ($("cm7")) $("cm7").onclick = async () => { try { const r = await fetch("/api/conta/exportar", { credentials: "same-origin" }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || "Falhou"); await compartilharOuBaixar(await r.blob(), `Propto_dados_${new Date().toISOString().slice(0, 10)}.json`); } catch (e) { toast(e.message); } };
@@ -2112,6 +2115,51 @@ VIEWS.contasPropto = async () => {
   document.querySelectorAll("[data-su]").forEach((b) => confirmar2(b, "Confirmar", () => acao(b.dataset.su, { acao: "suspender" }, "Conta suspensa.")));
   document.querySelectorAll("[data-re]").forEach((b) => (b.onclick = () => acao(b.dataset.re, { acao: "reativar" }, "Conta reativada.")));
   document.querySelectorAll("[data-pm]").forEach((b) => confirmar2(b, "1 mês, plano da conta?", () => { const c = cs.find((x) => x.id === b.dataset.pm); return acao(b.dataset.pm, { acao: "pago_manual", plano: c.plano || (c.tipo === "imobiliaria" ? "imobiliaria" : "corretor"), meses: 1 }, "Pagamento registrado."); }));
+};
+
+/* ---------- Instalar no celular (aplicativo web: sem loja, atualiza sozinho) ---------- */
+let PROMPT_INSTALAR = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); PROMPT_INSTALAR = e; if (route.v === "instalar") render(); });
+window.addEventListener("appinstalled", () => { PROMPT_INSTALAR = null; toast("Propto instalada na tela inicial."); if (route.v === "instalar") render(); });
+const appInstalado = () => { try { return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch { return false; } };
+const ehIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const ehAndroid = () => /android/i.test(navigator.userAgent);
+const urlApp = () => location.origin + "/app";
+const IC_COMP = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+function cartaoInstalar() {
+  if (appInstalado()) return "";
+  return `<button class="card instalar-cta" id="ginst"><span class="k">Aplicativo</span><b>Instale a Propto no celular</b><span class="hint">Ícone na tela inicial, abre em tela cheia e atualiza sozinho. Sem loja de aplicativos.</span></button>`;
+}
+VIEWS.instalar = () => {
+  header("Instalar no celular");
+  const ja = appInstalado();
+  const passosIOS = `<ol class="passos"><li>Abra <b>${esc(location.host)}/app</b> no <b>Safari</b> (no iOS 17 ou mais novo, também funciona no Chrome).</li><li>Toque em <b>Compartilhar</b> ${IC_COMP} na barra do navegador.</li><li>Role e toque em <b>“Adicionar à Tela de Início”</b> e depois em <b>Adicionar</b>.</li><li>Abra pelo ícone <b>Propto</b> e entre com o seu e-mail e senha.</li></ol>`;
+  const passosAndroid = `<ol class="passos"><li>Abra <b>${esc(location.host)}/app</b> no <b>Chrome</b>.</li><li>Toque em <b>“Instalar app”</b> quando aparecer, ou no menu <b>⋮</b> → <b>“Instalar app”</b> / <b>“Adicionar à tela inicial”</b>.</li><li>Confirme em <b>Instalar</b>.</li><li>Abra pelo ícone <b>Propto</b> e entre com o seu e-mail e senha.</li></ol>`;
+  $("main").innerHTML = ja ? `<div class="card"><h2>A Propto já está instalada neste aparelho.</h2><p class="hint">Você está usando o aplicativo pela tela inicial. As atualizações chegam sozinhas.</p></div>`
+    : `${PROMPT_INSTALAR ? `<div class="card"><h2>Instalar agora</h2><p class="hint">Um toque e o ícone da Propto vai para a tela inicial.</p><button class="p" id="inst">Instalar a Propto</button></div>` : ""}
+    ${MODO() === "escritorio" && !ehIOS() && !ehAndroid() ? `<div class="card celular"><div class="qr">${qrSVG(urlApp())}</div><div><span class="k">No computador?</span><h2>Aponte a câmera do celular para o código</h2><p class="hint">Abre a Propto no celular. Depois siga os passos abaixo para instalar.</p></div></div>` : ""}
+    ${ehIOS() ? `<div class="card"><h2>iPhone e iPad</h2>${passosIOS}</div><div class="card"><h3>Android</h3>${passosAndroid}</div>` : `<div class="card"><h2>Android</h2>${passosAndroid}</div><div class="card"><h3>iPhone e iPad</h3>${passosIOS}</div>`}`;
+  $("main").insertAdjacentHTML("beforeend", `<div class="card"><h3>Por que não está na loja?</h3><p class="hint">A Propto é um aplicativo web instalável: funciona igual a um app, ocupa pouco espaço, não depende de aprovação de loja e cada melhoria chega na hora para todos. Câmera e microfone pedem a sua permissão no primeiro uso.</p><div class="row"><b class="grow">${esc(urlApp())}</b><button class="sm" id="cpl">Copiar link</button></div></div>`);
+  const b = $("inst"); if (b) b.onclick = async () => { try { PROMPT_INSTALAR.prompt(); const r = await PROMPT_INSTALAR.userChoice; PROMPT_INSTALAR = null; if (r.outcome === "accepted") toast("Instalando…"); render(); } catch { toast("Use o menu ⋮ → Instalar app."); } };
+  $("cpl").onclick = () => copiar(urlApp());
+};
+
+/* ---------- Alterar senha (a pessoa troca a própria senha; nunca passa pelo nosso servidor) ---------- */
+VIEWS.senha = () => {
+  header("Alterar senha");
+  $("main").innerHTML = `<div class="card"><h2>Nova senha</h2><p class="hint">Use 8 caracteres ou mais, com letras e números. A senha fica só com você: a Propto nunca a vê nem pede por mensagem.</p>
+  <label>Nova senha<input id="ns1" type="password" autocomplete="new-password"></label><label>Repita a nova senha<input id="ns2" type="password" autocomplete="new-password"></label>
+  <button class="p" id="nsok">Salvar nova senha</button><div class="status" id="nsst"></div></div>`;
+  editing = true;
+  $("nsok").onclick = async () => {
+    const a = $("ns1").value, b = $("ns2").value, st = $("nsst");
+    if (a.length < 8 || !/[A-Za-z]/.test(a) || !/\d/.test(a)) { st.className = "status err"; st.textContent = "Use 8 caracteres ou mais, com letras e números."; return; }
+    if (a !== b) { st.className = "status err"; st.textContent = "As senhas não conferem."; return; }
+    $("nsok").disabled = true; st.className = "status"; st.textContent = "Salvando…";
+    try { await updateUser({ password: a }); $("ns1").value = ""; $("ns2").value = ""; editing = false; st.textContent = "Senha alterada. Use a nova senha na próxima entrada."; toast("Senha alterada."); }
+    catch { st.className = "status err"; st.textContent = "Não foi possível alterar agora. Saia, entre de novo e tente outra vez."; }
+    finally { $("nsok").disabled = false; }
+  };
 };
 
 iniciar();

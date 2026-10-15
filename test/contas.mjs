@@ -168,5 +168,20 @@ await t("cancelamento pelo cliente", async () => {
   const s = await J(await api(R("GET", "/api/status"), ctx())); assert.equal(s.j.conta.situacao.codigo, "ativa"); // até o fim do período pago
   const ex = await api(R("GET", "/api/conta/exportar"), ctx()); assert.equal(ex.status, 200); const j = await ex.json(); assert.ok(j.registros.some((r) => r.id === "a1"));
 });
+await t("e-mail de boas-vindas e de novo membro: links, sem senha, falha não derruba o cadastro", async () => {
+  const enviados = []; globalThis.__fetchEmail = async (u, o) => { enviados.push({ u, b: JSON.parse(o.body), h: o.headers }); return new Response(JSON.stringify({ id: "em_" + enviados.length }), { status: 200 }); };
+  const sem = await J(await cad(R("POST", "/propto/cadastro", novoCad({ email: "semchave@x.com", nome: "Sem Chave" })), ctx("7.7.7.1"))); assert.equal(sem.s, 200); assert.equal(enviados.length, 0); // sem RESEND_API_KEY: não envia, cadastro ok
+  process.env.RESEND_API_KEY = "re_teste"; process.env.PROPTO_SITE = "https://propto.com.br";
+  const r = await J(await cad(R("POST", "/propto/cadastro", novoCad({ email: "lia@imobz.com", nome: "Lia Prado", senha: "Segredo2026x", empresa: "Imob Z" })), ctx("7.7.7.2"))); assert.equal(r.s, 200);
+  const e = enviados[0]; assert.equal(e.u, "https://api.resend.com/emails"); assert.deepEqual(e.b.to, ["lia@imobz.com"]); assert.equal(e.h.authorization, "Bearer re_teste");
+  assert.ok(e.b.html.includes("https://propto.com.br/app") && e.b.text.includes("https://propto.com.br/app")); assert.ok(/Adicionar à Tela de Início/.test(e.b.html));
+  assert.ok(!JSON.stringify(e.b).includes("Segredo2026x"), "nunca leva a senha");
+  const em = await sql(`SELECT 1 FROM emissoes WHERE tipo = 'email_boas_vindas' AND conta = '${r.j.conta}'`); assert.equal(em.length, 1);
+  como("lia@imobz.com"); assert.equal((await api(R("POST", "/api/conta/membros", { nome: "Rui Costa", email: "rui@imobz.com" }), ctx())).status, 200);
+  const m = enviados[1]; assert.deepEqual(m.b.to, ["rui@imobz.com"]); assert.match(m.b.subject, /Imob Z/); assert.ok(!JSON.stringify(m.b).includes(globalThis.__usuariosCriados["rui@imobz.com"]), "senha provisória nunca vai no e-mail");
+  globalThis.__fetchEmail = async () => new Response("{}", { status: 500 });
+  assert.equal((await J(await cad(R("POST", "/propto/cadastro", novoCad({ email: "falha@x.com", nome: "Fa Lha" })), ctx("7.7.7.3")))).s, 200); // Resend fora: cadastro segue
+  delete process.env.RESEND_API_KEY;
+});
 console.log(`\n${ok} testes de contas Propto OK`);
 await db.stop?.(); process.exit(0);

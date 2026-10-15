@@ -73,5 +73,13 @@ ok(await a.locator('text=Andrade Imóveis').count() > 0, 'PrimeCorp vê a conta 
 const pcOf = await a.evaluate(async () => (await (await fetch('/api/dados')).json()).ofertas.some((o) => String(o.id).startsWith('lim')));
 ok(!pcOf, 'imóveis do cliente não aparecem na base da PrimeCorp');
 
+// 7) Instalar no celular e alterar senha (cliente, celular)
+{ const { p: m } = await ctxCom(EM, { width: 390, height: 844 }); await m.goto(L + '/app'); await m.waitForSelector('#qcap');
+  ok(await m.locator('#ginst').count() === 1, 'painel mostra o cartão Instalar no celular'); await m.click('#ginst'); await m.waitForSelector('ol.passos');
+  ok(/Adicionar à tela inicial|Instalar app/.test(await m.locator('main').innerText()), 'passos de instalação Android e iPhone'); await foto(m, '11_instalar');
+  await m.click('#tabs [data-tab=mais]'); await m.click('#cm10'); await m.fill('#ns1', 'NovaSenha2026'); await m.fill('#ns2', 'Outra2026xx'); await m.click('#nsok');
+  ok(/não conferem/.test(await m.locator('#nsst').innerText()), 'alterar senha valida a confirmação');
+  await m.fill('#ns2', 'NovaSenha2026'); await m.click('#nsok'); await m.waitForTimeout(400); ok(/alterada/.test(await m.locator('#nsst').innerText()), 'senha alterada'); await foto(m, '12_senha'); }
+
 console.log(errs.length ? 'ERROS: ' + JSON.stringify(errs) : 'sem erros');
 await b.close(); process.exit(errs.length ? 1 : 0);

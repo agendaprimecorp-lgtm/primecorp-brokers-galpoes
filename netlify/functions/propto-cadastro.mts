@@ -4,6 +4,7 @@ import { db, env, registrarEmissao, ehEquipePrimeCorp } from "../../shared/servi
 import { TESTE, novoIdConta, gravarConta, emailEmUso } from "../../shared/contas.mjs";
 import { criarUsuarioIdentity } from "../../shared/identidade.mjs";
 import { avisarOuEnfileirar } from "../../shared/zoe-run.mjs";
+import { enviarEmail, emailBoasVindas } from "../../shared/email.mjs";
 
 // Público: cadastro do teste grátis de 30 dias na página propto.com.br.
 // Cria a conta (dados separados), o acesso no Identity com a senha escolhida pela pessoa e avisa a equipe.
@@ -61,6 +62,12 @@ export default async (req: Request, context: Context) => {
   await registrarEmissao({ tipo: "conta_criada", conta: id, conteudo: `Conta criada · teste de ${TESTE.dias} dias · ${d.tipo === "imobiliaria" ? "Imobiliária " + d.empresa : "Corretor(a) " + d.nome}`, meta: { usuario: d.email } }).catch(() => null);
   const det = [d.tipo === "imobiliaria" ? "Imobiliária " + d.empresa : "Corretor(a)", d.nome, "CRECI " + d.creci, d.municipio, d.sistema && "sistema: " + d.sistema, d.equipe && d.equipe + " corretores", "+" + (d.fone.length <= 11 ? "55" + d.fone : d.fone)].filter(Boolean).join(" · ");
   await avisarOuEnfileirar(`Nova conta Propto (teste ${TESTE.dias} dias) · ${det}. Chame para a implantação de 30 minutos.`).catch((e) => console.error("Aviso da conta:", e));
+  // Boas-vindas por e-mail (links do sistema, instalação no celular, suporte). Nunca leva senha; falha não impede o cadastro.
+  try {
+    const m = emailBoasVindas({ nome: d.nome, email: d.email, empresa: d.empresa, tipo: d.tipo, teste_fim: conta.teste_fim });
+    const r = await enviarEmail({ para: d.email, assunto: m.assunto, html: m.html, texto: m.texto, tags: [{ name: "tipo", value: "boas_vindas" }] });
+    if (r.enviado) await registrarEmissao({ tipo: "email_boas_vindas", conta: id, conteudo: `Boas-vindas enviado para ${d.email}`, meta: { id: r.id } }).catch(() => null);
+  } catch (e: any) { console.error("E-mail de boas-vindas:", e?.message || e); }
   return resp({ ok: true, conta: id, teste_fim: conta.teste_fim });
 };
 

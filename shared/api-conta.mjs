@@ -14,6 +14,7 @@ import {
 import { asaasConfigurado, asaasProducao, criarCliente, criarAssinatura, faturaAberta, cancelarAssinatura, documentoValido } from "./asaas.mjs";
 import { criarUsuarioIdentity } from "./identidade.mjs";
 import { avisarOuEnfileirar } from "./zoe-run.mjs";
+import { enviarEmail, emailNovoMembro } from "./email.mjs";
 
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_PDF = 4 * 1024 * 1024;
@@ -307,6 +308,7 @@ export async function apiConta({ req, url, partes, u, cx }) {
       }
       const membros = ja ? cx.membros.map((m) => (m.email === em ? { ...m, ...membro, desde: m.desde } : m)) : [...(cx.membros || []), membro];
       await gravarConta(C, { ...cx, membros });
+      if (!ja) { try { const m = emailNovoMembro({ nome, email: em, empresa: cx.empresa || cx.nome, quemIncluiu: cx.membro?.nome }); await enviarEmail({ para: em, assunto: m.assunto, html: m.html, texto: m.texto, tags: [{ name: "tipo", value: "novo_membro" }] }); } catch (e) { console.error("E-mail do novo membro:", e?.message || e); } }
       return json({ ok: true, novo: !ja });
     }
     if (a === "membros" && b && req.method === "PUT") {
