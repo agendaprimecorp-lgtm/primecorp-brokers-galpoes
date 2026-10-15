@@ -264,3 +264,8 @@ Clientes da Propto (corretores e imobiliárias) criam a conta sozinhos na págin
 Sem `ASAAS_API_KEY`, o botão de assinar mostra "fale com a equipe pelo WhatsApp" e o pagamento pode ser registrado à mão em Contas Propto.
 
 Testes: `node test/contas.mjs` (15 testes: cadastro, isolamento, limites, assinatura, webhook, situação, rotina) e `node test/e2e12.mjs` (cadastro → app do cliente → plano → equipe → limite → painel de contas).
+
+### Domínio propto.com.br (Registro.br → Netlify)
+- `propto.com.br` mostra a página comercial; o app fica em **propto.com.br/app** (também funciona em `.netlify.app/app`). O ícone instalado no celular abre `/app`.
+- Links de convite e de nova senha que caírem na página comercial são levados para `/app` sozinhos.
+- Depois de definir propto.com.br como domínio principal no Netlify, reconectar o WhatsApp (Mais → Zoe → Conectar) para o webhook passar ao endereço novo.

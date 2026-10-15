@@ -10,6 +10,17 @@
   node_bundler = "esbuild"
   external_node_modules = ["imapflow", "mailparser"]
 
+# App também em /app (no domínio propto.com.br a raiz é a página comercial).
+[[redirects]]
+  from = "/app"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/app/*"
+  to = "/index.html"
+  status = 200
+
 # Domínio da marca Propto (opcional): a raiz mostra a página da Propto; /i/<token> continua servindo os anúncios.
 [[redirects]]
   from = "https://propto.com.br/"

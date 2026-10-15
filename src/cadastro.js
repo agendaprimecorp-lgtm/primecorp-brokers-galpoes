@@ -2,5 +2,5 @@
 import { login } from "@netlify/identity";
 window.proptoEntrar = async (email, senha) => {
   await login(email, senha);
-  location.href = "/?bemvindo=1";
+  location.href = "/app?bemvindo=1";
 };

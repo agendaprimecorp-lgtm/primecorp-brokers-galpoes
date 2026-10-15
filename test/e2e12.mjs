@@ -28,7 +28,7 @@ ok(/8 caracteres/.test(await p.locator('#msg').innerText()), 'valida a senha');
 await p.fill('#senha', 'Andrade2026'); await p.fill('#senha2', 'Andrade2026'); await p.click('#enviar'); await p.waitForTimeout(300);
 ok(/termos/.test(await p.locator('#msg').innerText()), 'exige aceite dos termos');
 await p.check('#termos'); await p.locator('#teste').scrollIntoViewIfNeeded(); await foto(p, '01_cadastro_preenchido');
-await Promise.all([p.waitForURL(/\/\?bemvindo=1/, { timeout: 15000 }).catch(() => {}), p.click('#enviar')]);
+await Promise.all([p.waitForURL(/\/app\?bemvindo=1/, { timeout: 15000 }).catch(() => {}), p.click('#enviar')]);
 ok(/bemvindo=1/.test(p.url()), 'conta criada e entrada direta no app');
 await p.waitForSelector('#qcap', { timeout: 15000 }).catch(() => {});
 

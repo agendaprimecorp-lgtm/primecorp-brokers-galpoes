@@ -58,7 +58,7 @@ http.createServer(async (req, res) => {
     const r = await fn(new Request('https://pc.test' + url.pathname + url.search, { method: req.method, headers: h, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), { params, ip: '127.0.0.1', site: { url: 'http://localhost:8899' } });
     res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer())); return;
   }
-  let f = path.join('test/www', url.pathname === '/' ? 'index.html' : url.pathname);
+  let f = path.join('test/www', url.pathname === '/' || url.pathname === '/app' || url.pathname.startsWith('/app/') ? 'index.html' : url.pathname);
   if (!fs.existsSync(f)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' }); res.end(fs.readFileSync(f));
 }).listen(8899, () => console.log('pronto'));

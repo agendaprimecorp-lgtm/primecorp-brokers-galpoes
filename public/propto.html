@@ -175,7 +175,7 @@ footer img{height:24px}
 
 <header class="nav"><div class="in">
 <img src="/marca/propto-horizontal-negative.svg" alt="Propto"><span class="sub">IMÓVEIS</span>
-<nav><a href="#como">Como funciona</a><a href="#imobiliarias">Imobiliárias</a><a href="#corretores">Corretores</a><a href="#proprietarios">Proprietários</a><a href="/">Entrar</a><a class="btn p" href="#teste">Testar 30 dias grátis</a></nav>
+<nav><a href="#como">Como funciona</a><a href="#imobiliarias">Imobiliárias</a><a href="#corretores">Corretores</a><a href="#proprietarios">Proprietários</a><a href="/app">Entrar</a><a class="btn p" href="#teste">Testar 30 dias grátis</a></nav>
 </div></header>
 
 <section class="hero"><div class="in">
@@ -346,7 +346,7 @@ footer img{height:24px}
 <div class="feito" id="feitoConta" hidden>
 <h3>Conta criada.</h3>
 <p id="feitoTxt">Entrando no app…</p>
-<a class="btn p" id="entrar" href="/">Entrar no app</a>
+<a class="btn p" id="entrar" href="/app">Entrar no app</a>
 </div>
 <div class="feito" id="feito" hidden>
 <h3>Recebemos o seu imóvel.</h3>
@@ -376,6 +376,8 @@ footer img{height:24px}
 </div></footer>
 
 <script>
+// Links do Identity (convite, nova senha, confirmação) abrem o app, não a página comercial.
+if (/(invite|recovery|confirmation|email_change)_token=/.test(location.hash)) location.replace('/app' + location.hash);
 (() => {
   const f = document.getElementById('f'), msg = document.getElementById('msg');
   const tipo = () => (f.querySelector('input[name=tipo]:checked') || {}).value || 'imobiliaria';
@@ -419,9 +421,9 @@ footer img{height:24px}
       const utm = new URLSearchParams(location.search); const u = ['utm_source', 'utm_medium', 'utm_campaign'].map((k) => utm.get(k)).filter(Boolean).join('/');
       const r = await fetch('/propto/cadastro', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tipo: t, nome: v('nome'), email, fone, senha, creci: v('creci'), empresa: v('empresa'), municipio: v('cidade'), equipe: t === 'imobiliaria' ? v('equipe') : '', segmento: t === 'corretor' ? v('segmento') : '', sistema: t === 'imobiliaria' ? v('sistema') : '', site: t === 'imobiliaria' ? v('site') : '', consentimento: true, termos: true, hp: f.hp.value, pagina: location.pathname, utm: u }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { if (j.entrar) { erro(j.erro); const a = document.createElement('a'); a.href = '/'; a.textContent = ' Entrar no app'; msg.appendChild(a); } else erro(j.erro || 'Não foi possível criar a conta agora. Tente de novo em instantes.'); btn.disabled = false; btn.textContent = 'Criar minha conta grátis'; return; }
+      if (!r.ok) { if (j.entrar) { erro(j.erro); const a = document.createElement('a'); a.href = '/app'; a.textContent = ' Entrar no app'; msg.appendChild(a); } else erro(j.erro || 'Não foi possível criar a conta agora. Tente de novo em instantes.'); btn.disabled = false; btn.textContent = 'Criar minha conta grátis'; return; }
       f.hidden = true; document.getElementById('feitoConta').hidden = false;
-      try { if (window.proptoEntrar) await window.proptoEntrar(email, senha); else location.href = '/'; }
+      try { if (window.proptoEntrar) await window.proptoEntrar(email, senha); else location.href = '/app'; }
       catch { document.getElementById('feitoTxt').textContent = 'Entre com o seu e-mail e a senha que você criou.'; }
     } catch (err) { erro('Sem conexão. Tente de novo.'); btn.disabled = false; btn.textContent = 'Criar minha conta grátis'; }
   }
