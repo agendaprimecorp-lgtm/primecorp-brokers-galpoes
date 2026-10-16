@@ -283,3 +283,9 @@ Testes: `node test/contas.mjs` (15 testes: cadastro, isolamento, limites, assina
 
 - Verificar o domínio no Resend: criar a conta, adicionar `propto.com.br` em Domains e cadastrar no Registro.br (zona DNS) os registros TXT/MX que o Resend mostrar.
 - App: Mais → **Instalar no celular** (Android instala com um toque quando o Chrome permite; iPhone mostra o passo a passo; computador mostra QR). Mais → **Alterar senha** (a troca vai direto ao Identity; a senha não passa pelo nosso servidor).
+
+## Atualização: Zoe só de imóveis
+- A assistente do WhatsApp deixou de atender frente tributária: saíram as linhas E, H, I, J e K, as ferramentas de parceiros/reservas (painel_tributario, buscar_reserva, minhas_reservas, consultar_ente, solicitar_reserva) e os textos de tributário, empresas, filantropia e indicação do conhecimento padrão.
+- A aba "Tributário" da Assistente foi removida. Os dados antigos (carteiras, parceiros, reservas) continuam guardados e não são mais acessados pela Zoe.
+- As abas da Assistente rolam na horizontal no celular (sem o ícone/aba cortado na tela).
+- Pendente: cobrança mais ativa de locatários (cobrança de atrasados com insistência e envio automático de boleto). Antes de implementar, precisa de revisão jurídica (CDC, LGPD e política da Meta para mensagens comerciais), e começa só no sandbox do Asaas.

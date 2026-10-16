@@ -334,13 +334,12 @@ await t("modelo: padrão novo com reserva automática", async () => {
   assert.equal(r.texto, "ok"); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-5-5", "claude-sonnet-4-5"]); globalThis.__modelosFora = [];
 });
 
-await t("Zoe: frente tributária (prefeituras e parceiros) no conhecimento", async () => {
+await t("Zoe: conhecimento e atendimento só de imóveis (sem frente tributária)", async () => {
   const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date() });
-  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /por êxito/, /H\) PARCEIRO TRIBUTÁRIO/, /Imóveis \| Prefeituras \| Empresas/, /55\.745\.297/, /Tema 69/, /CEBAS/, /725 do Código Civil|art\. 725/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/]) assert.match(p, x);
-  const p2 = Z.promptSistema({ zoe: { servicos: "texto antigo salvo" }, geral: {}, agora: new Date() }); assert.match(p2, /tema 1130/, "vale mesmo com conhecimento antigo salvo");
-  const salvos = []; const ctxZ = { agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: () => [], salvar: (col, id, d) => salvos.push([col, d]), avisar: () => {} };
-  Z.executar(ctxZ, { id: "5511999990000" }, "salvar_contato", { nome: "Dra. Paula", cargo: "Advogada OAB/MG 123", perfil: "Parceiro tributário", cidade: "Sul de Minas", observacoes: "atua com 12 municípios" }, false);
-  const c = salvos.find((x) => x[0] === "contatos")[1]; assert.equal(c.tipo, "Parceiro tributário"); assert.equal(c.cargo, "Advogada OAB/MG 123"); assert.match(c.obs, /12 municípios/);
+  for (const x of [/IMÓVEIS/, /Imóveis \| Imobiliária \| Proprietário/, /55\.745\.297/, /CRECI-SP 297692/]) assert.match(p, x);
+  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /PARCEIRO TRIBUTÁRIO/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/, /PrimeCorp Consultoria|PRIMECORP CONSULTORIA/]) assert.doesNotMatch(p, x);
+  assert.ok(!Z.FERRAMENTAS_TRIBUTARIO, "ferramentas tributárias removidas");
+  const p2 = Z.promptSistema({ zoe: { servicos: "texto antigo salvo" }, geral: {}, agora: new Date() }); assert.match(p2, /texto antigo salvo/);
 });
 
 await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async () => {
@@ -364,37 +363,9 @@ await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebr
   globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR;
 });
 
-await t("frente tributária: importa PrimeGov, reconhece parceiro e protege a carteira", async () => {
-  const B = await import("../shared/b2g.mjs");
-  const backup = { _app: "PrimeGov", central: { parceiros: [
-    { id: "p1", nome: "JOÃO TESTE", tel: "(35) 9 9103-0705", empresa: "", doc: "111", comissao: 4, contrato: { nome: "c.pdf", dataURL: "data:application/pdf;base64,AAAA" }, municipios: [
-      { id: "m1", uf: "MG", nome: "Pouso Alegre", tipo: "municipio", ini: "2026-09-01", fim: "2026-11-30", status: "proposta", mov: [{ data: "30/09/2026 10:00", texto: "Proposta enviada ao procurador" }] },
-      { id: "m2", uf: "MG", nome: "Itajubá", tipo: "municipio", ini: "2026-01-01", fim: "2026-04-01", status: "prospec", mov: [] }] },
-    { id: "p2", nome: "MARIA OUTRA", tel: "11 9 4494-4084", municipios: [{ id: "m3", uf: "SP", nome: "Araraquara", tipo: "municipio", ini: "2026-09-01", fim: "2026-12-01", status: "contato", mov: [{ ts: "2026-09-20T10:00:00Z", txt: "Reunião com secretário" }] }] }] }, cfo: null };
-  const ps = B.importarPrimeGov(backup); assert.equal(ps.length, 2); assert.equal(ps[0].telefones[0], "5535991030705"); assert.ok(!JSON.stringify(ps).includes("base64") && !JSON.stringify(ps).includes('"111"'), "sem anexos nem documento");
-  const r = await J(await api(R("POST", "/api/b2g/importar", { parceiros: ps }), ctx())); assert.equal(r.s, 200); assert.equal(r.j.reservas, 3);
-  assert.equal((await api(R("PUT", "/api/dados/b2g/bp_p1", { nome: "x" }), ctx())).status, 403);
-  const agora = new Date("2026-10-04T12:00:00-03:00"); const lista = (await J(await api(R("GET", "/api/dados"), ctx()))).j.b2g;
-  assert.equal(B.parceirosDoNumero(lista, "553591030705").length, 1, "acha mesmo sem o 9");
-  const outro = B.disponibilidade(lista, "araraquara", "SP", agora, "5535991030705"); assert.equal(outro.situacao, "reservado"); assert.ok(!/MARIA|12\/2026/.test(JSON.stringify(outro)), "não revela parceiro nem prazo");
-  const venc = B.disponibilidade(lista, "Itajubá", "MG", agora, "5535991030705"); assert.equal(venc.situacao, "consultar_central", "fora da carteira ativa nunca é 'livre'"); assert.ok(!/"livre"/.test(JSON.stringify(venc)));
-  assert.equal(B.disponibilidade(lista, "Campinas", "SP", agora, "5535991030705").situacao, "consultar_central");
-  assert.equal(B.disponibilidade(lista, "Prefeitura de Pouso Alegre", "", agora, "5535991030705").situacao, "sua_reserva");
-  // pessoa com WhatsApp próprio vê as carteiras em que aparece no nome (ex.: co-parceiro)
-  const pes = B.lerPessoas("Maria Outra; (11) 91234-5678; maria outra"); assert.equal(B.parceirosDoNumero(lista, "5511912345678", pes)[0].nome, "MARIA OUTRA");
-  assert.equal(B.parceirosDoNumero(lista, "5511944944084").length, 1, "Kronenberg (padrão) acha a carteira com o telefone dele");
-  // conversa real do parceiro pelo WhatsApp
-  let sys, tools; globalThis.__zoe = (req) => { const last = req.messages.at(-1); if (typeof last.content === "string") { sys = req.system; tools = req.tools.map((x) => x.name); return passo("solicitar_reserva", { ente: "Varginha", uf: "MG", contato_no_ente: "Secretário de Finanças" }); } return fala("Pedido registrado. A equipe confirma a liberação por aqui."); };
-  const n0 = enviados.length; await W(payload("5535991030705", "Quero reservar Varginha", "wamid.T1"));
-  await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5535991030705", espera: 0 }) }));
-  assert.match(sys, /PARCEIRO TRIBUTÁRIO CADASTRADO falando agora: JOÃO TESTE/); assert.ok(tools.includes("minhas_reservas") && tools.includes("consultar_ente"));
-  const d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const sol = d.b2g.find((x) => x.id.startsWith("sol_"));
-  assert.equal(sol.ente, "Varginha/MG"); assert.equal(sol.cadastrado, true); assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /RESERVA \(consultar central\) · Varginha\/MG/.test(m.text?.body || "")), "equipe avisada");
-  assert.equal((await api(R("POST", "/api/b2g/solicitacao", { id: sol.id }), ctx())).status, 200);
-  const ctxE = { agora, cfg: { zoe: {}, geral: {} }, listar: (c) => (c === "b2g" ? lista : []), salvar: () => {}, avisar: () => {} };
-  const br = Z.executar(ctxE, { id: "5519998051985" }, "buscar_reserva", { termo: "araraquara" }, true); assert.equal(br.resultados[0].parceiro, "MARIA OUTRA", "equipe vê o parceiro");
-  const pn = Z.executar(ctxE, { id: "x" }, "painel_tributario", {}, true); assert.equal(pn.reservas_ativas, 2);
-  const nao = Z.executar(ctxE, { id: "5511900000000" }, "minhas_reservas", {}, false); assert.ok(nao.erro);
+await t("Zoe: ferramentas de atendimento não incluem frente tributária", async () => {
+  const tools = Z.FERRAMENTAS_CLIENTE.map((x) => x.name);
+  for (const n of ["minhas_reservas", "consultar_ente", "solicitar_reserva", "painel_tributario", "buscar_reserva"]) assert.ok(!tools.includes(n), n);
 });
 
 await t("assistente se chama PrimeCorp e ajusta o tratamento pelo nome", async () => {

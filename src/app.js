@@ -1796,17 +1796,17 @@ const convReais = () => (S.conversas || []).filter((c) => !c.simulacao).sort((a,
 const hojeAg = () => { const h = new Date().toDateString(); return (S.agenda || []).filter((a) => a.status !== "cancelado" && new Date(a.inicio).toDateString() === h).sort((a, b) => a.inicio.localeCompare(b.inicio)); };
 function cardZoePainel() {
   const pend = convReais().filter((c) => c.precisa_humano); const hj = hojeAg(); const novas = convReais().filter((c) => c.ultima_de === "cliente" && c.modo === "humano");
-  const sg = sugPend().length + solPend().length;
+  const sg = sugPend().length;
   if (!pend.length && !hj.length && !novas.length && !sg) return "";
   return `<div class="card zoe-p"><div class="row" style="justify-content:space-between"><h3>🤖 Assistente</h3><button class="sm" id="gozoe">Conversas</button></div>
   ${pend.length ? `<div class="list">${pend.slice(0, 5).map((c) => `<button class="item" data-zc="${c.id}"><span class="dot ${c.precisa_humano?.urgente ? "vermelho" : "amarelo"}"></span><span class="t"><b>${esc(c.nome || "+" + c.id)}</b><span>${esc(c.precisa_humano?.motivo || "")}</span></span><span>›</span></button>`).join("")}</div>` : ""}
   ${novas.filter((c) => !c.precisa_humano).length ? `<p class="hint">${novas.filter((c) => !c.precisa_humano).length} conversa(s) com você aguardando resposta.</p>` : ""}
-  ${sg ? `<p class="hint">${sg} pendência(s) da assistente: sugestões em Assistente → Revisão e pedidos de parceiros em Assistente → Tributário.</p>` : ""}
+  ${sg ? `<p class="hint">${sg} pendência(s) da assistente: sugestões em Assistente → Revisão.</p>` : ""}
   ${hj.length ? `<button class="item" id="goagenda" style="width:100%"><span class="t"><b>Hoje: ${hj.length} compromisso(s)</b><span>${esc(hj.map((a) => quandoAg(a.inicio).split(" ").pop() + " " + a.tipo + " · " + a.nome).join(" | "))}</span></span><span>›</span></button>` : ""}</div>`;
 }
 VIEWS.zoe = () => {
   header("Assistente · WhatsApp"); const aba = route.aba || "conversas"; const cfg = CFGZ();
-  $("main").innerHTML = `<div class="seg">${[["conversas", "Conversas"], ["testar", "Testar a assistente"], ["config", "Conhecimento"], ["trib", "Tributário" + (solPend().length ? " (" + solPend().length + ")" : "")], ["revisao", "Revisão" + (sugPend().length ? " (" + sugPend().length + ")" : "")]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
+  $("main").innerHTML = `<div class="seg zoe-tabs">${[["conversas", "Conversas"], ["testar", "Testar a assistente"], ["config", "Conhecimento"], ["revisao", "Revisão" + (sugPend().length ? " (" + sugPend().length + ")" : "")]].map(([k, l]) => `<button data-aba="${k}" class="${aba === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="zb"></div>`;
   document.querySelectorAll("[data-aba]").forEach((b) => (b.onclick = () => { route = { v: "zoe", aba: b.dataset.aba }; render(); }));
   const zb = $("zb");
   if (aba === "conversas") {
@@ -1835,21 +1835,7 @@ VIEWS.zoe = () => {
         ch.insertAdjacentHTML("beforeend", bolha({ de: "zoe", texto: r.resposta + (r.botoes?.length ? "\n[" + r.botoes.join(" | ") + "]" : ""), t: now(), acoes: r.acoes }) + ((r.simulado || []).length || (r.avisos || []).length ? `<p class="sim">Simulação: ${esc([...(r.simulado || []).map((x) => "gravaria " + x.split("/")[0]), ...(r.avisos || []).map((x) => "avisaria a equipe: " + x)].join(" · "))}</p>` : "")); ch.scrollTop = ch.scrollHeight; $("zst").textContent = "";
       } catch (e) { $("zst").className = "status err"; $("zst").textContent = e.message; } $("zgo").disabled = false; $("ztx").focus(); };
     $("zgo").onclick = () => env(false); $("ztx").onkeydown = (e) => { if (e.key === "Enter") env(false); }; $("zre").onclick = () => env(true);
-  } else if (aba === "trib") {
-    const ps = (S.b2g || []).filter((x) => String(x.id).startsWith("bp_")).sort((a, b) => a.nome.localeCompare(b.nome)); const pn = painelB2G(S.b2g || [], new Date()); const sols = solPend(); const adm = ehAdmin();
-    zb.innerHTML = `<div class="card"><h2>Frente tributária · parceiros e reservas</h2>
-    <p class="hint">A assistente reconhece o parceiro pelo WhatsApp cadastrado, informa as reservas dele, consulta se um ente está livre (sem revelar outros parceiros), registra pedidos de reserva e andamentos. A carteira vem do backup do PrimeGov.</p>
-    ${adm ? '<label class="btn sm">Importar backup do PrimeGov (.json)<input type="file" id="b2gf" accept=".json,application/json" hidden></label><div class="status" id="b2gs"></div>' : ""}
-    <div class="kpis"><div class="kpi"><b>${pn.parceiros}</b><span>parceiros</span></div><div class="kpi"><b>${pn.reservas_ativas}</b><span>reservas ativas</span></div>${Object.entries(pn.por_status).map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${esc(k)}</span></div>`).join("")}</div>
-    ${pn.vencendo.length ? `<p class="note">Vencendo em 15 dias: ${esc(pn.vencendo.join(" | "))}</p>` : ""}</div>
-    <div class="card"><h3>Pedidos dos parceiros pela assistente</h3>${sols.map((x) => `<div class="item"><span class="dot amarelo"></span><span class="t"><b>${esc((x.tipo === "reserva" ? "Reserva · " : "Andamento · ") + x.ente)}</b><span>${esc((x.nome || "+" + x.wa) + (x.cadastrado ? "" : " (não cadastrado)") + " · " + fdt(x.em) + (x.texto ? " · " + x.texto : "") + (x.contato_no_ente ? " · contato: " + x.contato_no_ente : ""))}</span></span><button class="sm" data-sol="${x.id}">Tratado</button></div>`).join("") || '<p class="empty">Nenhum pedido pendente.</p>'}
-    <p class="hint">Pedido de reserva = consultar a central antes de liberar. Libere ou atualize no PrimeGov e importe o backup de novo para a assistente ver a carteira atualizada.</p></div>
-    <div class="card"><h3>WhatsApp de quem atende cada carteira</h3><p class="hint">Uma pessoa por linha: <b>Nome; telefone; apelidos</b>. A assistente reconhece a pessoa pelo WhatsApp e mostra todas as carteiras cujo nome no PrimeGov contém o nome ou um apelido (ex.: "kronenberg" pega "ULISSES | RODRIGO KRONEMBERG").</p>
-    <textarea id="b2gp" rows="6" ${adm ? "" : "disabled"}>${esc(CFGZ().b2g_pessoas ?? PESSOAS_PADRAO)}</textarea>${adm ? '<button class="sm" id="b2gps">Salvar</button>' : ""}</div>
-    <div class="card"><h3>Parceiros (${ps.length})</h3><div class="list">${ps.map((p) => `<details><summary><b>${esc(p.nome)}</b> · ${(p.reservas || []).length} ente(s)${(p.telefones || []).length ? " · +" + esc(p.telefones[0]) : " · <span class='tag r'>sem WhatsApp</span>"}</summary>${resumoReservas(p, new Date()).map((r) => `<p class="hint"><b>${esc(r.ente)}</b> · ${esc(r.status)} · ${esc(r.reserva)}${r.ultimo_andamento ? "<br>" + esc(r.ultimo_andamento) : ""}</p>`).join("")}</details>`).join("") || '<p class="empty">Importe o backup do PrimeGov.</p>'}</div></div>`;
-    const f = $("b2gf"); if (f) f.onchange = async () => { const st = $("b2gs"); st.className = "status"; st.textContent = "Lendo…"; try { const j = JSON.parse(await f.files[0].text()); const parceiros = importarPrimeGov(j); const r = await api("b2g/importar", { method: "POST", body: JSON.stringify({ parceiros }) }); st.className = "status ok"; st.textContent = `Importado: ${r.parceiros} parceiros, ${r.reservas} entes.`; await store.carregar(); render(); } catch (e) { st.className = "status err"; st.textContent = e.message; } };
-    const bps = $("b2gps"); if (bps) bps.onclick = async () => { try { await store.save("config", { ...CFGZ(), id: "zoe", b2g_pessoas: $("b2gp").value.trim() }); toast("Salvo."); } catch (e) { toast(e.message); } };
-    zb.querySelectorAll("[data-sol]").forEach((b) => (b.onclick = async () => { b.disabled = true; try { await api("b2g/solicitacao", { method: "POST", body: JSON.stringify({ id: b.dataset.sol }) }); await store.carregar(); render(); } catch (e) { toast(e.message); b.disabled = false; } }));
+  } else if (aba === "revisao") {
   } else if (aba === "revisao") {
     const pend = sugPend(); const feitas = (S.zoe_sugestoes || []).filter((x) => x.status !== "pendente").sort((a, b) => (b.decidido_em || "").localeCompare(a.decidido_em || "")).slice(0, 10); const adm = ehAdmin();
     zb.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><h2>Revisão semanal</h2>${adm ? '<button class="sm" id="zrv">Revisar agora</button>' : ""}</div>
@@ -1864,7 +1850,6 @@ VIEWS.zoe = () => {
       const ap = el.querySelector("[data-ap]"); if (ap) ap.onclick = () => dec("aprovar"); const rc = el.querySelector("[data-rc]"); if (rc) rc.onclick = () => dec("recusar");
     });
     const rv = $("zrv"); if (rv) rv.onclick = async () => { rv.disabled = true; const st = $("zrs"); st.className = "status"; st.textContent = "Revisando as conversas da semana… (1 a 2 min)"; try { await api("zoe/revisar", { method: "POST" }); setTimeout(async () => { await store.carregar(); render(); }, 90000); } catch (e) { st.className = "status err"; st.textContent = e.message; rv.disabled = false; } };
-  } else {
     const z = { ...ZOE_BASE, ...cfg }; const H = { ...ZOE_BASE.horario, ...(cfg.horario || {}), fim_dia: { ...ZOE_BASE.horario.fim_dia, ...((cfg.horario || {}).fim_dia || {}) } }; const so = !ehAdmin();
     zb.innerHTML = `<div class="card" id="zc"><h2>Conhecimento e regras da assistente</h2><p class="hint">Tudo o que a assistente sabe sobre a PrimeCorp vem daqui. Escreva fatos objetivos; ela não inventa o que não estiver aqui ou no sistema. As regras de segurança (sem endereço, sem negociar, LGPD, transbordo) são fixas.</p>
     <label class="cert"><input type="checkbox" data-z="ativa" ${z.ativa !== false ? "checked" : ""}><span>Assistente responde automaticamente no WhatsApp</span></label>
@@ -1875,11 +1860,7 @@ VIEWS.zoe = () => {
     <label>Quem somos<textarea data-z="quem_somos" rows="5">${esc(z.quem_somos)}</textarea></label>
     <label>O que oferecemos (use {{COMISSAO_VENDA}} e {{COMISSAO_LOCACAO}} para puxar a comissão padrão)<textarea data-z="servicos" rows="9">${esc(z.servicos)}</textarea></label>
     <label>Perguntas frequentes<textarea data-z="faq" rows="7">${esc(z.faq)}</textarea></label>
-    <label>Frente tributária (prefeituras, estados e parceiros tributários)<textarea data-z="tributario" rows="10">${esc(z.tributario || "")}</textarea></label>
     <label>Institucional, grupo e credenciais<textarea data-z="institucional" rows="8">${esc(z.institucional || "")}</textarea></label>
-    <label>Empresas (créditos, teses e CNPJ inapto)<textarea data-z="empresas" rows="8">${esc(z.empresas || "")}</textarea></label>
-    <label>Ensino e filantropia<textarea data-z="filantropia" rows="8">${esc(z.filantropia || "")}</textarea></label>
-    <label>Programa de indicação de municípios<textarea data-z="indicacao" rows="6">${esc(z.indicacao || "")}</textarea></label>
     <label>Orientações extras da equipe (ex.: campanha do mês, imóvel em destaque, regiões que não atendemos)<textarea data-z="regras_extra" rows="3">${esc(z.regras_extra || "")}</textarea></label>
     <label>Local das reuniões<input data-z="local_reuniao" value="${esc(z.local_reuniao)}"></label>
     <label>Assistente retoma a conversa após (horas) sem nova resposta sua pelo celular · 0 = só quando você devolver<input data-z="retomar_h" inputmode="numeric" value="${esc(cfg.retomar_h ?? 12)}"></label>
