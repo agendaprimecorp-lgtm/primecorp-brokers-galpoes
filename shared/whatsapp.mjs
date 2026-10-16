@@ -90,7 +90,14 @@ export async function conectarWebhook360(urlWebhook) {
 /** 360dialog: modelos aprovados — aviso à equipe (fora das 24 h) e primeiro contato com quem se cadastrou no site. */
 export const MODELO_AVISO = "primecorp_aviso";
 export const MODELO_SITE = "primecorp_site";
+/** Novo modelo de primeiro contato, com a marca Propto Imóveis. Ative trocando ZOE_MODELO_SITE=propto_site depois da aprovação da Meta. */
+export const MODELO_SITE_PROPTO = "propto_site";
 const MODELOS = () => [
+  { name: MODELO_SITE_PROPTO, category: "UTILITY", language: "pt_BR", components: [
+    { type: "BODY", text: "Olá, {{1}}! Aqui é a Propto Imóveis, assistente virtual. Recebemos o seu cadastro no nosso site sobre {{2}} e podemos seguir o atendimento por aqui. Para continuar, é só responder esta mensagem.", example: { body_text: [["Carlos", "captação de imóveis"]] } },
+    { type: "FOOTER", text: "Para não receber mais mensagens, responda SAIR." },
+    { type: "BUTTONS", buttons: [{ type: "QUICK_REPLY", text: "Quero continuar" }, { type: "QUICK_REPLY", text: "Falar com a equipe" }] },
+  ] },
   { name: MODELO_AVISO, category: "UTILITY", language: "pt_BR", components: [{ type: "BODY", text: "Aviso da assistente virtual para a equipe PrimeCorp: {{1}}. Responda esta mensagem para abrir a conversa.", example: { body_text: [["cliente aguardando atendimento humano na conversa de Carlos"]] } }] },
   { name: MODELO_SITE, category: "UTILITY", language: "pt_BR", components: [
     { type: "BODY", text: "Olá, {{1}}! Aqui é a PrimeCorp, atendente virtual da PrimeCorp Consultoria. Recebemos o seu cadastro no nosso site sobre {{2}} e podemos seguir o atendimento por aqui. Para continuar, é só responder esta mensagem.", example: { body_text: [["Carlos", "setor público"]] } },
