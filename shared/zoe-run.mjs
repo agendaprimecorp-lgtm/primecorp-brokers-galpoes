@@ -37,7 +37,7 @@ export async function criarContexto({ base, sandbox = false } = {}) {
 /** Mensagem para Rodrigo/Joselia (texto livre na janela de 24 h; fora dela, modelo aprovado). */
 export async function avisarEquipe(texto) {
   for (const n of equipeWA()) {
-    try { await enviar(n, "🤖 Assistente PrimeCorp · " + texto); }
+    try { await enviar(n, "🤖 Assistente Propto Imóveis · " + texto); }
     catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [texto.slice(0, 900)]).catch(() => null); }
   }
 }
