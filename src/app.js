@@ -1856,7 +1856,7 @@ VIEWS.zoe = () => {
     <label class="cert"><input type="checkbox" data-z="boas_vindas_imagem" ${cfg.boas_vindas_imagem !== false ? "checked" : ""}><span>No primeiro contato, enviar o cartão de boas-vindas com a atendente virtual</span></label>
     <div class="row"><img src="/marca/primecorp-atendente-perfil.png" alt="" style="width:72px;height:72px;border-radius:50%"><span class="hint">Foto do WhatsApp: <a href="/marca/primecorp-atendente-perfil.png" download>baixar perfil</a> · <a href="/marca/primecorp-atendente-selo.png" download>selo</a> · <a href="/marca/primecorp-boas-vindas.jpg" download>cartão de boas-vindas</a></span></div>
     <label class="cert"><input type="checkbox" data-z="anuncios_pela_zoe" ${cfg.anuncios_pela_zoe !== false ? "checked" : ""}><span>Botão "Tenho interesse" das páginas de anúncio abre o WhatsApp da assistente${EU.whatsapp_numero ? " (" + esc(EU.whatsapp_numero) + ")" : ""}</span></label>
-    <label>Nome da assistente (como ela se apresenta)<input data-z="nome" value="${esc(z.nome || "PrimeCorp")}"></label>
+    <label>Nome da assistente (como ela se apresenta)<input data-z="nome" value="${esc(z.nome || "Propto Imóveis")}"></label>
     <label>Quem somos<textarea data-z="quem_somos" rows="5">${esc(z.quem_somos)}</textarea></label>
     <label>O que oferecemos (use {{COMISSAO_VENDA}} e {{COMISSAO_LOCACAO}} para puxar a comissão padrão)<textarea data-z="servicos" rows="9">${esc(z.servicos)}</textarea></label>
     <label>Perguntas frequentes<textarea data-z="faq" rows="7">${esc(z.faq)}</textarea></label>

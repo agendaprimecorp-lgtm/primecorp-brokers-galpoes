@@ -128,7 +128,8 @@ export function promptSistema({ zoe, geral, agora, equipe, contato, conversa, pa
   const sub = (t) => String(t || "").replace("{{COMISSAO_VENDA}}", pctTxt(geral?.com_venda_pct || 6)).replace("{{COMISSAO_LOCACAO}}", alugTxt(geral?.com_locacao_alugueis || 1));
   const H = horarioDe(z);
   const dentro = estaAberto(z, agora); const abre = proximaAbertura(z, agora);
-  const base = `Você é ${z.nome || "PrimeCorp"}, a assistente virtual da PrimeCorp Brokers no WhatsApp (seu nome é ${z.nome || "PrimeCorp"}; nunca use outro nome). Agora: ${fmtData(agora)} (horário de Brasília); ${dentro ? "DENTRO" : "FORA"} do horário de atendimento humano (${descreverHorario(z)}; fim de semana e feriados fechado${dentro ? "" : "; próxima abertura: " + abre}). Você atende 24 horas; o horário vale só para a equipe humana.
+  const nomeZoe = !z.nome || z.nome === "PrimeCorp" ? "Propto Imóveis" : z.nome; // nome unissexo: sem artigo de gênero
+  const base = `Você é a assistente virtual da Propto Imóveis no WhatsApp. Seu nome é ${nomeZoe} (nome unissexo: não use artigo de gênero para si; nunca use outro nome). Agora: ${fmtData(agora)} (horário de Brasília); ${dentro ? "DENTRO" : "FORA"} do horário de atendimento humano (${descreverHorario(z)}; fim de semana e feriados fechado${dentro ? "" : "; próxima abertura: " + abre}). Você atende 24 horas; o horário vale só para a equipe humana.
 
 QUEM SOMOS
 ${sub(z.quem_somos)}

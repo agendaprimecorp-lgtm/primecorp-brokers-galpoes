@@ -4,7 +4,7 @@ import PC from "./core.mjs";
 /* ---------------- Base de conhecimento padrão (editável em Mais → Zoe) ---------------- */
 export const ZOE_PADRAO = {
   ativa: true,
-  nome: "PrimeCorp",
+  nome: "Propto Imóveis",
   quem_somos: `PrimeCorp Brokers — intermediação imobiliária com tecnologia própria. Atendimento de Rodrigo França Viana (corretor de imóveis, CRECI-SP 297692) e equipe, sediados em Sumaré/SP, com foco na Região Metropolitana de Campinas e atendimento em todo o Brasil por parceria.
 Lema: unimos oferta e procura. Cada imóvel apresentado passa por checagem de dados e verificação documental (matrícula, cadastro, proprietário e ônus) antes de chegar ao cliente.`,
   servicos: `1) BUSCA SOB MEDIDA (empresas, investidores e famílias): locação e compra de galpões, áreas industriais e comerciais, terrenos, salas, lojas, casas, apartamentos, sítios e fazendas. O cliente informa a necessidade; em até 24 horas úteis recebe opções classificadas e verificadas numa Sala do Cliente (link privado, com termo de confidencialidade).

@@ -370,8 +370,8 @@ await t("Zoe: ferramentas de atendimento não incluem frente tributária", async
 
 await t("assistente se chama PrimeCorp e ajusta o tratamento pelo nome", async () => {
   const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), conversa: { nome: "Juliana" } });
-  assert.match(p, /Você é PrimeCorp, a assistente virtual/); assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
-  assert.match(Z.promptSistema({ zoe: { nome: "Clara" }, geral: {}, agora: new Date() }), /Você é Clara/);
+  assert.match(p, /Você é a assistente virtual da Propto Imóveis/); assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
+  assert.match(Z.promptSistema({ zoe: { nome: "Clara" }, geral: {}, agora: new Date() }), /Seu nome é Clara/);
 });
 
 await t("primeiro contato recebe o cartão de boas-vindas uma única vez", async () => {
