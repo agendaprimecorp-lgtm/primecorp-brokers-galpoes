@@ -355,7 +355,7 @@ await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async (
 await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebra de linha", async () => {
   Object.assign(process.env, { WHATSAPP_PROVEDOR: "360dialog" }); const ant = globalThis.__fetchWA; const reqs = [];
   globalThis.__fetchWA = async (url, op) => { reqs.push([String(url), JSON.parse(op.body)]); return new Response(JSON.stringify({ status: "PENDING" }), { status: 200 }); };
-  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "primecorp_aviso PENDING · primecorp_site PENDING");
+  const r = await J(await api(R("POST", "/api/zoe/modelo-aviso"), ctx())); assert.equal(r.s, 200); assert.equal(r.j.nome, "propto_site PENDING · primecorp_aviso PENDING · primecorp_site PENDING");
   const site = reqs.find((x) => x[1].name === "primecorp_site")?.[1]; assert.ok(site, "modelo do site criado"); assert.match(JSON.stringify(site), /Quero continuar/); assert.match(JSON.stringify(site), /responda SAIR/);
   assert.equal(reqs[0][0], "https://waba-v2.360dialog.io/v1/configs/templates"); assert.equal(reqs[0][1].category, "UTILITY"); assert.match(reqs[0][1].components[0].text, /\{\{1\}\}/);
   const { enviarModelo } = await import("../shared/whatsapp.mjs"); await enviarModelo("5519998051985", "zoe_aviso", ["linha 1\nlinha   2"]);
