@@ -35,7 +35,7 @@ export function linhaDoPerfil(l) {
 }
 
 export const textoWhatsApp = (codigo, linha) => linha.startsWith("Propto") ? `Olá! Me inscrevi no teste grátis da Propto Imóveis. Código ${codigo}.` : `Olá! Acabei de me cadastrar no site da PrimeCorp (${linha}). Código ${codigo}.`;
-export const NUMERO_PROPTO = () => (env("PROPTO_WHATSAPP") || "(19) 99805-1985").replace(/\D/g, "").replace(/^(\d{10,11})$/, "55$1");
+export const NUMERO_PROPTO = () => (env("PROPTO_WHATSAPP") || "(19) 98110-5192").replace(/\D/g, "").replace(/^(\d{10,11})$/, "55$1");
 
 /** Grava o lead (limite por IP), devolve código e link do WhatsApp da assistente. */
 export async function registrarLead(dados, ip = "") {

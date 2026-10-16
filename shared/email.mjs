@@ -20,7 +20,7 @@ export async function enviarEmail({ para, assunto, html, texto, tags = [] }) {
   return { enviado: true, id: j.id };
 }
 
-const suporteWA = () => { const d = String(env("PROPTO_WHATSAPP") || "(19) 99805-1985").replace(/\D/g, ""); return { link: "https://wa.me/" + (d.length <= 11 ? "55" + d : d), texto: env("PROPTO_WHATSAPP") || "(19) 99805-1985" }; };
+const suporteWA = () => { const d = String(env("PROPTO_WHATSAPP") || "(19) 98110-5192").replace(/\D/g, ""); return { link: "https://wa.me/" + (d.length <= 11 ? "55" + d : d), texto: env("PROPTO_WHATSAPP") || "(19) 98110-5192" }; };
 
 function moldura(titulo, corpoHTML) {
   const base = siteBase();

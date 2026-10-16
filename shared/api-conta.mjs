@@ -50,7 +50,7 @@ export async function apiConta({ req, url, partes, u, cx }) {
       perfil: { nome: m.nome || "", creci: m.creci || "", telefone: m.telefone || "", email },
       conta: resumoConta(cx, uso, agora), planos: planosPublicos(cx), teste: TESTE, fundador: FUNDADOR,
       cobranca: { configurada: asaasConfigurado(), producao: asaasProducao() },
-      suporte: (env("PROPTO_WHATSAPP") || "(19) 99805-1985"),
+      suporte: (env("PROPTO_WHATSAPP") || "(19) 98110-5192"),
     });
   }
 

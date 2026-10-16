@@ -1921,7 +1921,7 @@ const SO_PC_VIEWS = ["briefings", "briefing", "editb", "teaser", "novasala", "sa
 const OCULTAR_CLIENTE = ["verde", "solic", "paut", "qbrief", "csv"];
 const brlC = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(Number(v)) ? 0 : 2, maximumFractionDigits: 2 });
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "");
-const waSuporte = (txt) => waLink(EU.suporte || "(19) 99805-1985", txt || `Olá! Preciso de ajuda com a Propto. Conta: ${CT().nome || ""}.`);
+const waSuporte = (txt) => waLink(EU.suporte || "(19) 98110-5192", txt || `Olá! Preciso de ajuda com a Propto. Conta: ${CT().nome || ""}.`);
 async function recarregarConta() { try { EU = await api("status"); } catch {} }
 function usoLinha(rot, usado, lim) { const p = lim ? Math.min(100, Math.round((usado / lim) * 100)) : 0; return `<div class="uso"><div class="row" style="justify-content:space-between"><span>${esc(rot)}</span><b>${usado} de ${lim}</b></div><div class="meter"><i class="${p >= 100 ? "" : p >= 80 ? "mid" : "ok"}" style="width:${p}%"></i></div></div>`; }
 function faixaConta() {
