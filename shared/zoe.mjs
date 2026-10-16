@@ -209,7 +209,16 @@ export function executar(ctx, conv, nome, inp, equipe) {
   const agora = ctx.agora; const cfgZ = ctx.cfg.zoe || {};
   const agenda = () => ctx.listar("agenda");
   switch (nome) {
-    case "buscar_imoveis": return buscar(ctx, inp, equipe);
+    case "buscar_imoveis": {
+      const out = buscar(ctx, inp, equipe);
+      // Sem resultado e com pedido completo: o sistema registra a demanda, sem depender da assistente lembrar.
+      const pedidoCompleto = inp.tipo && (inp.cidades || inp.regiao) && (inp.area_min || inp.area_max || inp.ha_min || inp.ha_max || inp.valor_max || inp.aluguel_max);
+      if (!equipe && out.encontrados === 0 && pedidoCompleto && !(conv.briefings || []).length) {
+        const reg = executar(ctx, conv, "registrar_demanda", inp, equipe);
+        if (reg.ok) out.orientacao = "Demanda registrada para a equipe. Diga que a equipe busca no mercado e retorna em até 24 horas úteis.";
+      }
+      return out;
+    }
     case "registrar_demanda": {
       const c = garantirContato(ctx, conv, inp);
       const parc = /corretor|imobili/i.test(inp.perfil || "");
