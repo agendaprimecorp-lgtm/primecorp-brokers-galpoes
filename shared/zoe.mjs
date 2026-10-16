@@ -6,6 +6,7 @@ import V from "./verif.mjs";
 import { ZOE_PADRAO } from "./zoe-base.mjs";
 import { MODELO_PADRAO, MODELOS_RESERVA, modeloIndisponivel } from "./servidor.mjs";
 import { leadDaConversa, resumoLead } from "./site.mjs";
+import { conhecimentoPropto } from "./propto-site.mjs";
 import { parceirosDoNumero, resumoReservas, disponibilidade, painelB2G, semAcento, lerPessoas, PESSOAS_PADRAO } from "./b2g.mjs";
 const pessoasB2G = (ctx) => lerPessoas(ctx.cfg?.zoe?.b2g_pessoas ?? PESSOAS_PADRAO);
 
@@ -139,6 +140,8 @@ ${sub(z.servicos)}
 
 PERGUNTAS FREQUENTES
 ${sub(z.faq)}
+
+${conhecimentoPropto()}
 
 ${z.institucional || ZOE_PADRAO.institucional}
 
