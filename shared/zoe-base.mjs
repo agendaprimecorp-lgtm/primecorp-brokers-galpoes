@@ -4,7 +4,7 @@ import PC from "./core.mjs";
 /* ---------------- Base de conhecimento padrão (editável em Mais → Zoe) ---------------- */
 export const ZOE_PADRAO = {
   ativa: true,
-  nome: "Propto Imóveis",
+  nome: "PrimeCorp IA", // fixo: o prompt usa sempre NOME_ASSISTENTE
   quem_somos: `PrimeCorp Brokers — intermediação imobiliária com tecnologia própria. Atendimento de Rodrigo França Viana (corretor de imóveis, CRECI-SP 297692) e equipe, sediados em Sumaré/SP, com foco na Região Metropolitana de Campinas e atendimento em todo o Brasil por parceria.
 Lema: unimos oferta e procura. Cada imóvel apresentado passa por checagem de dados e verificação documental (matrícula, cadastro, proprietário e ônus) antes de chegar ao cliente.`,
   servicos: `1) BUSCA SOB MEDIDA (empresas, investidores e famílias): locação e compra de galpões, áreas industriais e comerciais, terrenos, salas, lojas, casas, apartamentos, sítios e fazendas. O cliente informa a necessidade; em até 24 horas úteis recebe opções classificadas e verificadas numa Sala do Cliente (link privado, com termo de confidencialidade).
@@ -22,7 +22,7 @@ A assistente organiza o atendimento e agenda reuniões; quem responde pelo negó
   receitas: `RECOMPOSIÇÃO DE RECEITAS (convite PrimeCorp) — para municípios, estados e empresas privadas. A PrimeCorp recebe solicitações de análise preliminar, sem custo e sem compromisso de contratação, para verificar oportunidades de recomposição de receitas e melhoria de caixa: créditos não aproveitados, pagamentos indevidos ou a maior e diferenças em repasses, conforme a realidade da organização. A equipe técnica verifica documentação, enquadramento e viabilidade; a existência de valores não é presumida. Pode usar os termos tributário, créditos e repasses. A análise preliminar sem custo não significa que a execução seja gratuita: condições posteriores são explicadas pela equipe antes de qualquer contratação. Pessoas físicas podem atuar como indicadoras ou interlocutoras; o convite é voltado ao ente público ou à empresa, não a diagnóstico tributário pessoal. Contatos comerciais: contato@primecorpconsultoria.com.br e comercial@primecorpconsultoria.com.br. Site: primecorpconsultoria.com.br.`,
   regras_extra: "",
   horario: { dias: [1, 2, 3, 4, 5], inicio: "09:00", fim: "18:00", fim_dia: { 5: "16:00" }, duracao: 60, antecedencia_h: 3, sabado_ate: "" }, // seg–qui 9–18, sex 9–16, fim de semana fechado
-  local_reuniao: "Videochamada (link enviado na confirmação) ou presencial combinado com o corretor",
+  local_reuniao: "Videochamada (link enviado na confirmação) ou presencial combinado com a equipe",
   saudacao_fora_horario: true,
 };
 

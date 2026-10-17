@@ -162,23 +162,34 @@ await t("webhook: verificação GET e assinatura obrigatória", async () => {
 /* ---------- Zoe (cérebro com ferramentas) ---------- */
 const passo = (tool, input) => ({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu" + Math.random(), name: tool, input }] });
 const fala = (txt) => ({ stop_reason: "end_turn", content: [{ type: "text", text: txt }] });
-await t("Zoe: busca de galpão registra demanda, encontra opção sem endereço e responde com botões", async () => {
-  const visto = [];
+// O canal do cliente atende só a recomposição de receitas (o antigo teste de busca de galpão saiu com o fluxo imobiliário do cliente).
+await t("PrimeCorp IA: receitas qualificada registra contato, agenda reunião, chama a equipe e responde com botões", async () => {
+  const visto = []; let tools;
   globalThis.__zoe = (req) => { const last = req.messages[req.messages.length - 1];
-    if (typeof last.content === "string") { visto.push(req.system); return passo("registrar_demanda", { nome: "Carlos", empresa: "Log Z", tipo: "Galpão", operacao: "Locação", cidades: "Sumaré, Hortolândia", area_min: 5000, area_max: 7000 }); }
-    const res = JSON.parse(last.content[0].content);
-    if (res.briefing) return passo("buscar_imoveis", { tipo: "Galpão", operacao: "Locação", cidades: "Sumaré", area_min: 5000, area_max: 7000 });
-    visto.push(res); return fala("Achei 1 opção (PC-0001) com área entre 6 e 7 mil m². Quer agendar uma conversa?\n[[botoes: Agendar | Ver mais | Falar com corretor]]"); };
-  const r = await zbg(new Request("https://pc.test/.netlify/functions/zoe-background", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519911112222", espera: 0 }) }));
-  assert.match(visto[0], /assistente virtual/); assert.match(visto[0], /LGPD/);
-  assert.equal(visto[1].encontrados, 1); assert.equal(visto[1].imoveis[0].codigo, "PC-0001"); assert.ok(!JSON.stringify(visto[1]).includes("Dom Barreto")); assert.ok(!JSON.stringify(visto[1]).includes("45678"));
+    if (typeof last.content === "string") { visto.push(req.system); tools = req.tools.map((x) => x.name); return passo("salvar_contato", { nome: "Carlos", empresa: "Prefeitura de Sumaré", cargo: "Secretário de Finanças", cidade: "Sumaré/SP", perfil: "Órgão público", observacoes: "Receitas · origem: convite · análise preliminar" }); }
+    const res = JSON.parse(last.content[0].content); visto.push(res);
+    if (res.contato) return passo("horarios_livres", { dias_a_frente: 7 });
+    if (res.horarios) return passo("agendar", { inicio: res.horarios[0].inicio, tipo: "Reunião (vídeo)", assunto: "Receitas – Prefeitura de Sumaré/SP", nome: "Carlos" });
+    if (res.confirmado) return passo("chamar_equipe", { motivo: "Receitas: Prefeitura de Sumaré/SP – Órgão público – Carlos/Secretário de Finanças", urgente: false });
+    return fala("Agendado! A equipe técnica dá sequência por aqui.\n[[botoes: Análise de receitas | Indicação | Agendar reunião]]"); };
+  await zbg(new Request("https://pc.test/.netlify/functions/zoe-background", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519911112222", espera: 0 }) }));
+  assert.match(visto[0], /PrimeCorp IA/); assert.match(visto[0], /LGPD/);
+  for (const n of ["buscar_imoveis", "registrar_demanda", "registrar_imovel_proprietario"]) assert.ok(!tools.includes(n), n);
+  assert.ok(visto.some((x) => x.horarios?.length >= 2)); assert.ok(visto.some((x) => x.confirmado));
   const ult = enviados.filter((m) => m.to === "5519911112222").pop(); assert.ok(ult); assert.equal(ult.type, "interactive"); assert.equal(ult.interactive.action.buttons.length, 3);
   const d = await J(await api(R("GET", "/api/dados"), ctx()));
-  const b = d.j.briefings.find((x) => x.origem === "WhatsApp · Assistente"); assert.ok(b); assert.equal(b.areaMin, "5000"); assert.equal(b.operacao, "Locação");
-  const c = d.j.contatos.find((x) => x.telefone === "+5519911112222"); assert.equal(c.empresa, "Log Z"); assert.equal(b.cliente, c.id);
-  const cv = d.j.conversas.find((x) => x.id === "5519911112222"); assert.equal(cv.ultima_de, "zoe"); assert.equal(cv.contato, c.id); assert.ok(!cv.processando);
-  const e = await J(await api(R("GET", "/api/emissoes"), ctx())); assert.ok(e.j.emissoes.some((x) => x.tipo === "zoe_aviso" && /Nova demanda/.test(x.conteudo)));
-  assert.ok(enviados.some((m) => m.to === "5519998051985" && /Nova demanda/.test(m.text?.body || "")), "equipe avisada no WhatsApp");
+  const c = d.j.contatos.find((x) => x.telefone === "+5519911112222"); assert.equal(c.empresa, "Prefeitura de Sumaré"); assert.equal(c.tipo, "Órgão público"); assert.match(c.obs, /^Receitas/);
+  const ag = d.j.agenda.find((x) => x.wa === "5519911112222"); assert.equal(ag.tipo, "Reunião (vídeo)"); assert.match(ag.assunto, /^Receitas – Prefeitura de Sumaré\/SP/); assert.equal(ag.contato, c.id);
+  const cv = d.j.conversas.find((x) => x.id === "5519911112222"); assert.equal(cv.ultima_de, "zoe"); assert.equal(cv.contato, c.id); assert.ok(!cv.processando); assert.match(cv.precisa_humano.motivo, /^Receitas: /);
+  assert.ok(!d.j.briefings.some((x) => x.origem === "WhatsApp · Assistente"), "sem briefing de imóvel");
+  const e = await J(await api(R("GET", "/api/emissoes"), ctx())); assert.ok(e.j.emissoes.some((x) => x.tipo === "zoe_aviso" && /Agendado pela PrimeCorp IA/.test(x.conteudo)));
+  assert.ok(enviados.some((m) => m.to === "5519998051985" && /^🤖 PrimeCorp IA · .*Agendado pela PrimeCorp IA/s.test(m.text?.body || "")), "equipe avisada no WhatsApp");
+});
+await t("PrimeCorp IA: ferramentas imobiliárias recusadas no modo cliente (e liberadas para a equipe)", async () => {
+  const mem = { ofertas: [], anuncios: [], briefings: [], contatos: [] }; const ctxZ = { agora: new Date(), base: "https://pc.test", cfg: { zoe: {}, geral: {} }, listar: (k) => mem[k] || [], salvar: (k, id, d) => { mem[k] = (mem[k] || []).concat({ ...d, id }); }, avisar: () => {} };
+  for (const n of ["buscar_imoveis", "registrar_demanda", "registrar_imovel_proprietario"]) { const r = Z.executar(ctxZ, { id: "5519900008888" }, n, { nome: "X", tipo: "Galpão", operacao: "Locação", cidade: "Sumaré" }, false); assert.match(r.erro || "", /99805-1985/, n); }
+  assert.equal(mem.briefings.length + mem.ofertas.length + mem.contatos.length, 0, "nada gravado");
+  assert.equal(Z.executar(ctxZ, { id: "1" }, "buscar_imoveis", { tipo: "Galpão", operacao: "Locação" }, true).encontrados, 0, "equipe continua buscando");
 });
 await t("Zoe: agenda só em horário livre e avisa a equipe", async () => {
   const conv = { id: "5519900000001", msgs: [{ de: "cliente", t: new Date().toISOString(), texto: "quero marcar" }] };
@@ -186,11 +197,11 @@ await t("Zoe: agenda só em horário livre e avisa a equipe", async () => {
   const c = { agora: new Date("2026-10-05T12:00:00Z"), base: "https://pc.test", cfg: { zoe: {}, geral: {} }, listar: (k) => mem[k] || [], salvar: (k, id, d) => { const l = mem[k]; const i = l.findIndex((x) => x.id === id); if (i >= 0) l[i] = { ...d, id }; else l.push({ ...d, id }); }, avisar: (x) => av.push(x) };
   const hs = Z.executar(c, conv, "horarios_livres", { dias_a_frente: 2 }); assert.ok(hs.horarios.length >= 3);
   assert.ok(Z.executar(c, conv, "agendar", { inicio: "2026-10-05T03:00", tipo: "Ligação", assunto: "x", nome: "Ana" }).erro);
-  const ok1 = Z.executar(c, conv, "agendar", { inicio: hs.horarios[0].inicio, tipo: "Reunião (vídeo)", assunto: "Galpão 6 mil m²", nome: "Ana" }); assert.ok(ok1.ok); assert.match(ok1.confirmado, /segunda/);
+  const ok1 = Z.executar(c, conv, "agendar", { inicio: hs.horarios[0].inicio, tipo: "Reunião (vídeo)", assunto: "Receitas – Prefeitura de Sumaré/SP", nome: "Ana" }); assert.ok(ok1.ok); assert.match(ok1.confirmado, /segunda/);
   assert.ok(Z.executar(c, conv, "agendar", { inicio: hs.horarios[0].inicio, tipo: "Ligação", assunto: "y", nome: "Ana" }).erro, "não marca duas vezes");
   assert.equal(Z.executar(c, conv, "meus_agendamentos", {}).agendamentos.length, 1);
   assert.ok(Z.executar(c, conv, "cancelar_agendamento", { id: ok1.id }).ok); assert.equal(mem.agenda[0].status, "cancelado");
-  assert.ok(av.some((x) => /Agendado pela assistente/.test(x)));
+  assert.ok(av.some((x) => /Agendado pela PrimeCorp IA/.test(x)));
 });
 await t("Zoe: HUMANO transfere sem IA e silencia a Zoe; humano responde pelo app", async () => {
   globalThis.__zoe = () => { throw new Error("não devia chamar a IA"); };
@@ -215,16 +226,16 @@ await t("Zoe: número da equipe entra no modo equipe (resumo da operação)", as
   let sys = ""; globalThis.__zoe = (req) => { const last = req.messages[req.messages.length - 1]; if (typeof last.content === "string") { sys = req.system; assert.ok(req.tools.some((x) => x.name === "resumo_operacao")); return passo("resumo_operacao", {}); } const res = JSON.parse(last.content[0].content); return fala(`Briefings ativos: ${res.briefings_ativos}.`); };
   await W(payload("19998051985", "resumo do dia", "wamid.C1"));
   await zbg(new Request("https://pc.test/x", { method: "POST", headers: SEG, body: JSON.stringify({ wa: "5519998051985", espera: 0 }) }));
-  assert.match(sys, /MODO EQUIPE/); assert.ok(enviados.some((m) => m.to === "5519998051985" && /Briefings ativos: 1/.test(m.text?.body || "")));
+  assert.match(sys, /MODO EQUIPE/); assert.ok(enviados.some((m) => m.to === "5519998051985" && /Briefings ativos: \d+\./.test(m.text?.body || "")));
 });
-await t("Zoe: simulador não grava briefing de verdade", async () => {
-  globalThis.__zoe = (req) => { const last = req.messages[req.messages.length - 1]; if (typeof last.content === "string") return passo("registrar_demanda", { nome: "Teste", tipo: "Casa", operacao: "Venda" }); return fala("Registrado."); };
-  const antes = (await J(await api(R("GET", "/api/dados"), ctx()))).j.briefings.length;
-  const r = await J(await api(R("POST", "/api/zoe/simular", { texto: "quero comprar uma casa" }), ctx())); assert.equal(r.s, 200); assert.equal(r.j.resposta, "Registrado."); assert.ok(r.j.simulado.some((x) => x.startsWith("briefings/")));
-  assert.equal((await J(await api(R("GET", "/api/dados"), ctx()))).j.briefings.length, antes);
+await t("Zoe: simulador não grava contato de verdade", async () => {
+  globalThis.__zoe = (req) => { const last = req.messages[req.messages.length - 1]; if (typeof last.content === "string") return passo("salvar_contato", { nome: "Teste", empresa: "Prefeitura Teste", perfil: "Órgão público" }); return fala("Registrado."); };
+  const antes = (await J(await api(R("GET", "/api/dados"), ctx()))).j.contatos.length;
+  const r = await J(await api(R("POST", "/api/zoe/simular", { texto: "sou da prefeitura e recebi o convite" }), ctx())); assert.equal(r.s, 200); assert.equal(r.j.resposta, "Registrado."); assert.ok(r.j.simulado.some((x) => x.startsWith("contatos/")));
+  assert.equal((await J(await api(R("GET", "/api/dados"), ctx()))).j.contatos.length, antes);
 });
 await t("Zoe: botões e limpeza da resposta", async () => {
-  const f = Z.finalizar("Olá!\n[[botoes: Busco imóvel | Tenho um imóvel | Sou corretor(a) parceiro]]"); assert.equal(f.texto, "Olá!"); assert.equal(f.botoes.length, 3); assert.ok(f.botoes.every((b) => b.length <= 20));
+  const f = Z.finalizar("Olá!\n[[botoes: Análise de receitas | Indicação | Agendar reunião]]"); assert.equal(f.texto, "Olá!"); assert.equal(f.botoes.length, 3); assert.ok(f.botoes.every((b) => b.length <= 20));
   assert.equal(Z.waNum("(19) 99805-1985"), "5519998051985");
 });
 await t("coexistência: resposta pelo celular pausa a Zoe e ela retoma depois do prazo", async () => {
@@ -315,15 +326,16 @@ await t("revisão semanal: sugere, só aprende com aprovação", async () => {
   assert.match(prompt, /CONVERSAS DA SEMANA/); assert.ok(!/99805-1985|5519998051985/.test(prompt.split("CONVERSAS DA SEMANA")[1]), "sem equipe nem telefones");
   let d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const pend = d.zoe_sugestoes.filter((x) => x.status === "pendente"); assert.equal(pend.length, 2);
   assert.ok(enviados.slice(n0).some((m) => m.to === "5519998051985" && /Revisão semanal/.test(m.text?.body || "")), "equipe avisada no WhatsApp");
-  const faq0 = d.config.find((c) => c.id === "zoe")?.faq;
+  const rx0 = d.config.find((c) => c.id === "zoe")?.regras_extra;
   assert.equal((await api(R("PUT", "/api/dados/zoe_sugestoes/" + pend[0].id, { status: "aprovada" }), ctx())).status, 403, "não aprova por fora");
   const fq = pend.find((x) => x.tipo === "faq"), or = pend.find((x) => x.tipo === "orientacao");
   assert.equal((await api(R("POST", "/api/zoe/sugestao", { id: fq.id, acao: "aprovar", texto: "- Fazem visita no sábado? Sim, das 9h às 12h, com agendamento." }), ctx())).status, 200);
   assert.equal((await api(R("POST", "/api/zoe/sugestao", { id: or.id, acao: "recusar" }), ctx())).status, 200);
   assert.equal((await api(R("POST", "/api/zoe/sugestao", { id: or.id, acao: "aprovar" }), ctx())).status, 409, "já decidida");
   d = (await J(await api(R("GET", "/api/dados"), ctx()))).j; const z = d.config.find((c) => c.id === "zoe");
-  assert.match(z.faq, /das 9h às 12h/); assert.ok(z.faq.length > (faq0 || "").length); assert.ok(!/20 mil/.test(z.regras_extra || ""), "recusada não entra");
-  assert.match(Z.promptSistema({ zoe: z, geral: {}, agora: new Date() }), /das 9h às 12h/, "a Zoe já usa");
+  assert.match(z.regras_extra, /das 9h às 12h/, "FAQ aprovada entra nas orientações"); assert.ok(z.regras_extra.length > (rx0 || "").length); assert.ok(!/20 mil/.test(z.regras_extra || ""), "recusada não entra");
+  assert.match(Z.promptSistema({ zoe: z, geral: {}, agora: new Date() }), /das 9h às 12h/, "a PrimeCorp IA já usa no atendimento ao cliente");
+  assert.match(prompt, /PrimeCorp IA/); assert.match(prompt, /recomposição de receitas/); assert.doesNotMatch(prompt.split("CONVERSAS DA SEMANA")[0], /QUEM SOMOS|PERGUNTAS FREQUENTES/, "conhecimento = receitas + orientações");
   globalThis.__user = { email: "outra@x.com" };
   globalThis.__user = { email: "contato@primecorpconsultoria.com.br" }; delete globalThis.__revisao;
 });
@@ -334,13 +346,15 @@ await t("modelo: padrão novo com reserva automática", async () => {
   assert.equal(r.texto, "ok"); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-5-5", "claude-sonnet-4-5"]); globalThis.__modelosFora = [];
 });
 
-await t("Zoe: conhecimento de receitas e imóveis (sem frente tributária antiga)", async () => {
-  const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date() });
-  for (const x of [/RECOMPOSIÇÃO DE RECEITAS/, /IMÓVEIS/, /Análise de receitas \| Indicação \| Imóveis/, /55\.745\.297/, /CRECI-SP 297692/, /R2\) INDICAÇÃO/]) assert.match(p, x);
-  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /PARCEIRO TRIBUTÁRIO CADASTRADO/, /consultar reservas/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/, /PrimeCorp Consultoria|PRIMECORP CONSULTORIA/]) assert.doesNotMatch(p, x);
+await t("PrimeCorp IA: atendimento ao cliente só tributário (sem imóveis/Propto)", async () => {
+  const p = Z.promptSistema({ zoe: { nome: "Zoe", servicos: "texto antigo salvo" }, geral: {}, agora: new Date() });
+  for (const x of [/PrimeCorp IA/, /RECOMPOSIÇÃO DE RECEITAS/, /Análise de receitas \| Indicação \| Agendar reunião/, /F\) AGENDA/, /R2\) INDICAÇÃO/, /99805-1985/, /contato@primecorpconsultoria\.com\.br/, /Reunião \(vídeo\)/, /Receitas – <organização>\/<UF>/, /Não dê parecer jurídico, tributário ou contábil; não garanta resultado/]) assert.match(p, x);
+  for (const x of [/Propto/, /Zoe/, /BUSCA DE IMÓVEL/, /Imóveis \| Imobiliária/, /\| Imóveis\]\]/, /QUEM SOMOS/, /O QUE OFERECEMOS/, /PERGUNTAS FREQUENTES/, /CRECI/, /texto antigo salvo/, /Sala do Cliente/, /buscar_imoveis|registrar_demanda|registrar_imovel_proprietario/, /^[ABCD]\) /m]) assert.doesNotMatch(p, x);
+  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /PARCEIRO TRIBUTÁRIO CADASTRADO/, /consultar reservas/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/]) assert.doesNotMatch(p, x);
   assert.ok(!Z.FERRAMENTAS_TRIBUTARIO, "ferramentas tributárias removidas");
-  assert.match(Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), equipe: true, contato: { nome: "Rodrigo" } }), /RECOMPOSIÇÃO DE RECEITAS/, "modo equipe também conhece receitas");
-  const p2 = Z.promptSistema({ zoe: { servicos: "texto antigo salvo" }, geral: {}, agora: new Date() }); assert.match(p2, /texto antigo salvo/);
+  const eq = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), equipe: true, contato: { nome: "Rodrigo" } });
+  for (const x of [/MODO EQUIPE/, /equipe PrimeCorp/, /RECOMPOSIÇÃO DE RECEITAS/, /CRECI-SP 297692/, /QUEM SOMOS/]) assert.match(eq, x, "modo equipe mantém o conhecimento");
+  assert.doesNotMatch(eq, /Zoe|equipe Propto Imóveis/);
 });
 
 await t("Zoe: conhecimento salvo antigo sem receitas usa o padrão; perfil Indicador", async () => {
@@ -375,17 +389,21 @@ await t("modelo de aviso: criação na 360dialog e envio fora das 24 h sem quebr
   globalThis.__fetchWA = ant; delete process.env.WHATSAPP_PROVEDOR;
 });
 
-await t("Zoe: ferramentas de atendimento não incluem frente tributária", async () => {
+await t("Zoe: ferramentas de atendimento: só agenda, contato e equipe (sem imóveis nem frente tributária antiga)", async () => {
   const tools = Z.FERRAMENTAS_CLIENTE.map((x) => x.name);
+  assert.deepEqual(tools, ["horarios_livres", "agendar", "meus_agendamentos", "cancelar_agendamento", "salvar_contato", "chamar_equipe"]);
+  const ag = Z.FERRAMENTAS_CLIENTE.find((x) => x.name === "agendar"); assert.ok(!("codigo_imovel" in ag.input_schema.properties)); assert.equal(ag.input_schema.properties.tipo.description, "Reunião (vídeo) | Reunião presencial | Ligação");
+  const eq = Z.FERRAMENTAS_EQUIPE.map((x) => x.name); for (const n of ["resumo_operacao", "agenda_periodo", "conversas_pendentes", "buscar_imoveis", "verificacao_imovel", "registrar_imovel_proprietario", "horarios_livres", "ajustar_horario"]) assert.ok(eq.includes(n), "equipe: " + n);
   for (const n of ["minhas_reservas", "consultar_ente", "solicitar_reserva", "painel_tributario", "buscar_reserva"]) assert.ok(!tools.includes(n), n);
 });
 
-await t("assistente se chama PrimeCorp e ajusta o tratamento pelo nome", async () => {
+await t("assistente se chama PrimeCorp IA (nome salvo antigo ignorado) e ajusta o tratamento pelo nome", async () => {
   const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), conversa: { nome: "Juliana" } });
-  assert.match(p, /Você é a assistente virtual da PrimeCorp/); assert.match(p, /Seu nome é Propto Imóveis/); assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
-  assert.match(Z.promptSistema({ zoe: { nome: "Clara" }, geral: {}, agora: new Date() }), /Seu nome é Clara/);
+  assert.match(p, /Você é a PrimeCorp IA, assistente virtual da PrimeCorp no WhatsApp/); assert.match(p, /"Sou a PrimeCorp IA, assistente virtual da PrimeCorp"/); assert.match(p, /Para falar com uma pessoa, digite HUMANO/);
+  assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
+  for (const nome of ["PrimeCorp", "Propto Imóveis", "Zoe", "Clara"]) { const q = Z.promptSistema({ zoe: { nome }, geral: {}, agora: new Date() }); assert.match(q, /Você é a PrimeCorp IA/, nome); assert.ok(!q.includes("Seu nome é"), nome); }
+  assert.equal(Z.NOME_ASSISTENTE, "PrimeCorp IA");
 });
-
 await t("primeiro contato recebe o cartão de boas-vindas uma única vez", async () => {
   globalThis.__zoe = () => fala("Olá! Sou a PrimeCorp, sua atendente virtual.");
   const n0 = enviados.length; await W(payload("5519900001111", "Oi", "wamid.BV1"));
