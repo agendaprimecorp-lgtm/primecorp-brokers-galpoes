@@ -334,12 +334,24 @@ await t("modelo: padrão novo com reserva automática", async () => {
   assert.equal(r.texto, "ok"); assert.deepEqual(globalThis.__modelos.slice(0, 2), ["claude-sonnet-5-5", "claude-sonnet-4-5"]); globalThis.__modelosFora = [];
 });
 
-await t("Zoe: conhecimento e atendimento só de imóveis (sem frente tributária)", async () => {
+await t("Zoe: conhecimento de receitas e imóveis (sem frente tributária antiga)", async () => {
   const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date() });
-  for (const x of [/IMÓVEIS/, /Imóveis \| Imobiliária \| Proprietário/, /55\.745\.297/, /CRECI-SP 297692/]) assert.match(p, x);
-  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /PARCEIRO TRIBUTÁRIO/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/, /PrimeCorp Consultoria|PRIMECORP CONSULTORIA/]) assert.doesNotMatch(p, x);
+  for (const x of [/RECOMPOSIÇÃO DE RECEITAS/, /IMÓVEIS/, /Análise de receitas \| Indicação \| Imóveis/, /55\.745\.297/, /CRECI-SP 297692/, /R2\) INDICAÇÃO/]) assert.match(p, x);
+  for (const x of [/PROGRAMA DE CRÉDITO SAUDÁVEL/, /Imposto de Renda/, /RAT-FAP/, /FPM\/FPE/, /PARCEIRO TRIBUTÁRIO CADASTRADO/, /consultar reservas/, /I\) EMPRESA/, /J\) ENSINO/, /K\) INDICADOR/, /PrimeCorp Consultoria|PRIMECORP CONSULTORIA/]) assert.doesNotMatch(p, x);
   assert.ok(!Z.FERRAMENTAS_TRIBUTARIO, "ferramentas tributárias removidas");
+  assert.match(Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), equipe: true, contato: { nome: "Rodrigo" } }), /RECOMPOSIÇÃO DE RECEITAS/, "modo equipe também conhece receitas");
   const p2 = Z.promptSistema({ zoe: { servicos: "texto antigo salvo" }, geral: {}, agora: new Date() }); assert.match(p2, /texto antigo salvo/);
+});
+
+await t("Zoe: conhecimento salvo antigo sem receitas usa o padrão; perfil Indicador", async () => {
+  const antigo = { quem_somos: "x", servicos: "y", faq: "z", regras_extra: "" };
+  assert.ok(!("receitas" in antigo)); assert.match(Z.promptSistema({ zoe: antigo, geral: {}, agora: new Date() }), /RECOMPOSIÇÃO DE RECEITAS \(convite PrimeCorp\)/);
+  assert.match(Z.promptSistema({ zoe: { ...antigo, receitas: "" }, geral: {}, agora: new Date() }), /RECOMPOSIÇÃO DE RECEITAS \(convite PrimeCorp\)/, "campo vazio volta ao padrão");
+  const mem = { contatos: [] }; const ctxZ = { agora: new Date(), cfg: { zoe: {}, geral: {} }, listar: (c) => mem[c] || [], salvar: (c, id, d) => { mem[c] = (mem[c] || []).filter((x) => x.id !== id).concat(d); }, avisar: () => {} };
+  const conv = { id: "5519900007777" };
+  const r = Z.executar(ctxZ, conv, "salvar_contato", { nome: "Marta", perfil: "Indicador", observacoes: "Receitas · origem: direto · indica prefeitura" }, false);
+  assert.ok(!r.erro, JSON.stringify(r)); assert.equal(mem.contatos[0].tipo, "Indicador");
+  Z.executar(ctxZ, { id: "5519900007778" }, "salvar_contato", { nome: "Paulo", perfil: "Órgão público" }, false); assert.equal(mem.contatos.at(-1).tipo, "Órgão público");
 });
 
 await t("equipe ajusta horário pelo WhatsApp (seg-qui 9-18, sex 9-16)", async () => {
@@ -370,7 +382,7 @@ await t("Zoe: ferramentas de atendimento não incluem frente tributária", async
 
 await t("assistente se chama PrimeCorp e ajusta o tratamento pelo nome", async () => {
   const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), conversa: { nome: "Juliana" } });
-  assert.match(p, /Você é a assistente virtual da Propto Imóveis/); assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
+  assert.match(p, /Você é a assistente virtual da PrimeCorp/); assert.match(p, /Seu nome é Propto Imóveis/); assert.ok(!/Zoe/.test(p)); assert.match(p, /NOME NO PERFIL DO WHATSAPP: Juliana/); assert.match(p, /Nunca pergunte o gênero/);
   assert.match(Z.promptSistema({ zoe: { nome: "Clara" }, geral: {}, agora: new Date() }), /Seu nome é Clara/);
 });
 

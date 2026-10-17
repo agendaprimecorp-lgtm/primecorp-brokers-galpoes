@@ -283,7 +283,7 @@ async function exportCSV() {
 }
 
 /* ================= CRM (contatos) ================= */
-const TIPOS_C = ["Cliente (empresa)", "Cliente (investidor)", "Corretor parceiro", "Imobiliária", "Proprietário", "Órgão público", "Parceiro tributário", "Outro"];
+const TIPOS_C = ["Cliente (empresa)", "Cliente (investidor)", "Corretor parceiro", "Imobiliária", "Proprietário", "Órgão público", "Indicador", "Parceiro tributário", "Outro"];
 VIEWS.contatos = () => {
   header("CRM");
   const f = route.f || "todos";
@@ -1861,6 +1861,7 @@ VIEWS.zoe = () => {
     <label>O que oferecemos (use {{COMISSAO_VENDA}} e {{COMISSAO_LOCACAO}} para puxar a comissão padrão)<textarea data-z="servicos" rows="9">${esc(z.servicos)}</textarea></label>
     <label>Perguntas frequentes<textarea data-z="faq" rows="7">${esc(z.faq)}</textarea></label>
     <label>Institucional, grupo e credenciais<textarea data-z="institucional" rows="8">${esc(z.institucional || "")}</textarea></label>
+    <label>Recomposição de receitas (convite PrimeCorp)<textarea data-z="receitas" rows="8">${esc(z.receitas || ZOE_BASE.receitas)}</textarea></label>
     <label>Orientações extras da equipe (ex.: campanha do mês, imóvel em destaque, regiões que não atendemos)<textarea data-z="regras_extra" rows="3">${esc(z.regras_extra || "")}</textarea></label>
     <label>Local das reuniões<input data-z="local_reuniao" value="${esc(z.local_reuniao)}"></label>
     <label>Assistente retoma a conversa após (horas) sem nova resposta sua pelo celular · 0 = só quando você devolver<input data-z="retomar_h" inputmode="numeric" value="${esc(cfg.retomar_h ?? 12)}"></label>

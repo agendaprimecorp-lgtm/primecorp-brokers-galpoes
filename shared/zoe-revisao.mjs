@@ -4,7 +4,7 @@ import { db, env, salvarRegistro, obterRegistro, registrarEmissao, extrairJSON, 
 import { ZOE_PADRAO } from "./zoe-base.mjs";
 import { enviar, enviarModelo, equipeWA } from "./whatsapp.mjs";
 
-export const PROMPT_REVISAO = `Você é o supervisor de qualidade da assistente virtual de WhatsApp da Propto Imóveis (atendimento de imóveis, em nome da PrimeCorp Brokers) (intermediação de imóveis comerciais, industriais, rurais e residenciais na Região de Campinas).
+export const PROMPT_REVISAO = `Você é o supervisor de qualidade da assistente virtual de WhatsApp da PrimeCorp (recomposição de receitas para municípios, estados e empresas — convite PrimeCorp — e atendimento de imóveis da Propto Imóveis/PrimeCorp Brokers, intermediação de imóveis comerciais, industriais, rurais e residenciais na Região de Campinas).
 Recebe o CONHECIMENTO ATUAL da Zoe e as CONVERSAS DA SEMANA. Encontre onde ela errou, travou, repetiu pergunta, chamou a equipe por falta de informação, ou onde clientes perguntaram algo que o conhecimento não cobre.
 Responda SOMENTE um objeto JSON:
 {"resumo":"2 a 3 frases sobre a semana (volume, tipos de demanda, principais falhas)","sugestoes":[{"tipo":"faq"|"orientacao","titulo":"até 60 caracteres","texto":"o texto exato a ser acrescentado ao conhecimento (faq: '- Pergunta? Resposta.'; orientacao: instrução curta e objetiva para a Zoe)","motivo":"por que, citando o que aconteceu nas conversas","exemplo":"trecho curto da conversa que motivou (sem telefone, sem endereço)"}]}
@@ -35,7 +35,7 @@ export async function revisarSemana({ agora = Date.now(), base = env("URL") } = 
   const semana = new Date(agora).toISOString().slice(0, 10);
   if (!blocos.length) { await registrarEmissao({ tipo: "zoe_revisao", conteudo: "Revisão semanal: sem conversas de clientes na semana." }).catch(() => null); return { conversas: 0, sugestoes: 0 }; }
   const cfg = (await obterRegistro("config", "zoe")) || {}; const z = { ...ZOE_PADRAO, ...cfg };
-  const conhecimento = `QUEM SOMOS\n${z.quem_somos}\n\nSERVIÇOS\n${z.servicos}\n\nPERGUNTAS FREQUENTES\n${z.faq}\n\n${z.institucional || ZOE_PADRAO.institucional}\n\nORIENTAÇÕES DA EQUIPE\n${z.regras_extra || "(nenhuma)"}`;
+  const conhecimento = `QUEM SOMOS\n${z.quem_somos}\n\nSERVIÇOS\n${z.servicos}\n\nPERGUNTAS FREQUENTES\n${z.faq}\n\n${z.institucional || ZOE_PADRAO.institucional}\n\n${z.receitas || ZOE_PADRAO.receitas}\n\nORIENTAÇÕES DA EQUIPE\n${z.regras_extra || "(nenhuma)"}`;
   const client = new Anthropic(); const model = env("MODELO_IA") || MODELO_PADRAO; let r, ult;
   for (const m of [model, ...MODELOS_RESERVA].filter((x, i, a) => a.indexOf(x) === i)) {
     try { r = await client.messages.create({ model: m, max_tokens: 3000, messages: [{ role: "user", content: `${PROMPT_REVISAO}\n\nCONHECIMENTO ATUAL\n"""\n${conhecimento}\n"""\n\nCONVERSAS DA SEMANA (${blocos.length})\n"""\n${blocos.join("\n\n").slice(0, 120000)}\n"""` }] }); break; }
