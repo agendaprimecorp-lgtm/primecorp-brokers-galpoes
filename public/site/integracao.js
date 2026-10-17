@@ -19,8 +19,8 @@
 
   /* 2) Formul\u00e1rios \u2192 sistema (o e-mail do site continua) */
   var FORMS = [
-    { form: "consulta", ok: "rOk", campos: { perfil: "rPerfil", nome: "rNome", municipio: "rMun", fone: "rFone", email: "rMail", consentimento: "rLgpd" }, extras: {} },
-    { form: "indicacao", ok: "paOk", campos: { perfil: "paPerfil", nome: "paNome", municipio: "paMun", fone: "paFone", email: "paMail", consentimento: "paLgpd" }, extras: { acesso_gestao: "paAcesso", relato: "paObs", declaracao_nao_vinculo: "paDecl" } },
+    { form: "consulta", ok: "rOk", campos: { perfil: "rPerfil", nome: "rNome", municipio: "rMun", fone: "rFone", email: "rMail", consentimento: "rLgpd" }, extras: { tipo_organizacao: "rTipoOrg", tipo_ente: "rTipoEnte", organizacao: "rOrg", cnpj: "rCnpj" } },
+    { form: "indicacao", ok: "paOk", campos: { perfil: "paPerfil", nome: "paNome", municipio: "paMun", fone: "paFone", email: "paMail", consentimento: "paLgpd" }, extras: { acesso_gestao: "paAcesso", relato: "paObs", declaracao_nao_vinculo: "paDecl", tipo_organizacao: "paTipoOrg", tipo_ente: "paTipoEnte", organizacao: "paOrg", cnpj: "paCnpj" } },
     { form: "imovel", ok: "iOk", campos: { perfil: "iPerfil", nome: "iNome", municipio: "iCidade", fone: "iFone", email: "iMail", consentimento: "iLgpd" }, extras: { tipo_imovel: "iTipo", valor: "iValor", descricao: "iObs" } },
   ];
   var memoria = {};

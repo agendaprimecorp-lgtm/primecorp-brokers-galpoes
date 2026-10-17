@@ -454,7 +454,7 @@ await t("site: formulário vira lead, avisa a equipe e leva o cliente à assiste
   assert.equal(lead.wa, "5519997771234"); assert.equal(lead.status, "novo"); assert.ok(!lead.ip.includes("201."), "IP só em hash");
   // indicação com extras
   const ind = await J(await post({ form: "indicacao", perfil: "Cidadão", nome: "Carlos", municipio: "Hortolândia/SP", fone: "19988887777", consentimento: true, extras: { acesso_gestao: "conheço o secretário", declaracao_nao_vinculo: true } }, SITE, "201.0.0.2"));
-  assert.equal(ind.s, 200); assert.match(decodeURIComponent(ind.j.whatsapp), /indicação de município/);
+  assert.equal(ind.s, 200); assert.match(decodeURIComponent(ind.j.whatsapp), /\(indicação\)/);
   // a conversa que cita o código já chega com o cadastro no contexto
   const L = (await sdb().sql`SELECT dados FROM registros WHERE colecao='site_leads'`).map((x) => x.dados);
   const conv = { id: "5511900000001", msgs: [{ de: "cliente", t: new Date().toISOString(), texto: `Olá! Acabei de me cadastrar no site da PrimeCorp (ensino e filantropia). Código ${r.j.codigo}.` }] };
@@ -468,6 +468,35 @@ await t("site: formulário vira lead, avisa a equipe e leva o cliente à assiste
   // limite por IP
   for (let i = 0; i < 6; i++) await post({ ...base, nome: "Spam " + i }, SITE, "9.9.9.9");
   assert.equal((await post(base, SITE, "9.9.9.9")).status, 429);
+});
+
+await t("site: tipo de cadastro (prefeitura, empresa com CNPJ, empresa só com cidade/UF, governo do estado)", async () => {
+  const S = await import("../shared/site.mjs");
+  const lead = (form, municipio, extras) => ({ ...S.normalizarLead({ form, perfil: "Cidadão", nome: "Paula Lima", municipio, fone: "19988881111", consentimento: true, extras }), codigo: "S0A0B0C", criado: new Date().toISOString() });
+  const casos = [
+    ["prefeitura", "PREFEITURA", lead("indicacao", "Hortolândia/SP", { tipo_organizacao: "Ente público", tipo_ente: "Prefeitura (município)", organizacao: "Prefeitura Municipal de Hortolândia", cnpj: "45.787.660/0001-00" }), "Prefeitura Municipal de Hortolândia", "indicação de município"],
+    ["empresa", "EMPRESA", lead("indicacao", "Sumaré/SP", { organizacao: "Metalúrgica Sumaré Ltda.", cnpj: "12.345.678/0001-90" }), "Metalúrgica Sumaré Ltda.", "indicação de empresa"],
+    ["empresa", "EMPRESA", lead("consulta", "Campinas/SP", { tipo_organizacao: "Empresa privada", organizacao: "Transportes Campinas" }), "Transportes Campinas", "empresas"],
+    ["governo_estadual", "GOVERNO DO ESTADO", lead("indicacao", "MG", { tipo_organizacao: "Ente público", tipo_ente: "Governo do Estado", organizacao: "Governo do Estado de Minas Gerais" }), "Governo do Estado de Minas Gerais", "indicação de estado"],
+  ];
+  for (const [tipo, rotulo, l, nome, linha] of casos) {
+    const c = S.classificarOrganizacao(l); assert.equal(c.tipo, tipo, nome); assert.equal(c.nome, nome, "nome exatamente como veio");
+    assert.equal(S.linhaDoPerfil(l), linha, nome);
+    const r = S.resumoLead({ ...l, linha }); assert.match(r, new RegExp(`TIPO DE CADASTRO: ${rotulo} — organização: "${nome.replace(/[.()]/g, "\\$&")}"`)); assert.doesNotMatch(r, /prefeitura ou de uma empresa\?/);
+    assert.match(r, /não cite agenda, dia, hora, reserva, carteira nem honorários e não pergunte o contato do decisor/);
+    if (tipo !== "prefeitura") assert.doesNotMatch(r, /TIPO DE CADASTRO: PREFEITURA/, nome + " nunca vira prefeitura");
+  }
+  assert.match(S.resumoLead({ ...casos[1][2], linha: "x" }), /nunca como prefeitura, mesmo com cidade\/UF/);
+  // cidade/UF sozinha não define o tipo: pergunta uma vez
+  const vago = lead("indicacao", "Paulínia/SP", {}); assert.equal(S.classificarOrganizacao(vago).tipo, null); assert.equal(S.linhaDoPerfil(vago), "indicação");
+  assert.match(S.resumoLead({ ...vago, linha: "indicação" }), /Pergunte uma única vez: "Essa indicação é de uma prefeitura ou de uma empresa\?"/);
+  // "Prefeitura" no nome sem "Municipal de" não basta; "Empresa privada" vence o nome
+  assert.equal(S.classificarOrganizacao({ extras: { organizacao: "Prefeitura de Itu" } }).tipo, null);
+  assert.equal(S.classificarOrganizacao({ extras: { tipo_organizacao: "Empresa privada", organizacao: "Prefeitura Municipal de Itu" } }).tipo, "empresa");
+  // campos também aceitos no topo do envio
+  assert.equal(S.normalizarLead({ nome: "Ana", fone: "19999990000", consentimento: true, tipo_organizacao: "Empresa privada" }).extras.tipo_organizacao, "Empresa privada");
+  const p = Z.promptSistema({ zoe: {}, geral: {}, agora: new Date(), lead: { ...casos[3][2], linha: casos[3][4] } });
+  assert.match(p, /TIPO DE CADASTRO: GOVERNO DO ESTADO/); assert.match(p, /cidade\/UF sozinha não define o tipo/);
 });
 
 await t("site: quem não chamou em 10 min recebe o convite (modelo aprovado) uma vez", async () => {
