@@ -16,7 +16,31 @@ export function normalizarLead(b) {
   const nome = limpa(b.nome, 120); if (nome.length < 2) throw new Error("Informe o nome.");
   const form = ["consulta", "indicacao", "imovel", "propto"].includes(b.form) ? b.form : "consulta";
   const extras = {}; for (const [k, v] of Object.entries(b.extras || {}).slice(0, 12)) if (/^[a-z_]{2,30}$/.test(k)) extras[k] = limpa(String(v ?? ""), 600);
+  for (const k of CAMPOS_ORG) if (!extras[k] && b[k]) extras[k] = limpa(String(b[k]), 200); // campos do cadastro também aceitos no topo
   return { form, perfil: limpa(b.perfil, 80), nome, municipio: limpa(b.municipio, 120), wa: waNum(fone), email: limpa(b.email, 120).toLowerCase(), extras, pagina: limpa(b.pagina, 120) };
+}
+
+/* --- Tipo de cadastro: vem de "Tipo de organização" e "Tipo de ente"; cidade/UF sozinha não define tipo --- */
+const CAMPOS_ORG = ["tipo_organizacao", "tipo_ente", "organizacao", "cnpj"];
+const sem = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+export const TIPOS_ORG = { prefeitura: "PREFEITURA", governo_estadual: "GOVERNO DO ESTADO", ente_publico: "ENTE PÚBLICO", empresa: "EMPRESA" };
+
+/** Classifica o cadastro: { tipo: prefeitura|governo_estadual|ente_publico|empresa|null, nome } (nome exatamente como veio). */
+export function classificarOrganizacao(l) {
+  const ex = l?.extras || {};
+  const nome = ex.organizacao || ""; const n = sem(nome);
+  const org = sem(ex.tipo_organizacao); const ente = sem(ex.tipo_ente);
+  const cnpj = /\d{2}/.test(String(ex.cnpj || "").replace(/\D/g, ""));
+  const r = (tipo) => ({ tipo, nome });
+  if (/empresa|privad/.test(org)) return r("empresa");
+  // ente público declarado pelo próprio cadastro (prefeituras também têm CNPJ)
+  const prefeitura = /^prefeitura/.test(ente) || /^prefeitura municipal de /.test(n);
+  const estado = /governo|estado/.test(ente) || /^governo do estado /.test(n);
+  if (prefeitura) return r("prefeitura");
+  if (estado) return r("governo_estadual");
+  if (/ente|public/.test(org)) return r("ente_publico");
+  if (cnpj) return r("empresa");
+  return r(null); // não está claro: a assistente pergunta uma vez
 }
 
 /** Linha de atendimento sugerida pelo perfil escolhido no site. */
@@ -24,7 +48,10 @@ export function linhaDoPerfil(l) {
   const p = (l.perfil || "").toLowerCase();
   if (l.form === "propto") return "Propto · teste " + (l.perfil || "geral");
   if (l.form === "imovel") return "imóveis";
-  if (l.form === "indicacao") return "indicação de município";
+  const tipo = classificarOrganizacao(l).tipo;
+  if (l.form === "indicacao") return tipo === "empresa" ? "indicação de empresa" : tipo === "governo_estadual" ? "indicação de estado" : tipo === "ente_publico" ? "indicação de ente público" : tipo === "prefeitura" ? "indicação de município" : "indicação";
+  if (tipo === "empresa") return "empresas";
+  if (tipo) return "setor público";
   if (/prefeit|secret|procurad|servidor|vereador/.test(p)) return "setor público";
   if (/empres/.test(p)) return "empresas";
   if (/ensino|filantr/.test(p)) return "ensino e filantropia";
@@ -61,5 +88,12 @@ export function leadDaConversa(leads, conv) {
 
 export function resumoLead(l) {
   const ex = Object.entries(l.extras || {}).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("; ");
-  return `CADASTRO PELO SITE (${new Date(l.criado).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}, código ${l.codigo}): ${l.nome} · perfil "${l.perfil || l.form}" · ${l.municipio || "sem município"}${l.email ? " · " + l.email : ""}${ex ? " · " + ex : ""}. Linha sugerida: ${l.linha}. Não peça de novo o que já está aqui; confirme e siga a qualificação a partir do próximo dado que falta.`;
+  const { tipo, nome } = classificarOrganizacao(l);
+  const quem = l.form === "indicacao" ? "Essa indicação é" : "Essa solicitação é";
+  const tipoTxt = tipo
+    ? `TIPO DE CADASTRO: ${TIPOS_ORG[tipo]}${nome ? ` — organização: "${nome}" (use este nome exatamente como está, sem trocar, completar nem abreviar)` : ""}.${tipo === "empresa" ? " Trate como empresa privada, nunca como prefeitura, mesmo com cidade/UF." : ""} Não pergunte de novo o tipo.`
+    : `TIPO DE CADASTRO: não informado. Cidade/UF sozinha não define o tipo: não presuma prefeitura nem empresa. Pergunte uma única vez: "${quem} de uma prefeitura ou de uma empresa?"${nome ? ` Organização: "${nome}" (use este nome exatamente como está).` : ""}`;
+  return `CADASTRO PELO SITE (${new Date(l.criado).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}, código ${l.codigo}): ${l.nome} · perfil "${l.perfil || l.form}" · ${l.municipio || "sem município"}${l.email ? " · " + l.email : ""}${ex ? " · " + ex : ""}. Linha sugerida: ${l.linha}.
+${tipoTxt}
+Não peça de novo o que já está aqui; confirme e siga a qualificação a partir do próximo dado que falta. Na primeira resposta sobre este cadastro: não cite agenda, dia, hora, reserva, carteira nem honorários e não pergunte o contato do decisor.`;
 }
