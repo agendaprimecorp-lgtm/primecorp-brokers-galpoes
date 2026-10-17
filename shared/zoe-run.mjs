@@ -37,7 +37,7 @@ export async function criarContexto({ base, sandbox = false } = {}) {
 /** Mensagem para Rodrigo/Joselia (texto livre na janela de 24 h; fora dela, modelo aprovado). */
 export async function avisarEquipe(texto) {
   for (const n of equipeWA()) {
-    try { await enviar(n, "🤖 Assistente Propto Imóveis · " + texto); }
+    try { await enviar(n, "🤖 PrimeCorp IA · " + texto); }
     catch { const tpl = env("ZOE_MODELO_AVISO") || "primecorp_aviso"; if (tpl) await enviarModelo(n, tpl, [texto.slice(0, 900)]).catch(() => null); }
   }
 }
@@ -101,7 +101,7 @@ export async function processarConversa(wa, { base, esperaMs = 2500 } = {}) {
   if (conv.modo === "humano" && !humanoAtivo && !equipe) { conv.modo = "zoe"; conv.modo_por = "retomada automática"; }
   let r;
   try { r = await responder(ctx, conv, { equipe }); }
-  catch (e) { console.error("Zoe:", e); ctx.avisar(`Assistente com erro na conversa ${conv.nome || "+" + wa}: ${e?.message || e}`, conv, true); r = { texto: "Tive um problema técnico agora. Já avisei a equipe, que responde por aqui em breve.", botoes: [], acoes: ["erro"] }; conv.precisa_humano = { motivo: "erro técnico da assistente", em: new Date().toISOString() }; }
+  catch (e) { console.error("Zoe:", e); ctx.avisar(`PrimeCorp IA com erro na conversa ${conv.nome || "+" + wa}: ${e?.message || e}`, conv, true); r = { texto: "Tive um problema técnico agora. Já avisei a equipe, que responde por aqui em breve.", botoes: [], acoes: ["erro"] }; conv.precisa_humano = { motivo: "erro técnico da assistente", em: new Date().toISOString() }; }
 
   let enviadoId = null, falha = null;
   // primeiro contato: cartão de boas-vindas com a atendente virtual (uma vez por conversa)
