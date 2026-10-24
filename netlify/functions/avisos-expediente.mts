@@ -6,4 +6,5 @@ export default async () => {
   try { const r = await entregarFila(); if (r.entregues) console.log("Avisos entregues:", r.entregues); } catch (e) { console.error("Fila de avisos:", e); }
 };
 
-export const config: Config = { schedule: "*/15 * * * *" };
+// PAUSADO em 24/10/2026 para economizar creditos (original: "*/15 * * * *"). Roda so 1x/ano ate reconfigurar.
+export const config: Config = { schedule: "0 3 1 1 *" };
