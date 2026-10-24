@@ -15,4 +15,5 @@ export default async (req: Request, context: Context) => {
   console.log("Coleta disparada:", r.status);
 };
 
-export const config: Config = { schedule: "*/30 * * * *" };
+// PAUSADO em 24/10/2026 para economizar creditos (original: "*/30 * * * *"). Roda so 1x/ano ate reconfigurar.
+export const config: Config = { schedule: "0 3 1 1 *" };
