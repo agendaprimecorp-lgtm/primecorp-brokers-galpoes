@@ -1,7 +1,10 @@
 import type { Config, Context } from "@netlify/functions";
 import { db } from "../../shared/servidor.mjs";
+import { obterConta, situacao } from "../../shared/contas.mjs";
 
 // Vitrine pública para o site de imóveis (sem login).
+// Fonte: anúncios das contas do Propto (registros_conta, colecao 'anuncios'), só de conta
+// com anúncios liberados (mesma regra da página /i/<token>).
 // Devolve objetos no formato que o site (assets/propto.js) já entende e revalida.
 // Só entra anúncio de venda, ativo, com CRECI do responsável e dados essenciais.
 // A autorização do proprietário NÃO é exigida nesta fase (decisão do dono, 14/11/2026).
@@ -47,7 +50,22 @@ export default async (req: Request, _context: Context) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cab });
   if (req.method !== "GET") return new Response("{}", { status: 405, headers: cab });
 
-  const linhas = await db().sql`SELECT id, dados FROM registros WHERE colecao = 'anuncios' AND excluido = FALSE ORDER BY atualizado_em DESC LIMIT 300`;
+  const linhas = await db().sql`SELECT conta, id, dados FROM registros_conta WHERE colecao = 'anuncios' AND excluido = FALSE ORDER BY id LIMIT 300`;
+
+  // DIAGNÓSTICO TEMPORÁRIO: só contagens e nomes de campos, sem valores.
+  if (new URL(req.url).searchParams.get("diag") === "1") {
+    const motivos: Record<string, number> = {};
+    const chaves = new Set<string>();
+    for (const l of linhas) {
+      const m = !TOKEN_RE.test(l.id) ? "id invalido" : (motivoRecusa(l.dados || {}) || "OK");
+      motivos[m] = (motivos[m] || 0) + 1;
+      Object.keys(l.dados || {}).forEach((k) => chaves.add(k));
+      Object.keys(l.dados?.corretor || {}).forEach((k) => chaves.add("corretor." + k));
+    }
+    return new Response(JSON.stringify({ total: linhas.length, motivos, chaves: [...chaves].sort() }), { headers: cab });
+  }
+
+  const contas = new Map<string, any>();
   const imoveis: any[] = [];
   // DIAGNÓSTICO TEMPORÁRIO: só contagens e nomes de campos, sem valores.
   if (new URL(req.url).searchParams.get("diag") === "1") {
@@ -64,12 +82,16 @@ export default async (req: Request, _context: Context) => {
   for (const l of linhas) {
     const a = l.dados || {};
     if (!TOKEN_RE.test(l.id) || motivoRecusa(a)) continue;
+    if (!contas.has(l.conta)) contas.set(l.conta, await obterConta(l.conta));
+    const conta = contas.get(l.conta);
+    if (!conta || !situacao(conta).anuncios) continue;
+    const slug = a.tipo;
     imoveis.push({
       id: l.id,
       codigo: String(a.codigo ?? ""),
       status: "ativo",
       operacao: "venda",
-      tipo: a.tipo,
+      tipo: slug,
       titulo: a.titulo || "",
       descricao: a.descricao || "",
       cidade: a.cidade,
