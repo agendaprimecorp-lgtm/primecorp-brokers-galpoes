@@ -1,6 +1,6 @@
 /* ============================================================
    /api/publicos — a vitrine pública do Propto para o site
-   Rota: https://propto.com.br/api/publicos
+   Rota: https://propto.com.br/vitrine/imoveis
    Sem login: só devolve anúncio publicado, com autorização
    declarada, CRECI do responsável e operação de venda.
    Nunca devolve: endereço exato, anunciante terceiro, origem,
@@ -93,4 +93,4 @@ export default async (req: Request, _context: Context) => {
   return new Response(JSON.stringify({ imoveis }), { headers: cab });
 };
 
-export const config: Config = { path: "/api/publicos", method: ["GET", "OPTIONS"], rateLimit: { windowLimit: 120, windowSize: 60, aggregateBy: ["ip", "domain"] } };
+export const config: Config = { path: "/vitrine/imoveis", method: ["GET", "OPTIONS"], rateLimit: { windowLimit: 120, windowSize: 60, aggregateBy: ["ip", "domain"] } };
