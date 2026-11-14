@@ -49,6 +49,18 @@ export default async (req: Request, _context: Context) => {
 
   const linhas = await db().sql`SELECT id, dados FROM registros WHERE colecao = 'anuncios' AND excluido = FALSE ORDER BY atualizado_em DESC LIMIT 300`;
   const imoveis: any[] = [];
+  // DIAGNÓSTICO TEMPORÁRIO: só contagens e nomes de campos, sem valores.
+  if (new URL(req.url).searchParams.get("diag") === "1") {
+    const motivos: Record<string, number> = {};
+    const chaves = new Set<string>();
+    for (const l of linhas) {
+      const m = !TOKEN_RE.test(l.id) ? "id invalido" : (motivoRecusa(l.dados || {}) || "OK");
+      motivos[m] = (motivos[m] || 0) + 1;
+      Object.keys(l.dados || {}).forEach((k) => chaves.add(k));
+      Object.keys(l.dados?.corretor || {}).forEach((k) => chaves.add("corretor." + k));
+    }
+    return new Response(JSON.stringify({ total: linhas.length, motivos, chaves: [...chaves].sort() }), { headers: cab });
+  }
   for (const l of linhas) {
     const a = l.dados || {};
     if (!TOKEN_RE.test(l.id) || motivoRecusa(a)) continue;
