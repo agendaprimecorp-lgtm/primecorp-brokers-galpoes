@@ -2,29 +2,38 @@ import type { Config, Context } from "@netlify/functions";
 import { db } from "../../shared/servidor.mjs";
 
 // Vitrine pública para o site de imóveis (sem login).
-// Só entra anúncio: status "ativo", autorização do proprietário "aceita", operação de venda,
-// CRECI do responsável. Nunca devolve endereço exato, contato pessoal nem dados internos.
+// Devolve objetos no formato que o site (assets/propto.js) já entende e revalida.
+// Só entra anúncio de venda, ativo, com CRECI do responsável e dados essenciais.
+// A autorização do proprietário NÃO é exigida nesta fase (decisão do dono, 14/11/2026).
+// Nunca devolve endereço exato nem contato pessoal.
 
 const ORIGEM = "https://propto.com.br";
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
 const sem = (t: unknown) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
-const TIPO: Record<string, string> = {
-  casa: "casa", apartamento: "apartamento", terreno: "terreno-urbano", lote: "terreno-urbano",
-  galpao: "galpao", galpão: "galpao", barracao: "barracao", barracão: "barracao",
-  sala: "sala-comercial", loja: "loja-ponto", ponto: "loja-ponto", predio: "predio-comercial", prédio: "predio-comercial",
-  fazenda: "fazenda", sitio: "sitio", sítio: "sitio", chacara: "chacara", chácara: "chacara",
-};
-const tipoSlug = (t: unknown) => { const s = sem(t); const k = Object.keys(TIPO).find((x) => s.includes(sem(x))); return k ? TIPO[k] : "casa"; };
-const arteDe = (slug: string) =>
-  /galpao|barracao|area-industrial/.test(slug) ? "galpao" : /terreno|area/.test(slug) ? "terreno" : /predio|sala|loja/.test(slug) ? "predio" : /fazenda|sitio|chacara|haras|rural/.test(slug) ? "rural" : "residencial";
+// "R$ 450.000,00" → 450000 ; número → número ; vazio → 0
+function numeroBR(v: unknown): number {
+  if (typeof v === "number") return v;
+  const s = String(v ?? "").replace(/[^\d,.-]/g, "");
+  if (!s) return 0;
+  const n = Number(s.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Preço principal de venda: o valor cujo rótulo fala de venda/preço; senão o primeiro.
+function precoDeVenda(valores: any[]): number {
+  if (!Array.isArray(valores) || !valores.length) return 0;
+  const alvo = valores.find((v) => /venda|preco|valor/.test(sem(v?.[0])));
+  return numeroBR((alvo ?? valores[0])?.[1]);
+}
 
 function motivoRecusa(a: any): string | null {
-  if (a?.status !== "ativo") return "não ativo";
-  if (a?.autorizacao?.status !== "aceita") return "sem autorização do proprietário";
-  if (!String(a?.corretor?.creci ?? "").trim()) return "sem CRECI";
+  if (sem(a?.status) !== "ativo") return "não ativo";
   if (!sem(a?.operacao).includes("venda") || sem(a?.operacao).includes("locac")) return "não é venda";
+  if (!String(a?.corretor?.creci ?? "").trim()) return "sem CRECI";
+  if (!a?.tipo || !a?.cidade) return "faltam tipo ou cidade";
+  if (!(precoDeVenda(a?.valores) > 0)) return "sem preço de venda";
   return null;
 }
 
@@ -43,21 +52,22 @@ export default async (req: Request, _context: Context) => {
   for (const l of linhas) {
     const a = l.dados || {};
     if (!TOKEN_RE.test(l.id) || motivoRecusa(a)) continue;
-    const slug = tipoSlug(a.tipo);
-    const fotos = (a.fotos || []).slice(0, 12).map((_: unknown, i: number) => `${ORIGEM}/i/${l.id}/f/${i}.jpg`);
     imoveis.push({
-      ref: String(a.codigo ?? ""),
-      tipo: slug,
+      id: l.id,
+      codigo: String(a.codigo ?? ""),
+      status: "ativo",
+      operacao: "venda",
+      tipo: a.tipo,
       titulo: a.titulo || "",
       descricao: a.descricao || "",
-      cidade: a.cidade || "",
+      cidade: a.cidade,
       uf: String(a.uf || "SP").toUpperCase().slice(0, 2),
       bairro: a.bairro || "",
-      precos: (a.valores || []).map((v: any) => [String(v[0] ?? ""), String(v[1] ?? "")]),
+      regiao: a.regiao || "",
+      preco: precoDeVenda(a.valores),
       creci: String(a.corretor.creci).trim(),
-      arte: arteDe(slug),
-      fotos,
-      url: `${ORIGEM}/i/${l.id}`,
+      fotos: (a.fotos || []).slice(0, 12).map((_: unknown, i: number) => `${ORIGEM}/i/${l.id}/f/${i}.jpg`),
+      publicado_em: a.publicado_em || null,
     });
   }
   return new Response(JSON.stringify({ imoveis }), { headers: cab });
